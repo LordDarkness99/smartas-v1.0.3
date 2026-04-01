@@ -9,6 +9,10 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import NotFound from "@/pages/NotFound";
+// TAMBAHKAN IMPORT INI
+import MyGrades from "@/pages/MyGrades";
+import MyAttendance from "@/pages/MyAttendance";
+import Notifications from "@/pages/Notifications";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +34,10 @@ const App = () => (
               }
             >
               <Route path="/dashboard" element={<Dashboard />} />
+              {/* TAMBAHKAN ROUTE INI */}
+              <Route path="/my-grades" element={<MyGrades />} />
+              <Route path="/my-attendance" element={<MyAttendance />} />
+              <Route path="/notifications" element={<Notifications />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

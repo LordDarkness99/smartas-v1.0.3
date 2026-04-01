@@ -1,89 +1,91 @@
-import { useAuth } from "@/hooks/useAuth";
-import { NavLink } from "@/components/NavLink";
-import {
-  LayoutDashboard,
-  Users,
-  GraduationCap,
-  BookOpen,
-  ClipboardList,
-  CalendarCheck,
+import { NavLink } from "react-router-dom";
+import { 
+  LayoutDashboard, 
+  GraduationCap, 
+  Calendar, 
   Bell,
-  FileText,
-  LogOut,
+  Users,
+  BookOpen,
   School,
+  Settings
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
-const adminNav = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/students", label: "Students", icon: Users },
-  { to: "/teachers", label: "Teachers", icon: GraduationCap },
-  { to: "/classes", label: "Classes", icon: School },
-  { to: "/subjects", label: "Subjects", icon: BookOpen },
-  { to: "/grades", label: "Grades", icon: ClipboardList },
-  { to: "/attendance", label: "Attendance", icon: CalendarCheck },
-  { to: "/notifications", label: "Notifications", icon: Bell },
-  { to: "/audit-logs", label: "Audit Logs", icon: FileText },
-];
-
-const teacherNav = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/students", label: "Students", icon: Users },
-  { to: "/grades", label: "Grades", icon: ClipboardList },
-  { to: "/attendance", label: "Attendance", icon: CalendarCheck },
-  { to: "/notifications", label: "Notifications", icon: Bell },
-];
-
-const studentNav = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/grades", label: "My Grades", icon: ClipboardList },
-  { to: "/attendance", label: "My Attendance", icon: CalendarCheck },
-  { to: "/notifications", label: "Notifications", icon: Bell },
+const menuItems = [
+  { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { path: "/my-grades", label: "My Grades", icon: GraduationCap },
+  { path: "/my-attendance", label: "My Attendance", icon: Calendar },
+  { path: "/notifications", label: "Notifications", icon: Bell },
 ];
 
 export function AppSidebar() {
-  const { role, profile, signOut } = useAuth();
+  const { user } = useAuth();
 
-  const navItems = role === "admin" ? adminNav : role === "teacher" ? teacherNav : studentNav;
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ["unread-notifications-sidebar", user?.id],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user!.id)
+        .eq("read", false);
+      return count ?? 0;
+    },
+    enabled: !!user,
+    refetchInterval: 30000, // Refresh setiap 30 detik
+  });
 
   return (
-    <aside className="flex h-screen w-64 flex-col bg-sidebar text-sidebar-foreground">
-      <div className="flex items-center gap-3 px-6 py-5 border-b border-sidebar-border">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary">
-          <GraduationCap className="h-5 w-5 text-sidebar-primary-foreground" />
-        </div>
-        <div>
-          <h1 className="text-sm font-semibold">School SMS</h1>
-          <p className="text-xs text-sidebar-muted capitalize">{role || "user"}</p>
-        </div>
+    <aside className="w-64 border-r bg-card flex flex-col h-screen sticky top-0">
+      <div className="p-6 border-b">
+        <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+          SmartAS
+        </h1>
+        <p className="text-xs text-muted-foreground mt-1">School Management System</p>
       </div>
-
-      <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
-        {navItems.map((item) => (
+      
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        {menuItems.map((item) => (
           <NavLink
-            key={item.to}
-            to={item.to}
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+            key={item.path}
+            to={item.path}
+            className={({ isActive }) =>
+              cn(
+                "flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200",
+                isActive
+                  ? "bg-primary text-primary-foreground shadow-md"
+                  : "hover:bg-muted text-foreground/80 hover:text-foreground"
+              )
+            }
           >
-            <item.icon className="h-4 w-4" />
-            {item.label}
+            <div className="flex items-center gap-3">
+              <item.icon className="h-4 w-4" />
+              <span>{item.label}</span>
+            </div>
+            {item.path === "/notifications" && unreadCount > 0 && (
+              <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>
 
-      <div className="border-t border-sidebar-border p-4">
-        <div className="mb-3 px-3">
-          <p className="text-sm font-medium truncate">{profile?.full_name || "User"}</p>
-          <p className="text-xs text-sidebar-muted truncate">{profile?.email}</p>
+      <div className="p-4 border-t mt-auto">
+        <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-muted/50">
+          <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
+            <span className="text-sm font-semibold text-primary">
+              {user?.email?.charAt(0).toUpperCase()}
+            </span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium truncate">{user?.email}</p>
+            <p className="text-xs text-muted-foreground">Student</p>
+          </div>
         </div>
-        <button
-          onClick={signOut}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-destructive"
-        >
-          <LogOut className="h-4 w-4" />
-          Sign Out
-        </button>
       </div>
     </aside>
   );
