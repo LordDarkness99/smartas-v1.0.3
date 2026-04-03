@@ -7,12 +7,12 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Login from "@/pages/Login";
-import Dashboard from "@/pages/Dashboard";
+import Dashboard from "@/pages/student/Dashboard";
 import NotFound from "@/pages/NotFound";
 // TAMBAHKAN IMPORT INI
-import MyGrades from "@/pages/MyGrades";
-import MyAttendance from "@/pages/MyAttendance";
-import Notifications from "@/pages/Notifications";
+import MyGrades from "@/pages/student/MyGrades";
+import MyAttendance from "@/pages/student/MyAttendance";
+import Notifications from "@/pages/student/Notifications";
 
 const queryClient = new QueryClient();
 
