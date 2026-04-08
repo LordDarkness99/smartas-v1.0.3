@@ -5,11 +5,14 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import Login from "@/pages/Login";
 import NotFound from "@/pages/NotFound";
 
-// Student pages (yang sudah ada)
+// Student pages
 import StudentDashboard from "@/pages/student/Dashboard";
 import StudentMyGrades from "@/pages/student/MyGrades";
 import StudentMyAttendance from "@/pages/student/MyAttendance";
 import StudentNotifications from "@/pages/student/Notifications";
+
+// Admin pages
+import UserManagement from "@/pages/admin/UserManagement"; // <-- TAMBAHKAN IMPORT INI
 
 // Temporary pages untuk guru dan admin
 function GuruDashboard() {
@@ -57,12 +60,10 @@ function RootRouter() {
     );
   }
   
-  // Jika sudah login, redirect ke dashboard
   if (user) {
     return <Navigate to="/dashboard" replace />;
   }
   
-  // Jika belum login, redirect ke login
   return <Navigate to="/login" replace />;
 }
 
@@ -71,10 +72,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* Root path - redirect based on auth */}
           <Route path="/" element={<RootRouter />} />
-          
-          {/* Login page - accessible without auth */}
           <Route path="/login" element={<Login />} />
           
           {/* Student Routes */}
@@ -117,6 +115,7 @@ function App() {
           >
             <Route index element={<AdminDashboard />} />
             <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="manage-users" element={<UserManagement />} /> {/* <-- TAMBAHKAN ROUTE INI */}
           </Route>
           
           {/* Dashboard redirect based on role */}
@@ -131,7 +130,6 @@ function App() {
             <Route index element={<DashboardRouter />} />
           </Route>
           
-          {/* 404 Not Found */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </AuthProvider>
