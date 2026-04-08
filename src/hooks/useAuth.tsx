@@ -1,90 +1,128 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import { createContext, useContext, useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
 
-type AppRole = Database["public"]["Enums"]["app_role"];
+// Definisikan tipe untuk data akun
+interface AkunData {
+  id_akun: string;
+  nama: string;
+  email: string | null;
+  peran: string | null;
+  aktif: boolean | null;
+  id_guru: number | null;
+  id_siswa: number | null;
+  kata_sandi: string | null;
+}
+
+interface User {
+  id_akun: string;
+  nama: string;
+  email: string;
+  peran: string;
+  aktif: boolean;
+  id_guru?: number | null;
+  id_siswa?: number | null;
+}
 
 interface AuthContextType {
-  session: Session | null;
   user: User | null;
-  role: AppRole | null;
-  profile: Database["public"]["Tables"]["profiles"]["Row"] | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [role, setRole] = useState<AppRole | null>(null);
-  const [profile, setProfile] = useState<Database["public"]["Tables"]["profiles"]["Row"] | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const fetchUserData = async (userId: string) => {
-    const [roleRes, profileRes] = await Promise.all([
-      supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
-      supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
-    ]);
-    if (roleRes.data) setRole(roleRes.data.role);
-    else setRole(null);
-    if (profileRes.data) setProfile(profileRes.data);
-  };
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        setTimeout(() => fetchUserData(session.user.id), 0);
-      } else {
-        setRole(null);
-        setProfile(null);
+    const storedUser = localStorage.getItem('smartas_user');
+    if (storedUser) {
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        setUser(parsedUser);
+      } catch (e) {
+        console.error('Failed to parse stored user:', e);
+        localStorage.removeItem('smartas_user');
       }
-      setLoading(false);
-    });
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserData(session.user.id);
-      }
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    }
+    setLoading(false);
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error as Error | null };
-  };
+    try {
+      if (!email || !password) {
+        return { error: 'Email dan password harus diisi' };
+      }
 
-  const signUp = async (email: string, password: string, fullName: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName },
-        emailRedirectTo: window.location.origin,
-      },
-    });
-    return { error: error as Error | null };
+      console.log('Mencoba login dengan:', email);
+
+      // Cari akun berdasarkan email - cast ke any untuk menghindari type error
+      const { data: akun, error: queryError } = await supabase
+        .from('akun')
+        .select('id_akun, nama, email, peran, aktif, id_guru, id_siswa, kata_sandi')
+        .eq('email', email.toLowerCase().trim())
+        .maybeSingle() as { data: AkunData | null; error: any };
+
+      console.log('Data dari database:', akun);
+      console.log('Query error:', queryError);
+
+      if (queryError) {
+        console.error('Query error:', queryError);
+        return { error: 'Terjadi kesalahan database' };
+      }
+
+      if (!akun) {
+        return { error: 'Email tidak ditemukan' };
+      }
+
+      // Cek status aktif
+      if (akun.aktif === false) {
+        return { error: 'Akun Anda tidak aktif. Hubungi administrator.' };
+      }
+
+      // Verifikasi password (plain text untuk testing)
+      console.log('Password input:', password);
+      console.log('Password dari DB:', akun.kata_sandi);
+      
+      if (akun.kata_sandi !== password) {
+        return { error: 'Password salah' };
+      }
+
+      // Simpan user ke localStorage
+      const userData: User = {
+        id_akun: akun.id_akun,
+        nama: akun.nama,
+        email: akun.email || email,
+        peran: akun.peran || 'siswa',
+        aktif: akun.aktif || false,
+        id_guru: akun.id_guru,
+        id_siswa: akun.id_siswa,
+      };
+      
+      console.log('Login berhasil, user data:', userData);
+      
+      localStorage.setItem('smartas_user', JSON.stringify(userData));
+      setUser(userData);
+      
+      return { error: null };
+    } catch (err) {
+      console.error('Login error:', err);
+      return { error: 'Terjadi kesalahan saat login: ' + (err as Error).message };
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setRole(null);
-    setProfile(null);
+    localStorage.removeItem('smartas_user');
+    setUser(null);
+    navigate('/login');
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, role, profile, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
@@ -92,6 +130,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used within an AuthProvider");
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
   return context;
 }

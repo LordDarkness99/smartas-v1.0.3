@@ -5,103 +5,129 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { toast } from "@/components/ui/sonner";
-import { GraduationCap } from "lucide-react";
+import { toast } from "sonner";
+import { GraduationCap, School, UserCheck } from "lucide-react";
 
 export default function Login() {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!email || !password) {
+      toast.error("Email dan password harus diisi");
+      return;
+    }
+    
     setLoading(true);
 
-    if (isLogin) {
-      const { error } = await signIn(email, password);
-      if (error) {
-        toast.error(error.message);
-      } else {
-        navigate("/dashboard");
-      }
+    const { error } = await signIn(email, password);
+    if (error) {
+      toast.error(error);
     } else {
-      const { error } = await signUp(email, password, fullName);
-      if (error) {
-        toast.error(error.message);
-      } else {
-        toast.success("Check your email to verify your account.");
-        setIsLogin(true);
-      }
+      toast.success("Login berhasil! Mengalihkan...");
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 1000);
     }
+    
     setLoading(false);
   };
 
+  // Demo credentials untuk testing (bisa dihapus di production)
+  const fillDemoCredentials = () => {
+    setEmail("siswa1@example.com");
+    setPassword("password123");
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-primary">
-            <GraduationCap className="h-8 w-8 text-primary-foreground" />
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
+      <Card className="w-full max-w-md shadow-2xl border-0">
+        <CardHeader className="text-center space-y-4">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 shadow-lg">
+            <School className="h-10 w-10 text-white" />
           </div>
-          <CardTitle className="text-2xl">School Management</CardTitle>
-          <CardDescription>
-            {isLogin ? "Sign in to your account" : "Create a new account"}
-          </CardDescription>
+          <div>
+            <CardTitle className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+              SMARTAS
+            </CardTitle>
+            <CardDescription className="text-base mt-2">
+              Sistem Manajemen Akademik Terpadu
+            </CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
-              <div className="space-y-2">
-                <Label htmlFor="fullName">Full Name</Label>
-                <Input
-                  id="fullName"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  required={!isLogin}
-                  placeholder="Enter your full name"
-                />
-              </div>
-            )}
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-sm font-semibold">
+                Alamat Email
+              </Label>
               <Input
                 id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="Enter your email"
+                placeholder="contoh: siswa@sekolah.com"
+                className="h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                disabled={loading}
               />
             </div>
+            
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="text-sm font-semibold">
+                Kata Sandi
+              </Label>
               <Input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={6}
-                placeholder="Enter your password"
+                placeholder="Masukkan kata sandi"
+                className="h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                disabled={loading}
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Please wait..." : isLogin ? "Sign In" : "Sign Up"}
+            
+            <Button 
+              type="submit" 
+              className="w-full h-11 text-base font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-all duration-200"
+              disabled={loading}
+            >
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                  Memproses...
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <UserCheck className="h-4 w-4" />
+                  Masuk
+                </div>
+              )}
             </Button>
           </form>
-          <div className="mt-4 text-center text-sm text-muted-foreground">
-            {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
+          
+          {/* Demo credentials - HAPUS DI PRODUCTION */}
+          <div className="mt-6 p-3 bg-blue-50 rounded-lg border border-blue-100">
+            <p className="text-xs text-blue-800 font-medium mb-2">🔐 Demo Credentials (Testing):</p>
             <button
               type="button"
-              onClick={() => setIsLogin(!isLogin)}
-              className="font-medium text-primary hover:underline"
+              onClick={fillDemoCredentials}
+              className="text-xs text-blue-600 hover:text-blue-800 underline"
             >
-              {isLogin ? "Sign Up" : "Sign In"}
+              Klik untuk mengisi demo akun
             </button>
+          </div>
+          
+          <div className="mt-6 text-center text-xs text-gray-500 border-t pt-4">
+            <p>© 2024 SMARTAS - Sistem Manajemen Akademik</p>
+            <p className="mt-1">Hubungi administrator jika mengalami masalah login</p>
           </div>
         </CardContent>
       </Card>
