@@ -403,8 +403,11 @@ export default function UserManagement() {
     const { data: existingAccounts } = await supabase.from("akun").select("email").in("email", emails);
     const existingEmails = existingAccounts?.map(acc => acc.email) || [];
     const field = type === "guru" ? "nip" : "nis";
-    const { data: existingRecords } = await supabase.from(type).select(field).in(field, nipNisValues);
-    const existingNipNis = existingRecords?.map(record => record[field]) || [];
+    const { data: existingRecords } = await supabase
+      .from(type as any)
+      .select(field)
+      .in(field, nipNisValues as any[]);
+    const existingNipNis = existingRecords?.map((record: Record<string, any>) => record[field]) || [];
     return { existingEmails, existingNipNis };
   };
 
@@ -527,11 +530,11 @@ export default function UserManagement() {
       const idField = isGuru ? "id_guru" : "id_siswa";
       const updateData: any = { nama: editForm.nama, gender: editForm.gender.toUpperCase() };
       if (!isGuru && editForm.kelas_id) updateData.id_kelas = parseInt(editForm.kelas_id);
-      const { error: updateError } = await supabase.from(tableName).update(updateData).eq(idField, userId);
+      const { error: updateError } = await supabase.from(tableName as any).update(updateData).eq(idField, userId as any);
       if (updateError) throw updateError;
       const akunUpdate: any = { nama: editForm.nama, email: editForm.email };
       if (editForm.password.trim()) akunUpdate.kata_sandi = editForm.password;
-      const { error: akunError } = await supabase.from("akun").update(akunUpdate).eq(isGuru ? "id_guru" : "id_siswa", userId);
+      const { error: akunError } = await supabase.from("akun").update(akunUpdate).eq(isGuru ? "id_guru" : "id_siswa", userId as any);
       if (akunError) throw akunError;
       toast({ title: "Berhasil", description: "Data user berhasil diupdate" });
       setEditDialogOpen(false);
@@ -556,9 +559,9 @@ export default function UserManagement() {
       const userId = isGuru ? deletingUser.id_guru : deletingUser.id_siswa;
       const tableName = isGuru ? "guru" : "siswa";
       const idField = isGuru ? "id_guru" : "id_siswa";
-      const { error: akunError } = await supabase.from("akun").delete().eq(isGuru ? "id_guru" : "id_siswa", userId);
-      if (akunError) throw akunError;
-      const { error: deleteError } = await supabase.from(tableName).delete().eq(idField, userId);
+        const { error: akunError } = await supabase.from("akun").delete().eq(isGuru ? "id_guru" : "id_siswa", userId as any);
+        if (akunError) throw akunError;
+        const { error: deleteError } = await supabase.from(tableName as any).delete().eq(idField, userId as any);
       if (deleteError) throw deleteError;
       toast({ title: "Berhasil", description: "User berhasil dihapus" });
       setDeleteDialogOpen(false);
