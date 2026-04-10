@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { MapPin } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -37,8 +38,8 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
     if (userRole === "siswa") {
       return [
         { title: "Dashboard", icon: LayoutDashboard, path: "/student/dashboard" },
-        { title: "Nilai Saya", icon: BookOpen, path: "/student/my-grades" },
-        { title: "Kehadiran", icon: Calendar, path: "/student/my-attendance" },
+        { title: "Jadwal Mapel", icon: BookOpen, path: "/student/my-grades" },
+        { title: "Presensi", icon: Calendar, path: "/student/my-attendance" },
         { title: "Notifikasi", icon: Bell, path: "/student/notifications" },
       ];
     } else if (userRole === "guru") {
@@ -52,7 +53,9 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
       return [
         { title: "Dashboard", icon: LayoutDashboard, path: "/admin/dashboard" },
         { title: "Kelola User", icon: Users, path: "/admin/manage-users" },
-        { title: "Kelola Kelas", icon: School, path: "/admin/manage-classes" },
+        { title: "Kelola Jadwal & Mapel", icon: Calendar, path: "/admin/schedule" },
+        { title: "PKL", icon: MapPin, path: "/admin/pkl" },
+        { title: "Kelola Kehadiran", icon: School, path: "/admin/manage-attendance" },
         { title: "Laporan", icon: ClipboardList, path: "/admin/reports" },
       ];
     }
