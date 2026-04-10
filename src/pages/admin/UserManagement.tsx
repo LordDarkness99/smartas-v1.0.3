@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import * as XLSX from "xlsx";
+import * as bcrypt from 'bcryptjs';
 import {
   Card,
   CardContent,
@@ -181,7 +182,6 @@ export default function UserManagement() {
     setIsSavingKelas(true);
     try {
       if (editingKelas) {
-        // Update
         const { error } = await supabase
           .from("kelas")
           .update({ nama: kelasForm.nama.trim() })
@@ -189,7 +189,6 @@ export default function UserManagement() {
         if (error) throw error;
         toast({ title: "Berhasil", description: "Kelas berhasil diupdate" });
       } else {
-        // Insert
         const { error } = await supabase
           .from("kelas")
           .insert({
@@ -219,7 +218,6 @@ export default function UserManagement() {
     if (!deletingKelas) return;
     setIsSavingKelas(true);
     try {
-      // Cek apakah ada siswa yang menggunakan kelas ini
       const { data: siswaCount, error: countError } = await supabase
         .from("siswa")
         .select("id_siswa", { count: "exact", head: true })
@@ -260,14 +258,17 @@ export default function UserManagement() {
         .select("id_guru, nama, nip, gender, aktif")
         .order("id_guru");
       if (guruError) throw guruError;
+      
       const guruIds = guruData?.map(g => g.id_guru) || [];
       const { data: akunData, error: akunError } = await supabase
         .from("akun")
         .select("id_guru, email")
         .in("id_guru", guruIds);
       if (akunError) throw akunError;
+      
       const emailMap = new Map();
       akunData?.forEach(akun => emailMap.set(akun.id_guru, akun.email));
+      
       const combined: GuruData[] = guruData?.map(guru => ({
         ...guru,
         email: emailMap.get(guru.id_guru) || "",
@@ -289,22 +290,27 @@ export default function UserManagement() {
         .select("id_siswa, nama, nis, gender, aktif, id_kelas")
         .order("id_siswa");
       if (siswaError) throw siswaError;
+      
       const siswaIds = siswaData?.map(s => s.id_siswa) || [];
       const { data: akunData, error: akunError } = await supabase
         .from("akun")
         .select("id_siswa, email")
         .in("id_siswa", siswaIds);
       if (akunError) throw akunError;
+      
       const emailMap = new Map();
       akunData?.forEach(akun => emailMap.set(akun.id_siswa, akun.email));
+      
       const kelasIds = siswaData?.map(s => s.id_kelas).filter(Boolean) || [];
       const { data: kelasData, error: kelasError } = await supabase
         .from("kelas")
         .select("id_kelas, nama")
         .in("id_kelas", kelasIds);
       if (kelasError) throw kelasError;
+      
       const kelasMap = new Map();
       kelasData?.forEach(k => kelasMap.set(k.id_kelas, k.nama));
+      
       const combined: SiswaData[] = siswaData?.map(siswa => ({
         id_siswa: siswa.id_siswa,
         nama: siswa.nama,
@@ -370,12 +376,15 @@ export default function UserManagement() {
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(worksheet);
       if (jsonData.length === 0) throw new Error("File kosong");
+      
       let requiredColumns: string[];
       if (userType === "guru") requiredColumns = ["nama", "nip", "email", "gender"];
       else requiredColumns = ["nama", "nis", "email", "gender", "kelas"];
+      
       const firstRow = jsonData[0] as any;
       const missingColumns = requiredColumns.filter(col => !(col in firstRow));
       if (missingColumns.length) throw new Error(`Kolom diperlukan tidak ditemukan: ${missingColumns.join(", ")}`);
+      
       setPreviewData(jsonData);
       toast({ title: "Berhasil", description: `${jsonData.length} data siap diimport` });
     } catch (error: any) {
@@ -390,7 +399,11 @@ export default function UserManagement() {
 
   const getNextId = async (table: "guru" | "siswa"): Promise<number> => {
     const idField = table === "guru" ? "id_guru" : "id_siswa";
-    const { data, error } = await supabase.from(table).select(idField).order(idField, { ascending: false }).limit(1);
+    const { data, error } = await supabase
+      .from(table)
+      .select(idField)
+      .order(idField, { ascending: false })
+      .limit(1);
     if (error) throw error;
     let currentMax = 0;
     if (data && data.length) currentMax = data[0][idField];
@@ -400,28 +413,42 @@ export default function UserManagement() {
   const checkExistingData = async (type: "guru" | "siswa", data: any[]) => {
     const emails = data.map(item => item.email).filter(Boolean);
     const nipNisValues = data.map(item => type === "guru" ? item.nip : item.nis).filter(Boolean);
-    const { data: existingAccounts } = await supabase.from("akun").select("email").in("email", emails);
+    
+    const { data: existingAccounts } = await supabase
+      .from("akun")
+      .select("email")
+      .in("email", emails);
     const existingEmails = existingAccounts?.map(acc => acc.email) || [];
+    
     const field = type === "guru" ? "nip" : "nis";
     const { data: existingRecords } = await supabase
       .from(type as any)
       .select(field)
       .in(field, nipNisValues as any[]);
     const existingNipNis = existingRecords?.map((record: Record<string, any>) => record[field]) || [];
+    
     return { existingEmails, existingNipNis };
   };
 
   const getKelasIdFromName = async (namaKelas: string): Promise<number | null> => {
-    const { data, error } = await supabase.from("kelas").select("id_kelas").eq("nama", namaKelas).maybeSingle();
+    const { data, error } = await supabase
+      .from("kelas")
+      .select("id_kelas")
+      .eq("nama", namaKelas)
+      .maybeSingle();
     if (error) throw error;
     return data?.id_kelas || null;
   };
 
   const importGuru = async (data: GuruImportData[]) => {
     const { existingEmails, existingNipNis } = await checkExistingData("guru", data);
-    const filteredData = data.filter(item => !existingEmails.includes(item.email) && !existingNipNis.includes(item.nip));
+    const filteredData = data.filter(item => 
+      !existingEmails.includes(item.email) && 
+      !existingNipNis.includes(item.nip)
+    );
     const skippedCount = data.length - filteredData.length;
     if (!filteredData.length) throw new Error(`Semua data sudah ada (${skippedCount} duplikat)`);
+    
     const nextId = await getNextId("guru");
     const guruRecords = filteredData.map((item, idx) => ({
       id_guru: nextId + idx,
@@ -431,20 +458,29 @@ export default function UserManagement() {
       aktif: true,
       dibuat_pada: new Date().toISOString(),
     }));
+    
     const { error: guruError } = await supabase.from("guru").insert(guruRecords);
     if (guruError) throw guruError;
-    const akunRecords = filteredData.map((item, idx) => ({
-      nama: item.nama,
-      email: item.email,
-      peran: "guru",
-      aktif: true,
-      dibuat_pada: new Date().toISOString(),
-      id_guru: nextId + idx,
-      id_siswa: null,
-      kata_sandi: item.password || "password123",
+    
+    // Hash password dengan bcrypt
+    const akunRecords = await Promise.all(filteredData.map(async (item, idx) => {
+      const plainPassword = item.password || "password123";
+      const hashedPassword = await bcrypt.hash(plainPassword, 10);
+      return {
+        nama: item.nama,
+        email: item.email,
+        peran: "guru",
+        aktif: true,
+        dibuat_pada: new Date().toISOString(),
+        id_guru: nextId + idx,
+        id_siswa: null,
+        kata_sandi: hashedPassword,
+      };
     }));
+    
     const { error: akunError } = await supabase.from("akun").insert(akunRecords);
     if (akunError) throw akunError;
+    
     return { success: filteredData.length, skipped: skippedCount };
   };
 
@@ -456,10 +492,15 @@ export default function UserManagement() {
       if (!id) throw new Error(`Kelas "${nama}" tidak ditemukan. Silakan tambah kelas terlebih dahulu.`);
       kelasMap.set(nama, id);
     }
+    
     const { existingEmails, existingNipNis } = await checkExistingData("siswa", data);
-    const filteredData = data.filter(item => !existingEmails.includes(item.email) && !existingNipNis.includes(item.nis));
+    const filteredData = data.filter(item => 
+      !existingEmails.includes(item.email) && 
+      !existingNipNis.includes(item.nis)
+    );
     const skippedCount = data.length - filteredData.length;
     if (!filteredData.length) throw new Error(`Semua data sudah ada (${skippedCount} duplikat)`);
+    
     const nextId = await getNextId("siswa");
     const siswaRecords = filteredData.map((item, idx) => ({
       id_siswa: nextId + idx,
@@ -470,20 +511,29 @@ export default function UserManagement() {
       dibuat_pada: new Date().toISOString(),
       id_kelas: kelasMap.get(item.kelas) || null,
     }));
+    
     const { error: siswaError } = await supabase.from("siswa").insert(siswaRecords);
     if (siswaError) throw siswaError;
-    const akunRecords = filteredData.map((item, idx) => ({
-      nama: item.nama,
-      email: item.email,
-      peran: "siswa",
-      aktif: true,
-      dibuat_pada: new Date().toISOString(),
-      id_guru: null,
-      id_siswa: nextId + idx,
-      kata_sandi: item.password || "password123",
+    
+    // Hash password dengan bcrypt
+    const akunRecords = await Promise.all(filteredData.map(async (item, idx) => {
+      const plainPassword = item.password || "password123";
+      const hashedPassword = await bcrypt.hash(plainPassword, 10);
+      return {
+        nama: item.nama,
+        email: item.email,
+        peran: "siswa",
+        aktif: true,
+        dibuat_pada: new Date().toISOString(),
+        id_guru: null,
+        id_siswa: nextId + idx,
+        kata_sandi: hashedPassword,
+      };
     }));
+    
     const { error: akunError } = await supabase.from("akun").insert(akunRecords);
     if (akunError) throw akunError;
+    
     return { success: filteredData.length, skipped: skippedCount };
   };
 
@@ -495,11 +545,20 @@ export default function UserManagement() {
     setIsLoading(true);
     try {
       let result;
-      if (userType === "guru") result = await importGuru(previewData as GuruImportData[]);
-      else result = await importSiswa(previewData as SiswaImportData[]);
-      toast({ title: "Import Berhasil", description: `${result.success} data berhasil diimport${result.skipped ? `, ${result.skipped} duplikat dilewati` : ""}` });
+      if (userType === "guru") {
+        result = await importGuru(previewData as GuruImportData[]);
+      } else {
+        result = await importSiswa(previewData as SiswaImportData[]);
+      }
+      toast({ 
+        title: "Import Berhasil", 
+        description: `${result.success} data berhasil diimport${result.skipped ? `, ${result.skipped} duplikat dilewati` : ""}` 
+      });
       setPreviewData([]);
-      if (activeTab === "list") userType === "guru" ? fetchGuru() : fetchSiswa();
+      if (activeTab === "list") {
+        if (userType === "guru") fetchGuru();
+        else fetchSiswa();
+      }
     } catch (error: any) {
       toast({ title: "Import Gagal", description: error.message, variant: "destructive" });
     } finally {
@@ -528,14 +587,36 @@ export default function UserManagement() {
       const userId = isGuru ? editingUser.id_guru : editingUser.id_siswa;
       const tableName = isGuru ? "guru" : "siswa";
       const idField = isGuru ? "id_guru" : "id_siswa";
-      const updateData: any = { nama: editForm.nama, gender: editForm.gender.toUpperCase() };
-      if (!isGuru && editForm.kelas_id) updateData.id_kelas = parseInt(editForm.kelas_id);
-      const { error: updateError } = await supabase.from(tableName as any).update(updateData).eq(idField, userId as any);
+      
+      const updateData: any = { 
+        nama: editForm.nama, 
+        gender: editForm.gender.toUpperCase() 
+      };
+      if (!isGuru && editForm.kelas_id) {
+        updateData.id_kelas = parseInt(editForm.kelas_id);
+      }
+      
+      const { error: updateError } = await supabase
+        .from(tableName as any)
+        .update(updateData)
+        .eq(idField, userId as any);
       if (updateError) throw updateError;
-      const akunUpdate: any = { nama: editForm.nama, email: editForm.email };
-      if (editForm.password.trim()) akunUpdate.kata_sandi = editForm.password;
-      const { error: akunError } = await supabase.from("akun").update(akunUpdate).eq(isGuru ? "id_guru" : "id_siswa", userId as any);
+      
+      const akunUpdate: any = { 
+        nama: editForm.nama, 
+        email: editForm.email 
+      };
+      if (editForm.password.trim()) {
+        // Hash password baru jika diisi
+        akunUpdate.kata_sandi = await bcrypt.hash(editForm.password, 10);
+      }
+      
+      const { error: akunError } = await supabase
+        .from("akun")
+        .update(akunUpdate)
+        .eq(isGuru ? "id_guru" : "id_siswa", userId as any);
       if (akunError) throw akunError;
+      
       toast({ title: "Berhasil", description: "Data user berhasil diupdate" });
       setEditDialogOpen(false);
       if (isGuru) fetchGuru(); else fetchSiswa();
@@ -559,10 +640,19 @@ export default function UserManagement() {
       const userId = isGuru ? deletingUser.id_guru : deletingUser.id_siswa;
       const tableName = isGuru ? "guru" : "siswa";
       const idField = isGuru ? "id_guru" : "id_siswa";
-        const { error: akunError } = await supabase.from("akun").delete().eq(isGuru ? "id_guru" : "id_siswa", userId as any);
-        if (akunError) throw akunError;
-        const { error: deleteError } = await supabase.from(tableName as any).delete().eq(idField, userId as any);
+      
+      const { error: akunError } = await supabase
+        .from("akun")
+        .delete()
+        .eq(isGuru ? "id_guru" : "id_siswa", userId as any);
+      if (akunError) throw akunError;
+      
+      const { error: deleteError } = await supabase
+        .from(tableName as any)
+        .delete()
+        .eq(idField, userId as any);
       if (deleteError) throw deleteError;
+      
       toast({ title: "Berhasil", description: "User berhasil dihapus" });
       setDeleteDialogOpen(false);
       if (isGuru) fetchGuru(); else fetchSiswa();
@@ -608,14 +698,33 @@ export default function UserManagement() {
                     <Download className="mr-2 h-4 w-4" /> Download Template
                   </Button>
                   <div className="relative">
-                    <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} disabled={isLoading} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                    <Button disabled={isLoading}><Upload className="mr-2 h-4 w-4" />{isLoading ? "Memproses..." : "Upload File"}</Button>
+                    <input 
+                      type="file" 
+                      accept=".xlsx,.xls,.csv" 
+                      onChange={handleFileUpload} 
+                      disabled={isLoading} 
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                    />
+                    <Button disabled={isLoading}>
+                      <Upload className="mr-2 h-4 w-4" />
+                      {isLoading ? "Memproses..." : "Upload File"}
+                    </Button>
                   </div>
                 </div>
-                {uploadError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{uploadError}</AlertDescription></Alert>}
+                
+                {uploadError && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{uploadError}</AlertDescription>
+                  </Alert>
+                )}
+                
                 {previewData.length > 0 && (
                   <>
-                    <Alert><CheckCircle className="h-4 w-4" /><AlertDescription>{previewData.length} data siap diimport</AlertDescription></Alert>
+                    <Alert>
+                      <CheckCircle className="h-4 w-4" />
+                      <AlertDescription>{previewData.length} data siap diimport</AlertDescription>
+                    </Alert>
                     <div className="border rounded-lg overflow-auto max-h-96">
                       <Table>
                         <TableHeader>
@@ -640,7 +749,10 @@ export default function UserManagement() {
                         </TableBody>
                       </Table>
                     </div>
-                    <Button onClick={handleImport} disabled={isLoading}>{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Import Data</Button>
+                    <Button onClick={handleImport} disabled={isLoading}>
+                      {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Import Data
+                    </Button>
                   </>
                 )}
               </div>
@@ -651,40 +763,103 @@ export default function UserManagement() {
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <Select value={userType} onValueChange={(v) => setUserType(v as "guru" | "siswa")}>
-                    <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="guru">Guru</SelectItem><SelectItem value="siswa">Siswa</SelectItem></SelectContent>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="guru">Guru</SelectItem>
+                      <SelectItem value="siswa">Siswa</SelectItem>
+                    </SelectContent>
                   </Select>
-                  <Button variant="outline" onClick={() => userType === "guru" ? fetchGuru() : fetchSiswa()} disabled={isFetching}>
-                    <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} /> Refresh
+                  <Button 
+                    variant="outline" 
+                    onClick={() => userType === "guru" ? fetchGuru() : fetchSiswa()} 
+                    disabled={isFetching}
+                  >
+                    <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} /> 
+                    Refresh
                   </Button>
                 </div>
-                {isFetching ? <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div> : (
+                
+                {isFetching ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : (
                   <div className="border rounded-lg overflow-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>ID</TableHead><TableHead>Nama</TableHead><TableHead>{userType === "guru" ? "NIP" : "NIS"}</TableHead>
-                          <TableHead>Email</TableHead><TableHead>Gender</TableHead>{userType === "siswa" && <TableHead>Kelas</TableHead>}
-                          <TableHead>Status</TableHead><TableHead>Aksi</TableHead>
+                          <TableHead>ID</TableHead>
+                          <TableHead>Nama</TableHead>
+                          <TableHead>{userType === "guru" ? "NIP" : "NIS"}</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Gender</TableHead>
+                          {userType === "siswa" && <TableHead>Kelas</TableHead>}
+                          <TableHead>Status</TableHead>
+                          <TableHead>Aksi</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {userType === "guru" ? guruList.map(guru => (
-                          <TableRow key={guru.id_guru}>
-                            <TableCell>{guru.id_guru}</TableCell><TableCell>{guru.nama}</TableCell><TableCell>{guru.nip}</TableCell>
-                            <TableCell>{guru.email}</TableCell><TableCell>{guru.gender}</TableCell>
-                            <TableCell><span className={`px-2 py-1 rounded-full text-xs ${guru.aktif ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>{guru.aktif ? "Aktif" : "Nonaktif"}</span></TableCell>
-                            <TableCell><div className="flex gap-2"><Button variant="ghost" size="sm" onClick={() => openEditDialog(guru)}><Edit className="h-4 w-4" /></Button><Button variant="ghost" size="sm" onClick={() => confirmDelete(guru)}><Trash2 className="h-4 w-4 text-red-500" /></Button></div></TableCell>
+                        {userType === "guru" ? (
+                          guruList.map(guru => (
+                            <TableRow key={guru.id_guru}>
+                              <TableCell>{guru.id_guru}</TableCell>
+                              <TableCell>{guru.nama}</TableCell>
+                              <TableCell>{guru.nip}</TableCell>
+                              <TableCell>{guru.email}</TableCell>
+                              <TableCell>{guru.gender}</TableCell>
+                              <TableCell>
+                                <span className={`px-2 py-1 rounded-full text-xs ${guru.aktif ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                                  {guru.aktif ? "Aktif" : "Nonaktif"}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex gap-2">
+                                  <Button variant="ghost" size="sm" onClick={() => openEditDialog(guru)}>
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" onClick={() => confirmDelete(guru)}>
+                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          siswaList.map(siswa => (
+                            <TableRow key={siswa.id_siswa}>
+                              <TableCell>{siswa.id_siswa}</TableCell>
+                              <TableCell>{siswa.nama}</TableCell>
+                              <TableCell>{siswa.nis}</TableCell>
+                              <TableCell>{siswa.email}</TableCell>
+                              <TableCell>{siswa.gender}</TableCell>
+                              <TableCell>{siswa.nama_kelas || "-"}</TableCell>
+                              <TableCell>
+                                <span className={`px-2 py-1 rounded-full text-xs ${siswa.aktif ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                                  {siswa.aktif ? "Aktif" : "Nonaktif"}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex gap-2">
+                                  <Button variant="ghost" size="sm" onClick={() => openEditDialog(siswa)}>
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" onClick={() => confirmDelete(siswa)}>
+                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                        {((userType === "guru" && !guruList.length) || (userType === "siswa" && !siswaList.length)) && (
+                          <TableRow>
+                            <TableCell colSpan={userType === "guru" ? 7 : 8} className="text-center">
+                              Tidak ada data
+                            </TableCell>
                           </TableRow>
-                        )) : siswaList.map(siswa => (
-                          <TableRow key={siswa.id_siswa}>
-                            <TableCell>{siswa.id_siswa}</TableCell><TableCell>{siswa.nama}</TableCell><TableCell>{siswa.nis}</TableCell>
-                            <TableCell>{siswa.email}</TableCell><TableCell>{siswa.gender}</TableCell><TableCell>{siswa.nama_kelas || "-"}</TableCell>
-                            <TableCell><span className={`px-2 py-1 rounded-full text-xs ${siswa.aktif ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>{siswa.aktif ? "Aktif" : "Nonaktif"}</span></TableCell>
-                            <TableCell><div className="flex gap-2"><Button variant="ghost" size="sm" onClick={() => openEditDialog(siswa)}><Edit className="h-4 w-4" /></Button><Button variant="ghost" size="sm" onClick={() => confirmDelete(siswa)}><Trash2 className="h-4 w-4 text-red-500" /></Button></div></TableCell>
-                          </TableRow>
-                        ))}
-                        {((userType === "guru" && !guruList.length) || (userType === "siswa" && !siswaList.length)) && <TableRow><TableCell colSpan={userType === "guru" ? 7 : 8} className="text-center">Tidak ada data</TableCell></TableRow>}
+                        )}
                       </TableBody>
                     </Table>
                   </div>
@@ -696,26 +871,61 @@ export default function UserManagement() {
             <TabsContent value="kelas">
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <Button onClick={handleAddKelas}><Plus className="mr-2 h-4 w-4" /> Tambah Kelas</Button>
-                  <Button variant="outline" onClick={fetchKelas} disabled={isFetchingKelas}><RefreshCw className={`mr-2 h-4 w-4 ${isFetchingKelas ? "animate-spin" : ""}`} /> Refresh</Button>
+                  <Button onClick={handleAddKelas}>
+                    <Plus className="mr-2 h-4 w-4" /> Tambah Kelas
+                  </Button>
+                  <Button variant="outline" onClick={fetchKelas} disabled={isFetchingKelas}>
+                    <RefreshCw className={`mr-2 h-4 w-4 ${isFetchingKelas ? "animate-spin" : ""}`} /> 
+                    Refresh
+                  </Button>
                 </div>
-                {isFetchingKelas ? <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div> : (
+                
+                {isFetchingKelas ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : (
                   <div className="border rounded-lg overflow-auto">
                     <Table>
                       <TableHeader>
-                        <TableRow><TableHead>ID</TableHead><TableHead>Nama Kelas</TableHead><TableHead>Status</TableHead><TableHead>Dibuat Pada</TableHead><TableHead>Aksi</TableHead></TableRow>
+                        <TableRow>
+                          <TableHead>ID</TableHead>
+                          <TableHead>Nama Kelas</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Dibuat Pada</TableHead>
+                          <TableHead>Aksi</TableHead>
+                        </TableRow>
                       </TableHeader>
                       <TableBody>
                         {kelasList.map(kelas => (
                           <TableRow key={kelas.id_kelas}>
                             <TableCell>{kelas.id_kelas}</TableCell>
                             <TableCell>{kelas.nama}</TableCell>
-                            <TableCell><span className={`px-2 py-1 rounded-full text-xs ${kelas.aktif ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>{kelas.aktif ? "Aktif" : "Nonaktif"}</span></TableCell>
+                            <TableCell>
+                              <span className={`px-2 py-1 rounded-full text-xs ${kelas.aktif ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                                {kelas.aktif ? "Aktif" : "Nonaktif"}
+                              </span>
+                            </TableCell>
                             <TableCell>{new Date(kelas.dibuat_pada).toLocaleDateString()}</TableCell>
-                            <TableCell><div className="flex gap-2"><Button variant="ghost" size="sm" onClick={() => handleEditKelas(kelas)}><Edit className="h-4 w-4" /></Button><Button variant="ghost" size="sm" onClick={() => confirmDeleteKelas(kelas)}><Trash2 className="h-4 w-4 text-red-500" /></Button></div></TableCell>
+                            <TableCell>
+                              <div className="flex gap-2">
+                                <Button variant="ghost" size="sm" onClick={() => handleEditKelas(kelas)}>
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => confirmDeleteKelas(kelas)}>
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </div>
+                            </TableCell>
                           </TableRow>
                         ))}
-                        {!kelasList.length && <TableRow><TableCell colSpan={5} className="text-center">Belum ada data kelas</TableCell></TableRow>}
+                        {!kelasList.length && (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center">
+                              Belum ada data kelas
+                            </TableCell>
+                          </TableRow>
+                        )}
                       </TableBody>
                     </Table>
                   </div>
@@ -729,35 +939,144 @@ export default function UserManagement() {
       {/* Dialog Edit User */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Edit User</DialogTitle><DialogDescription>Ubah informasi user. Kosongkan password jika tidak ingin mengubah.</DialogDescription></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>
+              Ubah informasi user. Kosongkan password jika tidak ingin mengubah.
+            </DialogDescription>
+          </DialogHeader>
           <div className="space-y-4">
-            <div><Label>Nama</Label><Input value={editForm.nama} onChange={e => setEditForm({...editForm, nama: e.target.value})} /></div>
-            <div><Label>Email</Label><Input type="email" value={editForm.email} onChange={e => setEditForm({...editForm, email: e.target.value})} /></div>
-            <div><Label>Gender</Label><Select value={editForm.gender} onValueChange={v => setEditForm({...editForm, gender: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>
-            {userType === "siswa" && <div><Label>Kelas</Label><Select value={editForm.kelas_id} onValueChange={v => setEditForm({...editForm, kelas_id: v})}><SelectTrigger><SelectValue placeholder="Pilih kelas" /></SelectTrigger><SelectContent>{kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}</SelectContent></Select></div>}
-            <div><Label>Password Baru (Opsional)</Label><Input type="password" placeholder="Kosongkan jika tidak ingin mengubah" value={editForm.password} onChange={e => setEditForm({...editForm, password: e.target.value})} /></div>
+            <div>
+              <Label>Nama</Label>
+              <Input 
+                value={editForm.nama} 
+                onChange={e => setEditForm({...editForm, nama: e.target.value})} 
+              />
+            </div>
+            <div>
+              <Label>Email</Label>
+              <Input 
+                type="email" 
+                value={editForm.email} 
+                onChange={e => setEditForm({...editForm, email: e.target.value})} 
+              />
+            </div>
+            <div>
+              <Label>Gender</Label>
+              <Select 
+                value={editForm.gender} 
+                onValueChange={v => setEditForm({...editForm, gender: v})}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="L">Laki-laki</SelectItem>
+                  <SelectItem value="P">Perempuan</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {userType === "siswa" && (
+              <div>
+                <Label>Kelas</Label>
+                <Select 
+                  value={editForm.kelas_id} 
+                  onValueChange={v => setEditForm({...editForm, kelas_id: v})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih kelas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {kelasList.map(k => (
+                      <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>
+                        {k.nama}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div>
+              <Label>Password Baru (Opsional)</Label>
+              <Input 
+                type="password" 
+                placeholder="Kosongkan jika tidak ingin mengubah" 
+                value={editForm.password} 
+                onChange={e => setEditForm({...editForm, password: e.target.value})} 
+              />
+            </div>
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setEditDialogOpen(false)}>Batal</Button><Button onClick={handleUpdateUser} disabled={isLoading}>{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button></DialogFooter>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Batal</Button>
+            <Button onClick={handleUpdateUser} disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Simpan
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Dialog Delete User */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent><DialogHeader><DialogTitle>Hapus User</DialogTitle><DialogDescription>Yakin ingin menghapus <strong>{deletingUser?.nama}</strong>? Tindakan tidak dapat dibatalkan.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Batal</Button><Button variant="destructive" onClick={handleDeleteUser} disabled={isLoading}>{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Hapus</Button></DialogFooter></DialogContent>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Hapus User</DialogTitle>
+            <DialogDescription>
+              Yakin ingin menghapus <strong>{deletingUser?.nama}</strong>? Tindakan tidak dapat dibatalkan.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Batal</Button>
+            <Button variant="destructive" onClick={handleDeleteUser} disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Hapus
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
 
       {/* Dialog Kelas (Add/Edit) */}
       <Dialog open={kelasDialogOpen} onOpenChange={setKelasDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{editingKelas ? "Edit Kelas" : "Tambah Kelas Baru"}</DialogTitle></DialogHeader>
-          <div><Label>Nama Kelas</Label><Input value={kelasForm.nama} onChange={e => setKelasForm({ nama: e.target.value })} placeholder="Contoh: XII RPL 1" /></div>
-          <DialogFooter><Button variant="outline" onClick={() => setKelasDialogOpen(false)}>Batal</Button><Button onClick={handleSaveKelas} disabled={isSavingKelas}>{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button></DialogFooter>
+          <DialogHeader>
+            <DialogTitle>{editingKelas ? "Edit Kelas" : "Tambah Kelas Baru"}</DialogTitle>
+          </DialogHeader>
+          <div>
+            <Label>Nama Kelas</Label>
+            <Input 
+              value={kelasForm.nama} 
+              onChange={e => setKelasForm({ nama: e.target.value })} 
+              placeholder="Contoh: XII RPL 1" 
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setKelasDialogOpen(false)}>Batal</Button>
+            <Button onClick={handleSaveKelas} disabled={isSavingKelas}>
+              {isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Simpan
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Dialog Delete Kelas */}
       <Dialog open={deleteKelasDialogOpen} onOpenChange={setDeleteKelasDialogOpen}>
-        <DialogContent><DialogHeader><DialogTitle>Hapus Kelas</DialogTitle><DialogDescription>Yakin ingin menghapus kelas <strong>{deletingKelas?.nama}</strong>? Siswa yang memiliki kelas ini akan kehilangan referensi.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDeleteKelasDialogOpen(false)}>Batal</Button><Button variant="destructive" onClick={handleDeleteKelas} disabled={isSavingKelas}>{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Hapus</Button></DialogFooter></DialogContent>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Hapus Kelas</DialogTitle>
+            <DialogDescription>
+              Yakin ingin menghapus kelas <strong>{deletingKelas?.nama}</strong>? 
+              Siswa yang memiliki kelas ini akan kehilangan referensi.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteKelasDialogOpen(false)}>Batal</Button>
+            <Button variant="destructive" onClick={handleDeleteKelas} disabled={isSavingKelas}>
+              {isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Hapus
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
     </div>
   );

@@ -1,3 +1,5 @@
+
+// src/pages/Login.tsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -6,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { GraduationCap, School, UserCheck } from "lucide-react";
+import { UserCheck } from "lucide-react";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -17,14 +19,13 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email || !password) {
       toast.error("Email dan password harus diisi");
       return;
     }
-    
-    setLoading(true);
 
+    setLoading(true);
     const { error } = await signIn(email, password);
     if (error) {
       toast.error(error);
@@ -34,22 +35,20 @@ export default function Login() {
         navigate("/dashboard");
       }, 1000);
     }
-    
     setLoading(false);
-  };
-
-  // Demo credentials untuk testing (bisa dihapus di production)
-  const fillDemoCredentials = () => {
-    setEmail("siswa1@example.com");
-    setPassword("password123");
   };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
       <Card className="w-full max-w-md shadow-2xl border-0">
         <CardHeader className="text-center space-y-4">
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 shadow-lg">
-            <School className="h-10 w-10 text-white" />
+          {/* Logo dari public/smartas-logo.png */}
+          <div className="mx-auto flex h-24 w-24 items-center justify-center">
+            <img
+              src="/smartas-logo.png"
+              alt="SMARTAS Logo"
+              className="h-full w-full object-contain"
+            />
           </div>
           <div>
             <CardTitle className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
@@ -72,12 +71,12 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="contoh: siswa@sekolah.com"
+                placeholder="contoh: nama@sekolah.com"
                 className="h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                 disabled={loading}
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="password" className="text-sm font-semibold">
                 Kata Sandi
@@ -93,9 +92,9 @@ export default function Login() {
                 disabled={loading}
               />
             </div>
-            
-            <Button 
-              type="submit" 
+
+            <Button
+              type="submit"
               className="w-full h-11 text-base font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-all duration-200"
               disabled={loading}
             >
@@ -112,21 +111,9 @@ export default function Login() {
               )}
             </Button>
           </form>
-          
-          {/* Demo credentials - HAPUS DI PRODUCTION */}
-          <div className="mt-6 p-3 bg-blue-50 rounded-lg border border-blue-100">
-            <p className="text-xs text-blue-800 font-medium mb-2">🔐 Demo Credentials (Testing):</p>
-            <button
-              type="button"
-              onClick={fillDemoCredentials}
-              className="text-xs text-blue-600 hover:text-blue-800 underline"
-            >
-              Klik untuk mengisi demo akun
-            </button>
-          </div>
-          
+
           <div className="mt-6 text-center text-xs text-gray-500 border-t pt-4">
-            <p>© 2024 SMARTAS - Sistem Manajemen Akademik</p>
+            <p>© {new Date().getFullYear()} SMARTAS - Sistem Manajemen Akademik</p>
             <p className="mt-1">Hubungi administrator jika mengalami masalah login</p>
           </div>
         </CardContent>

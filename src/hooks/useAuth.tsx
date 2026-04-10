@@ -1,6 +1,8 @@
+// File: src/hooks/useAuth.tsx
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
+import * as bcrypt from 'bcryptjs';
 
 // Definisikan tipe untuk data akun
 interface AkunData {
@@ -60,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log('Mencoba login dengan:', email);
 
-      // Cari akun berdasarkan email - cast ke any untuk menghindari type error
+      // Cari akun berdasarkan email
       const { data: akun, error: queryError } = await supabase
         .from('akun')
         .select('id_akun, nama, email, peran, aktif, id_guru, id_siswa, kata_sandi')
@@ -84,11 +86,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: 'Akun Anda tidak aktif. Hubungi administrator.' };
       }
 
-      // Verifikasi password (plain text untuk testing)
-      console.log('Password input:', password);
-      console.log('Password dari DB:', akun.kata_sandi);
+      // Verifikasi password dengan bcrypt
+      if (!akun.kata_sandi) {
+        return { error: 'Akun tidak memiliki password. Hubungi administrator.' };
+      }
+
+      const isPasswordValid = await bcrypt.compare(password, akun.kata_sandi);
       
-      if (akun.kata_sandi !== password) {
+      if (!isPasswordValid) {
         return { error: 'Password salah' };
       }
 
