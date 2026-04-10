@@ -15,6 +15,7 @@ import StudentNotifications from "@/pages/student/Notifications";
 import UserManagement from "@/pages/admin/UserManagement";
 import ScheduleManagement from "@/pages/admin/ScheduleManagement";
 import PKLManagement from "@/pages/admin/PKLManagement";
+import AttendanceManagement from "@/pages/attendance/AttendanceManagement";
 
 
 // Temporary pages untuk guru dan admin
@@ -105,6 +106,7 @@ function App() {
           >
             <Route index element={<GuruDashboard />} />
             <Route path="dashboard" element={<GuruDashboard />} />
+            <Route path="attendance" element={<AttendanceManagement />} />
           </Route>
           
           {/* Admin Routes */}
@@ -121,6 +123,7 @@ function App() {
             <Route path="manage-users" element={<UserManagement />} />
             <Route path="schedule" element={<ScheduleManagement />} />
             <Route path="pkl" element={<PKLManagement />} />
+            <Route path="attendance" element={<AttendanceManagement />} />
           </Route>
           
           {/* Dashboard redirect based on role */}

@@ -49,13 +49,22 @@ import {
   Upload,
   Download,
   CheckCircle,
+  User,
 } from "lucide-react";
 
 // Tipe data
+interface Guru {
+  id_guru: number;
+  nama: string;
+  nip: string; // diubah ke string agar kompatibel
+}
+
 interface PKL {
   id_pkl: number;
   tempat_pkl: string;
   koordinat_pkl: string;
+  id_guru: number | null;
+  guru_nama?: string;
 }
 
 interface Siswa {
@@ -73,16 +82,17 @@ interface Kelas {
   nama: string;
 }
 
-export default function PKLManagement() {
+export default function PklManagement() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"lokasi" | "siswa">("lokasi");
 
   // State untuk lokasi PKL
   const [pklList, setPklList] = useState<PKL[]>([]);
+  const [guruList, setGuruList] = useState<Guru[]>([]);
   const [isFetchingPKL, setIsFetchingPKL] = useState(false);
   const [pklDialogOpen, setPklDialogOpen] = useState(false);
   const [editingPKL, setEditingPKL] = useState<PKL | null>(null);
-  const [pklForm, setPklForm] = useState({ tempat_pkl: "", koordinat_pkl: "" });
+  const [pklForm, setPklForm] = useState({ tempat_pkl: "", koordinat_pkl: "", id_guru: "" });
   const [isSavingPKL, setIsSavingPKL] = useState(false);
   const [deletePKLDialogOpen, setDeletePKLDialogOpen] = useState(false);
   const [deletingPKL, setDeletingPKL] = useState<PKL | null>(null);
@@ -101,16 +111,49 @@ export default function PKLManagement() {
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
+  // ========== FETCH GURU ==========
+  const fetchGuru = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("guru")
+        .select("id_guru, nama, nip")
+        .eq("aktif", true)
+        .order("nama");
+      if (error) throw error;
+      // Konversi nip ke string
+      const formatted: Guru[] = data.map((g: any) => ({
+        ...g,
+        nip: g.nip?.toString() || "",
+      }));
+      setGuruList(formatted);
+    } catch (error: any) {
+      console.error("Fetch guru error:", error);
+    }
+  };
+
   // ========== FETCH LOKASI PKL ==========
   const fetchPKL = async () => {
     setIsFetchingPKL(true);
     try {
       const { data, error } = await supabase
         .from("pkl")
-        .select("*")
+        .select(`
+          id_pkl,
+          tempat_pkl,
+          koordinat_pkl,
+          id_guru,
+          guru:guru (nama)
+        `)
         .order("id_pkl");
       if (error) throw error;
-      setPklList(data || []);
+      const formatted: PKL[] = data.map((item: any) => ({
+        id_pkl: item.id_pkl,
+        tempat_pkl: item.tempat_pkl,
+        koordinat_pkl: item.koordinat_pkl,
+        id_guru: item.id_guru,
+        guru_nama: item.guru?.nama || "-",
+      }));
+      setPklList(formatted);
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
@@ -121,7 +164,7 @@ export default function PKLManagement() {
   // ========== CRUD LOKASI PKL ==========
   const openAddPKL = () => {
     setEditingPKL(null);
-    setPklForm({ tempat_pkl: "", koordinat_pkl: "" });
+    setPklForm({ tempat_pkl: "", koordinat_pkl: "", id_guru: "" });
     setPklDialogOpen(true);
   };
 
@@ -130,6 +173,7 @@ export default function PKLManagement() {
     setPklForm({
       tempat_pkl: pkl.tempat_pkl,
       koordinat_pkl: pkl.koordinat_pkl || "",
+      id_guru: pkl.id_guru?.toString() || "",
     });
     setPklDialogOpen(true);
   };
@@ -144,6 +188,7 @@ export default function PKLManagement() {
       const data = {
         tempat_pkl: pklForm.tempat_pkl.trim(),
         koordinat_pkl: pklForm.koordinat_pkl.trim() || null,
+        id_guru: pklForm.id_guru ? parseInt(pklForm.id_guru) : null,
       };
       if (editingPKL) {
         const { error } = await supabase.from("pkl").update(data).eq("id_pkl", editingPKL.id_pkl);
@@ -253,6 +298,7 @@ export default function PKLManagement() {
   };
 
   useEffect(() => {
+    fetchGuru();
     fetchPKL();
     fetchKelas();
   }, []);
@@ -283,10 +329,10 @@ export default function PKLManagement() {
     let headers: string[];
     let data: any[][];
     if (type === "lokasi") {
-      headers = ["tempat_pkl", "koordinat_pkl"];
+      headers = ["tempat_pkl", "koordinat_pkl", "guru_pendamping"];
       data = [
-        ["PT. Maju Jaya", "-6.200000,106.816666"],
-        ["CV. Karya Mandiri", "-6.208333,106.845555"],
+        ["PT. Maju Jaya", "-6.200000,106.816666", "Ahmad Santoso"],
+        ["CV. Karya Mandiri", "-6.208333,106.845555", "Siti Aminah"],
       ];
     } else {
       headers = ["nis", "tempat_pkl"];
@@ -313,7 +359,6 @@ export default function PKLManagement() {
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
         if (jsonData.length === 0) throw new Error("File kosong");
-        // Validasi kolom
         let requiredColumns: string[];
         if (importType === "lokasi") requiredColumns = ["tempat_pkl"];
         else requiredColumns = ["nis", "tempat_pkl"];
@@ -344,10 +389,37 @@ export default function PKLManagement() {
     setIsImporting(true);
     try {
       if (importType === "lokasi") {
-        // Import lokasi PKL
+        // Import lokasi PKL dengan guru pendamping (nama guru)
+        const tempatList = importPreview.map((row: any) => row.tempat_pkl);
+        // Cek duplikat tempat_pkl
+        const { data: existing, error: checkError } = await supabase
+          .from("pkl")
+          .select("tempat_pkl")
+          .in("tempat_pkl", tempatList);
+        if (checkError) throw checkError;
+        if (existing && existing.length) {
+          const duplicates = existing.map((e) => e.tempat_pkl);
+          throw new Error(`Tempat PKL sudah ada: ${duplicates.join(", ")}`);
+        }
+        // Kumpulkan nama guru pendamping unik
+        const guruNames = [...new Set(importPreview.map((row: any) => row.guru_pendamping).filter(Boolean))];
+        let guruMap = new Map<string, number>();
+        if (guruNames.length) {
+          const { data: guruData, error: guruError } = await supabase
+            .from("guru")
+            .select("id_guru, nama")
+            .in("nama", guruNames);
+          if (guruError) throw guruError;
+          guruData?.forEach((g) => guruMap.set(g.nama, g.id_guru));
+          const missingGuru = guruNames.filter((name) => !guruMap.has(name));
+          if (missingGuru.length) {
+            throw new Error(`Guru pendamping tidak ditemukan: ${missingGuru.join(", ")}`);
+          }
+        }
         const dataToInsert = importPreview.map((row: any) => ({
           tempat_pkl: row.tempat_pkl,
           koordinat_pkl: row.koordinat_pkl || null,
+          id_guru: row.guru_pendamping ? guruMap.get(row.guru_pendamping) : null,
         }));
         const { error } = await supabase.from("pkl").insert(dataToInsert);
         if (error) throw error;
@@ -355,7 +427,6 @@ export default function PKLManagement() {
         fetchPKL();
       } else {
         // Import assignment siswa PKL
-        // Pertama, kumpulkan semua nama tempat_pkl unik, cari id_pkl
         const tempatNames = [...new Set(importPreview.map((row: any) => row.tempat_pkl))];
         const { data: pklData, error: pklError } = await supabase
           .from("pkl")
@@ -368,7 +439,6 @@ export default function PKLManagement() {
         if (missingTempat.length) {
           throw new Error(`Tempat PKL tidak ditemukan: ${missingTempat.join(", ")}. Silakan import lokasi PKL terlebih dahulu.`);
         }
-        // Ambil semua nis dari import
         const nisList = importPreview.map((row: any) => row.nis.toString());
         const { data: siswaData, error: siswaError } = await supabase
           .from("siswa")
@@ -381,7 +451,6 @@ export default function PKLManagement() {
         if (missingNis.length) {
           throw new Error(`NIS tidak ditemukan: ${missingNis.join(", ")}`);
         }
-        // Update siswa
         const updates = importPreview.map((row: any) => ({
           id_siswa: nisToId.get(row.nis.toString()),
           id_pkl: tempatToId.get(row.tempat_pkl),
@@ -414,7 +483,7 @@ export default function PKLManagement() {
             <Building2 className="h-6 w-6" />
             Manajemen PKL (Praktik Kerja Lapangan)
           </CardTitle>
-          <CardDescription>Kelola lokasi PKL dan atur siswa yang sedang melaksanakan PKL</CardDescription>
+          <CardDescription>Kelola lokasi PKL (dengan guru pendamping) dan atur siswa yang sedang PKL</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "lokasi" | "siswa")}>
@@ -446,6 +515,7 @@ export default function PKLManagement() {
                       <TableHead className="w-16">ID</TableHead>
                       <TableHead>Tempat PKL</TableHead>
                       <TableHead>Koordinat</TableHead>
+                      <TableHead>Guru Pendamping</TableHead>
                       <TableHead className="w-24">Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -456,6 +526,12 @@ export default function PKLManagement() {
                         <TableCell className="font-medium">{pkl.tempat_pkl}</TableCell>
                         <TableCell>
                           <code className="text-xs bg-muted px-1 py-0.5 rounded">{pkl.koordinat_pkl || "-"}</code>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <User className="h-3 w-3 text-muted-foreground" />
+                            {pkl.guru_nama}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2">
@@ -471,7 +547,7 @@ export default function PKLManagement() {
                     ))}
                     {pklList.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center">Belum ada lokasi PKL</TableCell>
+                        <TableCell colSpan={5} className="text-center">Belum ada lokasi PKL</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
@@ -570,7 +646,7 @@ export default function PKLManagement() {
                   <ul className="list-disc list-inside mt-2 space-y-1">
                     <li>Siswa dengan status <strong>Sekolah</strong> akan melakukan presensi harian dan presensi mapel di lokasi sekolah.</li>
                     <li>Siswa dengan status <strong>PKL</strong> hanya dapat melakukan presensi harian di lokasi PKL yang ditentukan.</li>
-                    <li>Gunakan fitur <strong>Import Assignment</strong> untuk mengatur banyak siswa sekaligus via Excel.</li>
+                    <li>Setiap lokasi PKL memiliki <strong>guru pendamping</strong> yang bertanggung jawab.</li>
                   </ul>
                 </AlertDescription>
               </Alert>
@@ -588,8 +664,8 @@ export default function PKLManagement() {
             </DialogTitle>
             <DialogDescription>
               Upload file Excel (.xlsx, .xls, .csv) dengan format yang sesuai.
-              {importType === "lokasi" 
-                ? " Kolom: tempat_pkl (wajib), koordinat_pkl (opsional)." 
+              {importType === "lokasi"
+                ? " Kolom: tempat_pkl (wajib), koordinat_pkl (opsional), guru_pendamping (nama guru, opsional)."
                 : " Kolom: nis (wajib), tempat_pkl (wajib, nama tempat PKL harus sudah ada di database)."}
             </DialogDescription>
           </DialogHeader>
@@ -676,6 +752,21 @@ export default function PKLManagement() {
               <Label htmlFor="koordinat">Koordinat (Opsional)</Label>
               <Input id="koordinat" value={pklForm.koordinat_pkl} onChange={(e) => setPklForm({ ...pklForm, koordinat_pkl: e.target.value })} placeholder="-6.200000,106.816666" />
               <p className="text-xs text-muted-foreground mt-1">Format: latitude,longitude</p>
+            </div>
+            <div>
+              <Label htmlFor="guru">Guru Pendamping</Label>
+              <Select value={pklForm.id_guru} onValueChange={(v) => setPklForm({ ...pklForm, id_guru: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih guru pendamping" />
+                </SelectTrigger>
+                <SelectContent>
+                  {guruList.map((guru) => (
+                    <SelectItem key={guru.id_guru} value={guru.id_guru.toString()}>
+                      {guru.nama} (NIP: {guru.nip})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

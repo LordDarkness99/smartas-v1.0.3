@@ -3,7 +3,6 @@ import { useState, useCallback, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import * as XLSX from "xlsx";
-import * as bcrypt from 'bcryptjs';
 import {
   Card,
   CardContent,
@@ -94,6 +93,14 @@ interface Kelas {
   nama: string;
   aktif: boolean;
   dibuat_pada: string;
+  id_guru: number | null;
+  guru_nama?: string | null;
+}
+
+interface GuruSimple {
+  id_guru: number;
+  nama: string;
+  nip: string;
 }
 
 // ==================== MAIN COMPONENT ====================
@@ -115,6 +122,7 @@ export default function UserManagement() {
   // State untuk daftar kelas
   const [kelasList, setKelasList] = useState<Kelas[]>([]);
   const [isFetchingKelas, setIsFetchingKelas] = useState(false);
+  const [guruOptions, setGuruOptions] = useState<GuruSimple[]>([]); // untuk dropdown wali kelas
 
   // State untuk edit dialog (user)
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -134,21 +142,52 @@ export default function UserManagement() {
   // State untuk dialog kelas
   const [kelasDialogOpen, setKelasDialogOpen] = useState(false);
   const [editingKelas, setEditingKelas] = useState<Kelas | null>(null);
-  const [kelasForm, setKelasForm] = useState({ nama: "" });
+  const [kelasForm, setKelasForm] = useState({ nama: "", id_guru: "" });
   const [isSavingKelas, setIsSavingKelas] = useState(false);
   const [deleteKelasDialogOpen, setDeleteKelasDialogOpen] = useState(false);
   const [deletingKelas, setDeletingKelas] = useState<Kelas | null>(null);
 
-  // ==================== FETCH KELAS ====================
+  // ==================== FETCH GURU UNTUK WALI KELAS ====================
+  const fetchGuruOptions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("guru")
+        .select("id_guru, nama, nip")
+        .eq("aktif", true)
+        .order("nama");
+      if (error) throw error;
+      // Konversi nip ke string
+      const formatted = data.map((g: any) => ({
+        ...g,
+        nip: g.nip?.toString() || "",
+      }));
+      setGuruOptions(formatted);
+    } catch (error: any) {
+      console.error("Fetch guru options error:", error);
+    }
+  };
+
+  // ==================== FETCH KELAS (dengan join ke guru) ====================
   const fetchKelas = async () => {
     setIsFetchingKelas(true);
     try {
       const { data, error } = await supabase
         .from("kelas")
-        .select("*")
+        .select(`
+          *,
+          guru:guru (nama)
+        `)
         .order("nama");
       if (error) throw error;
-      setKelasList(data || []);
+      const formatted: Kelas[] = data.map((item: any) => ({
+        id_kelas: item.id_kelas,
+        nama: item.nama,
+        aktif: item.aktif,
+        dibuat_pada: item.dibuat_pada,
+        id_guru: item.id_guru,
+        guru_nama: item.guru?.nama || null,
+      }));
+      setKelasList(formatted);
     } catch (error: any) {
       console.error("Fetch kelas error:", error);
       toast({
@@ -164,13 +203,16 @@ export default function UserManagement() {
   // ==================== CRUD KELAS ====================
   const handleAddKelas = () => {
     setEditingKelas(null);
-    setKelasForm({ nama: "" });
+    setKelasForm({ nama: "", id_guru: "" });
     setKelasDialogOpen(true);
   };
 
   const handleEditKelas = (kelas: Kelas) => {
     setEditingKelas(kelas);
-    setKelasForm({ nama: kelas.nama });
+    setKelasForm({
+      nama: kelas.nama,
+      id_guru: kelas.id_guru?.toString() || "",
+    });
     setKelasDialogOpen(true);
   };
 
@@ -181,10 +223,14 @@ export default function UserManagement() {
     }
     setIsSavingKelas(true);
     try {
+      const data: any = {
+        nama: kelasForm.nama.trim(),
+        id_guru: kelasForm.id_guru ? parseInt(kelasForm.id_guru) : null,
+      };
       if (editingKelas) {
         const { error } = await supabase
           .from("kelas")
-          .update({ nama: kelasForm.nama.trim() })
+          .update(data)
           .eq("id_kelas", editingKelas.id_kelas);
         if (error) throw error;
         toast({ title: "Berhasil", description: "Kelas berhasil diupdate" });
@@ -192,7 +238,7 @@ export default function UserManagement() {
         const { error } = await supabase
           .from("kelas")
           .insert({
-            nama: kelasForm.nama.trim(),
+            ...data,
             aktif: true,
             dibuat_pada: new Date().toISOString(),
           });
@@ -218,6 +264,7 @@ export default function UserManagement() {
     if (!deletingKelas) return;
     setIsSavingKelas(true);
     try {
+      // Cek apakah ada siswa yang menggunakan kelas ini
       const { data: siswaCount, error: countError } = await supabase
         .from("siswa")
         .select("id_siswa", { count: "exact", head: true })
@@ -330,6 +377,7 @@ export default function UserManagement() {
   };
 
   useEffect(() => {
+    fetchGuruOptions();
     fetchKelas();
   }, []);
 
@@ -462,20 +510,16 @@ export default function UserManagement() {
     const { error: guruError } = await supabase.from("guru").insert(guruRecords);
     if (guruError) throw guruError;
     
-    // Hash password dengan bcrypt
-    const akunRecords = await Promise.all(filteredData.map(async (item, idx) => {
-      const plainPassword = item.password || "password123";
-      const hashedPassword = await bcrypt.hash(plainPassword, 10);
-      return {
-        nama: item.nama,
-        email: item.email,
-        peran: "guru",
-        aktif: true,
-        dibuat_pada: new Date().toISOString(),
-        id_guru: nextId + idx,
-        id_siswa: null,
-        kata_sandi: hashedPassword,
-      };
+    // Simpan password plain text (sementara) - nanti akan di-hash di backend
+    const akunRecords = filteredData.map((item, idx) => ({
+      nama: item.nama,
+      email: item.email,
+      peran: "guru",
+      aktif: true,
+      dibuat_pada: new Date().toISOString(),
+      id_guru: nextId + idx,
+      id_siswa: null,
+      kata_sandi: item.password || "password123",
     }));
     
     const { error: akunError } = await supabase.from("akun").insert(akunRecords);
@@ -515,20 +559,15 @@ export default function UserManagement() {
     const { error: siswaError } = await supabase.from("siswa").insert(siswaRecords);
     if (siswaError) throw siswaError;
     
-    // Hash password dengan bcrypt
-    const akunRecords = await Promise.all(filteredData.map(async (item, idx) => {
-      const plainPassword = item.password || "password123";
-      const hashedPassword = await bcrypt.hash(plainPassword, 10);
-      return {
-        nama: item.nama,
-        email: item.email,
-        peran: "siswa",
-        aktif: true,
-        dibuat_pada: new Date().toISOString(),
-        id_guru: null,
-        id_siswa: nextId + idx,
-        kata_sandi: hashedPassword,
-      };
+    const akunRecords = filteredData.map((item, idx) => ({
+      nama: item.nama,
+      email: item.email,
+      peran: "siswa",
+      aktif: true,
+      dibuat_pada: new Date().toISOString(),
+      id_guru: null,
+      id_siswa: nextId + idx,
+      kata_sandi: item.password || "password123",
     }));
     
     const { error: akunError } = await supabase.from("akun").insert(akunRecords);
@@ -607,8 +646,8 @@ export default function UserManagement() {
         email: editForm.email 
       };
       if (editForm.password.trim()) {
-        // Hash password baru jika diisi
-        akunUpdate.kata_sandi = await bcrypt.hash(editForm.password, 10);
+        // Simpan plain text (sementara)
+        akunUpdate.kata_sandi = editForm.password;
       }
       
       const { error: akunError } = await supabase
@@ -670,7 +709,7 @@ export default function UserManagement() {
         <CardHeader>
           <CardTitle>Manajemen Data User & Kelas</CardTitle>
           <CardDescription>
-            Import, edit, hapus data guru/siswa, serta kelola data kelas
+            Import, edit, hapus data guru/siswa, serta kelola data kelas dengan wali kelas
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -681,8 +720,9 @@ export default function UserManagement() {
               <TabsTrigger value="kelas">Kelola Kelas</TabsTrigger>
             </TabsList>
 
-            {/* TAB IMPORT */}
+            {/* TAB IMPORT (tidak berubah) */}
             <TabsContent value="import">
+              {/* ... kode import sama seperti sebelumnya ... */}
               <div className="space-y-6">
                 <div className="flex gap-4 flex-wrap">
                   <Select value={userType} onValueChange={(v) => setUserType(v as "guru" | "siswa")}>
@@ -758,7 +798,7 @@ export default function UserManagement() {
               </div>
             </TabsContent>
 
-            {/* TAB DAFTAR USER */}
+            {/* TAB DAFTAR USER (tidak berubah) */}
             <TabsContent value="list">
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
@@ -867,7 +907,7 @@ export default function UserManagement() {
               </div>
             </TabsContent>
 
-            {/* TAB KELOLA KELAS */}
+            {/* TAB KELOLA KELAS (DENGAN GURU WALI) */}
             <TabsContent value="kelas">
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
@@ -891,6 +931,7 @@ export default function UserManagement() {
                         <TableRow>
                           <TableHead>ID</TableHead>
                           <TableHead>Nama Kelas</TableHead>
+                          <TableHead>Wali Kelas</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Dibuat Pada</TableHead>
                           <TableHead>Aksi</TableHead>
@@ -901,6 +942,7 @@ export default function UserManagement() {
                           <TableRow key={kelas.id_kelas}>
                             <TableCell>{kelas.id_kelas}</TableCell>
                             <TableCell>{kelas.nama}</TableCell>
+                            <TableCell>{kelas.guru_nama || "-"}</TableCell>
                             <TableCell>
                               <span className={`px-2 py-1 rounded-full text-xs ${kelas.aktif ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
                                 {kelas.aktif ? "Aktif" : "Nonaktif"}
@@ -921,7 +963,7 @@ export default function UserManagement() {
                         ))}
                         {!kelasList.length && (
                           <TableRow>
-                            <TableCell colSpan={5} className="text-center">
+                            <TableCell colSpan={6} className="text-center">
                               Belum ada data kelas
                             </TableCell>
                           </TableRow>
@@ -936,7 +978,7 @@ export default function UserManagement() {
         </CardContent>
       </Card>
 
-      {/* Dialog Edit User */}
+      {/* Dialog Edit User (tidak berubah) */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1035,19 +1077,40 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Kelas (Add/Edit) */}
+      {/* Dialog Kelas (Add/Edit) dengan pilihan guru wali */}
       <Dialog open={kelasDialogOpen} onOpenChange={setKelasDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editingKelas ? "Edit Kelas" : "Tambah Kelas Baru"}</DialogTitle>
           </DialogHeader>
-          <div>
-            <Label>Nama Kelas</Label>
-            <Input 
-              value={kelasForm.nama} 
-              onChange={e => setKelasForm({ nama: e.target.value })} 
-              placeholder="Contoh: XII RPL 1" 
-            />
+          <div className="space-y-4">
+            <div>
+              <Label>Nama Kelas</Label>
+              <Input 
+                value={kelasForm.nama} 
+                onChange={e => setKelasForm({ ...kelasForm, nama: e.target.value })} 
+                placeholder="Contoh: XII RPL 1" 
+              />
+            </div>
+            <div>
+              <Label>Wali Kelas</Label>
+              <Select 
+                value={kelasForm.id_guru} 
+                onValueChange={v => setKelasForm({ ...kelasForm, id_guru: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih wali kelas (opsional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Tidak ada wali kelas</SelectItem>
+                  {guruOptions.map(guru => (
+                    <SelectItem key={guru.id_guru} value={guru.id_guru.toString()}>
+                      {guru.nama} (NIP: {guru.nip})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setKelasDialogOpen(false)}>Batal</Button>

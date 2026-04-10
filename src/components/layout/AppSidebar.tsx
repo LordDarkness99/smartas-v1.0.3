@@ -46,7 +46,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
       return [
         { title: "Dashboard", icon: LayoutDashboard, path: "/guru/dashboard" },
         { title: "Kelola Nilai", icon: ClipboardList, path: "/guru/manage-grades" },
-        { title: "Kelola Kehadiran", icon: Calendar, path: "/guru/manage-attendance" },
+        { title: "Presensi", icon: Calendar, path: "/guru/attendance" },
         { title: "Jadwal", icon: Bell, path: "/guru/schedule" },
       ];
     } else if (userRole === "admin") {
@@ -56,6 +56,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
         { title: "Kelola Jadwal & Mapel", icon: Calendar, path: "/admin/schedule" },
         { title: "PKL", icon: MapPin, path: "/admin/pkl" },
         { title: "Kelola Kehadiran", icon: School, path: "/admin/manage-attendance" },
+        { title: "Presensi", icon: Calendar, path: "/admin/attendance" },
         { title: "Laporan", icon: ClipboardList, path: "/admin/reports" },
       ];
     }
