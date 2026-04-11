@@ -55,8 +55,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
         { title: "Kelola User", icon: Users, path: "/admin/manage-users" },
         { title: "Kelola Jadwal & Mapel", icon: Calendar, path: "/admin/schedule" },
         { title: "PKL", icon: MapPin, path: "/admin/pkl" },
-        { title: "Kelola Kehadiran", icon: School, path: "/admin/manage-attendance" },
-        { title: "Presensi", icon: Calendar, path: "/admin/attendance" },
+        { title: "Kelola Kehadiran", icon: School, path: "/admin/attendance" },
         { title: "Laporan", icon: ClipboardList, path: "/admin/reports" },
       ];
     }
