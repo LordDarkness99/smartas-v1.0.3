@@ -16,7 +16,7 @@ import UserManagement from "@/pages/admin/UserManagement";
 import ScheduleManagement from "@/pages/admin/ScheduleManagement";
 import PKLManagement from "@/pages/admin/PKLManagement";
 import AttendanceManagement from "@/pages/attendance/AttendanceManagement";
-
+import AttendanceReport from "@/pages/report/AttendanceReport";
 
 // Temporary pages untuk guru dan admin
 function GuruDashboard() {
@@ -124,6 +124,7 @@ function App() {
             <Route path="schedule" element={<ScheduleManagement />} />
             <Route path="pkl" element={<PKLManagement />} />
             <Route path="attendance" element={<AttendanceManagement />} />
+            <Route path="reports" element={<AttendanceReport />} />
           </Route>
           
           {/* Dashboard redirect based on role */}

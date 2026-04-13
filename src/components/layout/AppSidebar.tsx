@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { MapPin } from "lucide-react";
+import { FileText, MapPin } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -56,7 +56,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
         { title: "Kelola Jadwal & Mapel", icon: Calendar, path: "/admin/schedule" },
         { title: "PKL", icon: MapPin, path: "/admin/pkl" },
         { title: "Kelola Kehadiran", icon: School, path: "/admin/attendance" },
-        { title: "Laporan", icon: ClipboardList, path: "/admin/reports" },
+        { title: "Laporan", icon: FileText, path: "/admin/reports" }
       ];
     }
     return [];
