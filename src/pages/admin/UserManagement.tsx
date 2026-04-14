@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import * as XLSX from "xlsx";
+import * as bcrypt from 'bcryptjs';
 import {
   Card,
   CardContent,
@@ -122,7 +123,7 @@ export default function UserManagement() {
   // State untuk daftar kelas
   const [kelasList, setKelasList] = useState<Kelas[]>([]);
   const [isFetchingKelas, setIsFetchingKelas] = useState(false);
-  const [guruOptions, setGuruOptions] = useState<GuruSimple[]>([]); // untuk dropdown wali kelas
+  const [guruOptions, setGuruOptions] = useState<GuruSimple[]>([]);
 
   // State untuk edit dialog (user)
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -156,7 +157,6 @@ export default function UserManagement() {
         .eq("aktif", true)
         .order("nama");
       if (error) throw error;
-      // Konversi nip ke string
       const formatted = data.map((g: any) => ({
         ...g,
         nip: g.nip?.toString() || "",
@@ -264,7 +264,6 @@ export default function UserManagement() {
     if (!deletingKelas) return;
     setIsSavingKelas(true);
     try {
-      // Cek apakah ada siswa yang menggunakan kelas ini
       const { data: siswaCount, error: countError } = await supabase
         .from("siswa")
         .select("id_siswa", { count: "exact", head: true })
@@ -510,16 +509,20 @@ export default function UserManagement() {
     const { error: guruError } = await supabase.from("guru").insert(guruRecords);
     if (guruError) throw guruError;
     
-    // Simpan password plain text (sementara) - nanti akan di-hash di backend
-    const akunRecords = filteredData.map((item, idx) => ({
-      nama: item.nama,
-      email: item.email,
-      peran: "guru",
-      aktif: true,
-      dibuat_pada: new Date().toISOString(),
-      id_guru: nextId + idx,
-      id_siswa: null,
-      kata_sandi: item.password || "password123",
+    // Hash password dengan bcrypt
+    const akunRecords = await Promise.all(filteredData.map(async (item, idx) => {
+      const plainPassword = item.password || "password123";
+      const hashedPassword = await bcrypt.hash(plainPassword, 10);
+      return {
+        nama: item.nama,
+        email: item.email,
+        peran: "guru",
+        aktif: true,
+        dibuat_pada: new Date().toISOString(),
+        id_guru: nextId + idx,
+        id_siswa: null,
+        kata_sandi: hashedPassword,
+      };
     }));
     
     const { error: akunError } = await supabase.from("akun").insert(akunRecords);
@@ -559,15 +562,20 @@ export default function UserManagement() {
     const { error: siswaError } = await supabase.from("siswa").insert(siswaRecords);
     if (siswaError) throw siswaError;
     
-    const akunRecords = filteredData.map((item, idx) => ({
-      nama: item.nama,
-      email: item.email,
-      peran: "siswa",
-      aktif: true,
-      dibuat_pada: new Date().toISOString(),
-      id_guru: null,
-      id_siswa: nextId + idx,
-      kata_sandi: item.password || "password123",
+    // Hash password dengan bcrypt
+    const akunRecords = await Promise.all(filteredData.map(async (item, idx) => {
+      const plainPassword = item.password || "password123";
+      const hashedPassword = await bcrypt.hash(plainPassword, 10);
+      return {
+        nama: item.nama,
+        email: item.email,
+        peran: "siswa",
+        aktif: true,
+        dibuat_pada: new Date().toISOString(),
+        id_guru: null,
+        id_siswa: nextId + idx,
+        kata_sandi: hashedPassword,
+      };
     }));
     
     const { error: akunError } = await supabase.from("akun").insert(akunRecords);
@@ -646,8 +654,8 @@ export default function UserManagement() {
         email: editForm.email 
       };
       if (editForm.password.trim()) {
-        // Simpan plain text (sementara)
-        akunUpdate.kata_sandi = editForm.password;
+        // Hash password baru jika diisi
+        akunUpdate.kata_sandi = await bcrypt.hash(editForm.password, 10);
       }
       
       const { error: akunError } = await supabase
@@ -720,9 +728,8 @@ export default function UserManagement() {
               <TabsTrigger value="kelas">Kelola Kelas</TabsTrigger>
             </TabsList>
 
-            {/* TAB IMPORT (tidak berubah) */}
+            {/* TAB IMPORT */}
             <TabsContent value="import">
-              {/* ... kode import sama seperti sebelumnya ... */}
               <div className="space-y-6">
                 <div className="flex gap-4 flex-wrap">
                   <Select value={userType} onValueChange={(v) => setUserType(v as "guru" | "siswa")}>
@@ -798,7 +805,7 @@ export default function UserManagement() {
               </div>
             </TabsContent>
 
-            {/* TAB DAFTAR USER (tidak berubah) */}
+            {/* TAB DAFTAR USER */}
             <TabsContent value="list">
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
@@ -978,7 +985,7 @@ export default function UserManagement() {
         </CardContent>
       </Card>
 
-      {/* Dialog Edit User (tidak berubah) */}
+      {/* Dialog Edit User */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
           <DialogHeader>

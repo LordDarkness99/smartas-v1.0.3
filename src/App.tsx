@@ -12,50 +12,32 @@ import StudentMyAttendance from "@/pages/student/MyAttendance";
 import StudentNotifications from "@/pages/student/Notifications";
 
 // Admin pages
+import AdminDashboard from "@/pages/admin/Dashboard";
 import UserManagement from "@/pages/admin/UserManagement";
 import ScheduleManagement from "@/pages/admin/ScheduleManagement";
 import PKLManagement from "@/pages/admin/PKLManagement";
 import AttendanceManagement from "@/pages/attendance/AttendanceManagement";
 import AttendanceReport from "@/pages/report/AttendanceReport";
 
-// Temporary pages untuk guru dan admin
-function GuruDashboard() {
-  const { user } = useAuth();
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold">Dashboard Guru</h1>
-      <p>Selamat datang, {user?.nama}</p>
-      <p>Halaman ini sedang dalam pengembangan</p>
-    </div>
-  );
-}
+// Guru pages
+import GuruDashboard from "@/pages/guru/Dashboard";
 
-function AdminDashboard() {
-  const { user } = useAuth();
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold">Dashboard Admin</h1>
-      <p>Selamat datang, {user?.nama}</p>
-      <p>Halaman ini sedang dalam pengembangan</p>
-    </div>
-  );
-}
 
-// Komponen untuk redirect berdasarkan role
-function DashboardRouter() {
+// Komponen untuk merender dashboard berdasarkan role (tanpa redirect)
+function DashboardRenderer() {
   const { user } = useAuth();
-  
-  if (user?.peran === "siswa") return <Navigate to="/student/dashboard" replace />;
-  if (user?.peran === "guru") return <Navigate to="/guru/dashboard" replace />;
-  if (user?.peran === "admin") return <Navigate to="/admin/dashboard" replace />;
-  
+
+  if (user?.peran === "siswa") return <StudentDashboard />;
+  if (user?.peran === "guru") return <GuruDashboard />;
+  if (user?.peran === "admin") return <AdminDashboard />;
+
   return <Navigate to="/login" replace />;
 }
 
 // Root router - cek auth status
 function RootRouter() {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -63,11 +45,11 @@ function RootRouter() {
       </div>
     );
   }
-  
+
   if (user) {
     return <Navigate to="/dashboard" replace />;
   }
-  
+
   return <Navigate to="/login" replace />;
 }
 
@@ -78,7 +60,7 @@ function App() {
         <Routes>
           <Route path="/" element={<RootRouter />} />
           <Route path="/login" element={<Login />} />
-          
+
           {/* Student Routes */}
           <Route
             path="/student"
@@ -94,7 +76,7 @@ function App() {
             <Route path="my-attendance" element={<StudentMyAttendance />} />
             <Route path="notifications" element={<StudentNotifications />} />
           </Route>
-          
+
           {/* Guru Routes */}
           <Route
             path="/guru"
@@ -108,7 +90,7 @@ function App() {
             <Route path="dashboard" element={<GuruDashboard />} />
             <Route path="attendance" element={<AttendanceManagement />} />
           </Route>
-          
+
           {/* Admin Routes */}
           <Route
             path="/admin"
@@ -126,8 +108,8 @@ function App() {
             <Route path="attendance" element={<AttendanceManagement />} />
             <Route path="reports" element={<AttendanceReport />} />
           </Route>
-          
-          {/* Dashboard redirect based on role */}
+
+          {/* Dashboard redirect - sekarang langsung render dashboard sesuai role */}
           <Route
             path="/dashboard"
             element={
@@ -136,9 +118,9 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<DashboardRouter />} />
+            <Route index element={<DashboardRenderer />} />
           </Route>
-          
+
           <Route path="*" element={<NotFound />} />
         </Routes>
       </AuthProvider>
