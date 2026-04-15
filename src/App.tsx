@@ -8,8 +8,8 @@ import NotFound from "@/pages/NotFound";
 // Student pages
 import StudentDashboard from "@/pages/student/Dashboard";
 import StudentMyGrades from "@/pages/student/MyGrades";
-import StudentMyAttendance from "@/pages/student/MyAttendance";
 import StudentNotifications from "@/pages/student/Notifications";
+import StudentAttendance from "@/pages/student/StudentAttendance";
 
 // Admin pages
 import AdminDashboard from "@/pages/admin/Dashboard";
@@ -73,7 +73,7 @@ function App() {
             <Route index element={<StudentDashboard />} />
             <Route path="dashboard" element={<StudentDashboard />} />
             <Route path="my-grades" element={<StudentMyGrades />} />
-            <Route path="my-attendance" element={<StudentMyAttendance />} />
+            <Route path="attendance" element={<StudentAttendance />} />
             <Route path="notifications" element={<StudentNotifications />} />
           </Route>
 

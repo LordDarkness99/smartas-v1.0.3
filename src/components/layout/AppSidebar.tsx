@@ -53,7 +53,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
       return [
         { title: "Dashboard", icon: LayoutDashboard, path: "/student/dashboard" },
         { title: "Jadwal Mapel", icon: BookOpen, path: "/student/my-grades" },
-        { title: "Presensi", icon: Calendar, path: "/student/my-attendance" },
+        { title: "Presensi", icon: Calendar, path: "/student/attendance" },
         { title: "Notifikasi", icon: Bell, path: "/student/notifications" },
       ];
     } else if (userRole === "guru") {
