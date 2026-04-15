@@ -12,6 +12,7 @@ import {
   ClipboardList,
   School,
   UserCircle,
+  Book,
 } from "lucide-react";
 import {
   Sidebar,
@@ -52,16 +53,15 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
     if (userRole === "siswa") {
       return [
         { title: "Dashboard", icon: LayoutDashboard, path: "/student/dashboard" },
-        { title: "Jadwal Mapel", icon: BookOpen, path: "/student/my-grades" },
+        { title: "Jadwal", icon: Calendar, path: "/student/schedule" },
         { title: "Presensi", icon: Calendar, path: "/student/attendance" },
         { title: "Notifikasi", icon: Bell, path: "/student/notifications" },
       ];
     } else if (userRole === "guru") {
       return [
         { title: "Dashboard", icon: LayoutDashboard, path: "/guru/dashboard" },
-        { title: "Kelola Nilai", icon: ClipboardList, path: "/guru/manage-grades" },
-        { title: "Presensi", icon: Calendar, path: "/guru/attendance" },
-        { title: "Jadwal", icon: Bell, path: "/guru/schedule" },
+        { title: "Jadwal", icon: Calendar, path: "/guru/schedule" },
+        { title: "Presensi", icon: Book, path: "/guru/attendance" },
       ];
     } else if (userRole === "admin") {
       return [

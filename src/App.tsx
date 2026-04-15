@@ -21,6 +21,7 @@ import AttendanceReport from "@/pages/report/AttendanceReport";
 
 // Guru pages
 import GuruDashboard from "@/pages/guru/Dashboard";
+import ScheduleView from "@/pages/schedule/ScheduleView";
 
 
 // Komponen untuk merender dashboard berdasarkan role (tanpa redirect)
@@ -72,7 +73,7 @@ function App() {
           >
             <Route index element={<StudentDashboard />} />
             <Route path="dashboard" element={<StudentDashboard />} />
-            <Route path="my-grades" element={<StudentMyGrades />} />
+            <Route path="schedule" element={<ScheduleView />} />
             <Route path="attendance" element={<StudentAttendance />} />
             <Route path="notifications" element={<StudentNotifications />} />
           </Route>
@@ -89,6 +90,7 @@ function App() {
             <Route index element={<GuruDashboard />} />
             <Route path="dashboard" element={<GuruDashboard />} />
             <Route path="attendance" element={<AttendanceManagement />} />
+            <Route path="schedule" element={<ScheduleView />} />
           </Route>
 
           {/* Admin Routes */}
