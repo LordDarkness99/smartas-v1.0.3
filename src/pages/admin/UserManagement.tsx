@@ -39,6 +39,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Upload,
   Download,
@@ -49,6 +52,47 @@ import {
   Trash2,
   RefreshCw,
   Plus,
+  Sun,
+  Moon,
+  Cloud,
+  Users,
+  School,
+  BookOpen,
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Calendar,
+  Clock,
+  Sparkles,
+  Trophy,
+  Activity,
+  Shield,
+  Fingerprint,
+  Smartphone,
+  Home,
+  Briefcase,
+  Star,
+  Heart,
+  Smile,
+  ThumbsUp,
+  GraduationCap,
+  UserCheck,
+  UserPlus,
+  FileText,
+  UploadCloud,
+  DownloadCloud,
+  Filter,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Maximize2,
+  Minimize2,
+  Eye,
+  EyeOff,
+  Settings,
+  Bell,
+  Info
 } from "lucide-react";
 
 // ==================== TYPES ====================
@@ -109,6 +153,8 @@ export default function UserManagement() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"import" | "list" | "kelas">("import");
   const [userType, setUserType] = useState<"guru" | "siswa">("guru");
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [greeting, setGreeting] = useState("");
 
   // State untuk import
   const [previewData, setPreviewData] = useState<any[]>([]);
@@ -148,6 +194,27 @@ export default function UserManagement() {
   const [deleteKelasDialogOpen, setDeleteKelasDialogOpen] = useState(false);
   const [deletingKelas, setDeletingKelas] = useState<Kelas | null>(null);
 
+  // ==================== GREETING EFFECT ====================
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) setGreeting("Selamat Pagi");
+    else if (hour < 18) setGreeting("Selamat Siang");
+    else setGreeting("Selamat Malam");
+
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // ==================== FORMAT DATE ====================
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString("id-ID", { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  };
+
   // ==================== FETCH GURU UNTUK WALI KELAS ====================
   const fetchGuruOptions = async () => {
     try {
@@ -167,7 +234,7 @@ export default function UserManagement() {
     }
   };
 
-  // ==================== FETCH KELAS (dengan join ke guru) ====================
+  // ==================== FETCH KELAS ====================
   const fetchKelas = async () => {
     setIsFetchingKelas(true);
     try {
@@ -509,7 +576,6 @@ export default function UserManagement() {
     const { error: guruError } = await supabase.from("guru").insert(guruRecords);
     if (guruError) throw guruError;
     
-    // Hash password dengan bcrypt
     const akunRecords = await Promise.all(filteredData.map(async (item, idx) => {
       const plainPassword = item.password || "password123";
       const hashedPassword = await bcrypt.hash(plainPassword, 10);
@@ -536,7 +602,7 @@ export default function UserManagement() {
     const kelasMap = new Map<string, number>();
     for (const nama of kelasNames) {
       const id = await getKelasIdFromName(nama);
-      if (!id) throw new Error(`Kelas "${nama}" tidak ditemukan. Silakan tambah kelas terlebih dahulu.`);
+      if (!id) throw new Error(`Kelas "${nama}" tidak ditemukan. Silakan tambah kelas ter dahulu.`);
       kelasMap.set(nama, id);
     }
     
@@ -562,7 +628,6 @@ export default function UserManagement() {
     const { error: siswaError } = await supabase.from("siswa").insert(siswaRecords);
     if (siswaError) throw siswaError;
     
-    // Hash password dengan bcrypt
     const akunRecords = await Promise.all(filteredData.map(async (item, idx) => {
       const plainPassword = item.password || "password123";
       const hashedPassword = await bcrypt.hash(plainPassword, 10);
@@ -654,7 +719,6 @@ export default function UserManagement() {
         email: editForm.email 
       };
       if (editForm.password.trim()) {
-        // Hash password baru jika diisi
         akunUpdate.kata_sandi = await bcrypt.hash(editForm.password, 10);
       }
       
@@ -710,39 +774,154 @@ export default function UserManagement() {
     }
   };
 
+  // Hitung statistik
+  const totalGuru = guruList.length;
+  const totalSiswa = siswaList.length;
+  const totalKelas = kelasList.length;
+
   // ==================== RENDER ====================
   return (
-    <div className="container mx-auto py-8 px-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Manajemen Data User & Kelas</CardTitle>
-          <CardDescription>
-            Import, edit, hapus data guru/siswa, serta kelola data kelas dengan wali kelas
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-            <TabsList className="grid w-full grid-cols-3 mb-6">
-              <TabsTrigger value="import">Import Data</TabsTrigger>
-              <TabsTrigger value="list">Daftar User</TabsTrigger>
-              <TabsTrigger value="kelas">Kelola Kelas</TabsTrigger>
-            </TabsList>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+      
+      {/* HEADER SECTION */}
+      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
+        <div className="container mx-auto px-6 py-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-sm">
+                <Users className="h-8 w-8" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  {greeting === "Selamat Pagi" ? <Sun className="h-4 w-4" /> : 
+                   greeting === "Selamat Malam" ? <Moon className="h-4 w-4" /> : 
+                   <Cloud className="h-4 w-4" />}
+                  <p className="text-sm text-blue-100">{greeting}</p>
+                </div>
+                <h1 className="text-2xl lg:text-3xl font-bold">Manajemen Data User & Kelas</h1>
+                <p className="text-blue-100 text-sm">
+                  Import, edit, hapus data guru/siswa, serta kelola data kelas dengan wali kelas
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <div className="bg-white/10 rounded-xl px-4 py-2 backdrop-blur-sm text-center">
+                <p className="text-xs text-blue-100">{formatDate(currentTime)}</p>
+                <p className="text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-            {/* TAB IMPORT */}
-            <TabsContent value="import">
-              <div className="space-y-6">
-                <div className="flex gap-4 flex-wrap">
-                  <Select value={userType} onValueChange={(v) => setUserType(v as "guru" | "siswa")}>
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Pilih tipe user" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="guru">Guru</SelectItem>
-                      <SelectItem value="siswa">Siswa</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button variant="outline" onClick={() => downloadTemplate(userType)}>
-                    <Download className="mr-2 h-4 w-4" /> Download Template
+      {/* MAIN CONTENT */}
+      <div className="container mx-auto px-4 py-8 space-y-8">
+        
+        {/* STATS CARDS */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-blue-600 font-medium">Total Guru</p>
+                  <p className="text-2xl font-bold text-blue-900">{totalGuru}</p>
+                </div>
+                <User className="h-8 w-8 text-blue-500" />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-emerald-600 font-medium">Total Siswa</p>
+                  <p className="text-2xl font-bold text-emerald-900">{totalSiswa}</p>
+                </div>
+                <GraduationCap className="h-8 w-8 text-emerald-500" />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-purple-600 font-medium">Total Kelas</p>
+                  <p className="text-2xl font-bold text-purple-900">{totalKelas}</p>
+                </div>
+                <School className="h-8 w-8 text-purple-500" />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-amber-600 font-medium">Total Akun</p>
+                  <p className="text-2xl font-bold text-amber-900">{totalGuru + totalSiswa}</p>
+                </div>
+                <UserCheck className="h-8 w-8 text-amber-500" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* MAIN TABS CARD */}
+        <Card className="rounded-2xl border-0 shadow-xl overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-6">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/10 p-2 rounded-xl">
+                <Shield className="h-6 w-6" />
+              </div>
+              <div>
+                <CardTitle className="text-xl">Manajemen User & Kelas</CardTitle>
+                <CardDescription className="text-slate-300 text-sm">
+                  Kelola data guru, siswa, dan kelas dengan mudah
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          
+          <CardContent className="p-6">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-6">
+              {/* TABS LIST - DIPERKECIL DAN DITENGAH */}
+              <div className="flex justify-center">
+                <TabsList className="bg-slate-100 p-1 rounded-xl w-auto inline-flex">
+                  <TabsTrigger value="import" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2 px-4 py-1.5 text-sm">
+                    <Upload className="h-3.5 w-3.5" />
+                    Import Data
+                  </TabsTrigger>
+                  <TabsTrigger value="list" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2 px-4 py-1.5 text-sm">
+                    <Users className="h-3.5 w-3.5" />
+                    Daftar User
+                  </TabsTrigger>
+                  <TabsTrigger value="kelas" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2 px-4 py-1.5 text-sm">
+                    <School className="h-3.5 w-3.5" />
+                    Kelola Kelas
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              {/* TAB IMPORT */}
+              <TabsContent value="import" className="space-y-6">
+                <div className="flex flex-col sm:flex-row gap-4 items-end justify-center">
+                  <div className="w-48">
+                    <Label className="text-slate-700 font-medium">Tipe User</Label>
+                    <Select value={userType} onValueChange={(v) => setUserType(v as "guru" | "siswa")}>
+                      <SelectTrigger className="rounded-xl border-slate-200 h-9 text-sm">
+                        <SelectValue placeholder="Pilih tipe user" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="guru">Guru</SelectItem>
+                        <SelectItem value="siswa">Siswa</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button variant="outline" onClick={() => downloadTemplate(userType)} className="rounded-xl h-9 text-sm">
+                    <Download className="mr-1.5 h-3.5 w-3.5" /> Download Template
                   </Button>
                   <div className="relative">
                     <input 
@@ -752,15 +931,15 @@ export default function UserManagement() {
                       disabled={isLoading} 
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
                     />
-                    <Button disabled={isLoading}>
-                      <Upload className="mr-2 h-4 w-4" />
+                    <Button disabled={isLoading} className="rounded-xl h-9 text-sm bg-gradient-to-r from-blue-600 to-indigo-600">
+                      <Upload className="mr-1.5 h-3.5 w-3.5" />
                       {isLoading ? "Memproses..." : "Upload File"}
                     </Button>
                   </div>
                 </div>
                 
                 {uploadError && (
-                  <Alert variant="destructive">
+                  <Alert variant="destructive" className="rounded-xl">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>{uploadError}</AlertDescription>
                   </Alert>
@@ -768,52 +947,56 @@ export default function UserManagement() {
                 
                 {previewData.length > 0 && (
                   <>
-                    <Alert>
-                      <CheckCircle className="h-4 w-4" />
-                      <AlertDescription>{previewData.length} data siap diimport</AlertDescription>
+                    <Alert className="rounded-xl bg-emerald-50 border-emerald-200 max-w-md mx-auto">
+                      <CheckCircle className="h-4 w-4 text-emerald-600" />
+                      <AlertDescription className="text-emerald-700">{previewData.length} data siap diimport</AlertDescription>
                     </Alert>
-                    <div className="border rounded-lg overflow-auto max-h-96">
+                    <div className="border rounded-xl overflow-auto max-h-96 shadow-sm">
                       <Table>
                         <TableHeader>
-                          <TableRow>
-                            <TableHead>Nama</TableHead>
-                            <TableHead>{userType === "guru" ? "NIP" : "NIS"}</TableHead>
-                            <TableHead>Email</TableHead>
-                            <TableHead>Gender</TableHead>
-                            {userType === "siswa" && <TableHead>Kelas</TableHead>}
+                          <TableRow className="bg-slate-50">
+                            <TableHead className="font-semibold">Nama</TableHead>
+                            <TableHead className="font-semibold">{userType === "guru" ? "NIP" : "NIS"}</TableHead>
+                            <TableHead className="font-semibold">Email</TableHead>
+                            <TableHead className="font-semibold">Gender</TableHead>
+                            {userType === "siswa" && <TableHead className="font-semibold">Kelas</TableHead>}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {previewData.slice(0, 10).map((item: any, idx) => (
-                            <TableRow key={idx}>
+                            <TableRow key={idx} className="hover:bg-slate-50 transition-colors">
                               <TableCell>{item.nama}</TableCell>
-                              <TableCell>{userType === "guru" ? item.nip : item.nis}</TableCell>
+                              <TableCell className="font-mono text-sm">{userType === "guru" ? item.nip : item.nis}</TableCell>
                               <TableCell>{item.email}</TableCell>
-                              <TableCell>{item.gender}</TableCell>
+                              <TableCell>
+                                <Badge className={item.gender === "L" ? "bg-blue-100 text-blue-700" : "bg-pink-100 text-pink-700"} rounded-full>
+                                  {item.gender === "L" ? "Laki-laki" : "Perempuan"}
+                                </Badge>
+                              </TableCell>
                               {userType === "siswa" && <TableCell>{item.kelas}</TableCell>}
                             </TableRow>
                           ))}
                         </TableBody>
                       </Table>
                     </div>
-                    <Button onClick={handleImport} disabled={isLoading}>
-                      {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Import Data
-                    </Button>
+                    <div className="flex justify-center">
+                      <Button onClick={handleImport} disabled={isLoading} className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600">
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Import Data
+                      </Button>
+                    </div>
                   </>
                 )}
-              </div>
-            </TabsContent>
+              </TabsContent>
 
-            {/* TAB DAFTAR USER */}
-            <TabsContent value="list">
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
+              {/* TAB DAFTAR USER */}
+              <TabsContent value="list" className="space-y-6">
+                <div className="flex justify-between items-center flex-wrap gap-3">
                   <Select value={userType} onValueChange={(v) => setUserType(v as "guru" | "siswa")}>
-                    <SelectTrigger className="w-[180px]">
+                    <SelectTrigger className="w-[180px] rounded-xl border-slate-200 h-9 text-sm">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl">
                       <SelectItem value="guru">Guru</SelectItem>
                       <SelectItem value="siswa">Siswa</SelectItem>
                     </SelectContent>
@@ -822,204 +1005,258 @@ export default function UserManagement() {
                     variant="outline" 
                     onClick={() => userType === "guru" ? fetchGuru() : fetchSiswa()} 
                     disabled={isFetching}
+                    className="rounded-xl h-9 text-sm"
                   >
-                    <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} /> 
+                    <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} /> 
                     Refresh
                   </Button>
                 </div>
                 
                 {isFetching ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin" />
+                  <div className="flex justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
                   </div>
                 ) : (
-                  <div className="border rounded-lg overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>ID</TableHead>
-                          <TableHead>Nama</TableHead>
-                          <TableHead>{userType === "guru" ? "NIP" : "NIS"}</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Gender</TableHead>
-                          {userType === "siswa" && <TableHead>Kelas</TableHead>}
-                          <TableHead>Status</TableHead>
-                          <TableHead>Aksi</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {userType === "guru" ? (
-                          guruList.map(guru => (
-                            <TableRow key={guru.id_guru}>
-                              <TableCell>{guru.id_guru}</TableCell>
-                              <TableCell>{guru.nama}</TableCell>
-                              <TableCell>{guru.nip}</TableCell>
-                              <TableCell>{guru.email}</TableCell>
-                              <TableCell>{guru.gender}</TableCell>
-                              <TableCell>
-                                <span className={`px-2 py-1 rounded-full text-xs ${guru.aktif ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
-                                  {guru.aktif ? "Aktif" : "Nonaktif"}
-                                </span>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex gap-2">
-                                  <Button variant="ghost" size="sm" onClick={() => openEditDialog(guru)}>
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button variant="ghost" size="sm" onClick={() => confirmDelete(guru)}>
-                                    <Trash2 className="h-4 w-4 text-red-500" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        ) : (
-                          siswaList.map(siswa => (
-                            <TableRow key={siswa.id_siswa}>
-                              <TableCell>{siswa.id_siswa}</TableCell>
-                              <TableCell>{siswa.nama}</TableCell>
-                              <TableCell>{siswa.nis}</TableCell>
-                              <TableCell>{siswa.email}</TableCell>
-                              <TableCell>{siswa.gender}</TableCell>
-                              <TableCell>{siswa.nama_kelas || "-"}</TableCell>
-                              <TableCell>
-                                <span className={`px-2 py-1 rounded-full text-xs ${siswa.aktif ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
-                                  {siswa.aktif ? "Aktif" : "Nonaktif"}
-                                </span>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex gap-2">
-                                  <Button variant="ghost" size="sm" onClick={() => openEditDialog(siswa)}>
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button variant="ghost" size="sm" onClick={() => confirmDelete(siswa)}>
-                                    <Trash2 className="h-4 w-4 text-red-500" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                        {((userType === "guru" && !guruList.length) || (userType === "siswa" && !siswaList.length)) && (
-                          <TableRow>
-                            <TableCell colSpan={userType === "guru" ? 7 : 8} className="text-center">
-                              Tidak ada data
-                            </TableCell>
+                  <div className="border rounded-xl overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-slate-50">
+                            <TableHead className="font-semibold">ID</TableHead>
+                            <TableHead className="font-semibold">Nama</TableHead>
+                            <TableHead className="font-semibold">{userType === "guru" ? "NIP" : "NIS"}</TableHead>
+                            <TableHead className="font-semibold">Email</TableHead>
+                            <TableHead className="font-semibold">Gender</TableHead>
+                            {userType === "siswa" && <TableHead className="font-semibold">Kelas</TableHead>}
+                            <TableHead className="font-semibold text-center">Status</TableHead>
+                            <TableHead className="font-semibold text-center">Aksi</TableHead>
                           </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {userType === "guru" ? (
+                            guruList.map(guru => (
+                              <TableRow key={guru.id_guru} className="hover:bg-slate-50 transition-colors">
+                                <TableCell className="font-mono text-sm">{guru.id_guru}</TableCell>
+                                <TableCell className="font-medium">{guru.nama}</TableCell>
+                                <TableCell className="font-mono text-sm">{guru.nip}</TableCell>
+                                <TableCell>{guru.email}</TableCell>
+                                <TableCell>
+                                  <Badge className={guru.gender === "L" ? "bg-blue-100 text-blue-700" : "bg-pink-100 text-pink-700"} rounded-full>
+                                    {guru.gender === "L" ? "Laki-laki" : "Perempuan"}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <Badge className={guru.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"} rounded-full>
+                                    {guru.aktif ? "Aktif" : "Nonaktif"}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <div className="flex gap-1 justify-center">
+                                    <Button variant="ghost" size="sm" onClick={() => openEditDialog(guru)} className="h-8 w-8 p-0 rounded-lg">
+                                      <Edit className="h-4 w-4 text-blue-500" />
+                                    </Button>
+                                    <Button variant="ghost" size="sm" onClick={() => confirmDelete(guru)} className="h-8 w-8 p-0 rounded-lg">
+                                      <Trash2 className="h-4 w-4 text-red-500" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            siswaList.map(siswa => (
+                              <TableRow key={siswa.id_siswa} className="hover:bg-slate-50 transition-colors">
+                                <TableCell className="font-mono text-sm">{siswa.id_siswa}</TableCell>
+                                <TableCell className="font-medium">{siswa.nama}</TableCell>
+                                <TableCell className="font-mono text-sm">{siswa.nis}</TableCell>
+                                <TableCell>{siswa.email}</TableCell>
+                                <TableCell>
+                                  <Badge className={siswa.gender === "L" ? "bg-blue-100 text-blue-700" : "bg-pink-100 text-pink-700"} rounded-full>
+                                    {siswa.gender === "L" ? "Laki-laki" : "Perempuan"}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>{siswa.nama_kelas || "-"}</TableCell>
+                                <TableCell className="text-center">
+                                  <Badge className={siswa.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"} rounded-full>
+                                    {siswa.aktif ? "Aktif" : "Nonaktif"}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <div className="flex gap-1 justify-center">
+                                    <Button variant="ghost" size="sm" onClick={() => openEditDialog(siswa)} className="h-8 w-8 p-0 rounded-lg">
+                                      <Edit className="h-4 w-4 text-blue-500" />
+                                    </Button>
+                                    <Button variant="ghost" size="sm" onClick={() => confirmDelete(siswa)} className="h-8 w-8 p-0 rounded-lg">
+                                      <Trash2 className="h-4 w-4 text-red-500" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                          {((userType === "guru" && !guruList.length) || (userType === "siswa" && !siswaList.length)) && (
+                            <TableRow>
+                              <TableCell colSpan={userType === "guru" ? 7 : 8} className="text-center py-8 text-slate-500">
+                                <Users className="h-8 w-8 mx-auto mb-2 text-slate-300" />
+                                Tidak ada data
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
                 )}
-              </div>
-            </TabsContent>
+              </TabsContent>
 
-            {/* TAB KELOLA KELAS (DENGAN GURU WALI) */}
-            <TabsContent value="kelas">
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <Button onClick={handleAddKelas}>
-                    <Plus className="mr-2 h-4 w-4" /> Tambah Kelas
+              {/* TAB KELOLA KELAS */}
+              <TabsContent value="kelas" className="space-y-6">
+                <div className="flex justify-between items-center flex-wrap gap-3">
+                  <Button onClick={handleAddKelas} className="rounded-xl h-9 text-sm bg-gradient-to-r from-blue-600 to-indigo-600">
+                    <Plus className="mr-1.5 h-3.5 w-3.5" /> Tambah Kelas
                   </Button>
-                  <Button variant="outline" onClick={fetchKelas} disabled={isFetchingKelas}>
-                    <RefreshCw className={`mr-2 h-4 w-4 ${isFetchingKelas ? "animate-spin" : ""}`} /> 
+                  <Button variant="outline" onClick={fetchKelas} disabled={isFetchingKelas} className="rounded-xl h-9 text-sm">
+                    <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingKelas ? "animate-spin" : ""}`} /> 
                     Refresh
                   </Button>
                 </div>
                 
                 {isFetchingKelas ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin" />
+                  <div className="flex justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
                   </div>
                 ) : (
-                  <div className="border rounded-lg overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>ID</TableHead>
-                          <TableHead>Nama Kelas</TableHead>
-                          <TableHead>Wali Kelas</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Dibuat Pada</TableHead>
-                          <TableHead>Aksi</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {kelasList.map(kelas => (
-                          <TableRow key={kelas.id_kelas}>
-                            <TableCell>{kelas.id_kelas}</TableCell>
-                            <TableCell>{kelas.nama}</TableCell>
-                            <TableCell>{kelas.guru_nama || "-"}</TableCell>
-                            <TableCell>
-                              <span className={`px-2 py-1 rounded-full text-xs ${kelas.aktif ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
-                                {kelas.aktif ? "Aktif" : "Nonaktif"}
-                              </span>
-                            </TableCell>
-                            <TableCell>{new Date(kelas.dibuat_pada).toLocaleDateString()}</TableCell>
-                            <TableCell>
-                              <div className="flex gap-2">
-                                <Button variant="ghost" size="sm" onClick={() => handleEditKelas(kelas)}>
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button variant="ghost" size="sm" onClick={() => confirmDeleteKelas(kelas)}>
-                                  <Trash2 className="h-4 w-4 text-red-500" />
-                                </Button>
-                              </div>
-                            </TableCell>
+                  <div className="border rounded-xl overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-slate-50">
+                            <TableHead className="font-semibold">ID</TableHead>
+                            <TableHead className="font-semibold">Nama Kelas</TableHead>
+                            <TableHead className="font-semibold">Wali Kelas</TableHead>
+                            <TableHead className="font-semibold text-center">Status</TableHead>
+                            <TableHead className="font-semibold">Dibuat Pada</TableHead>
+                            <TableHead className="font-semibold text-center">Aksi</TableHead>
                           </TableRow>
-                        ))}
-                        {!kelasList.length && (
-                          <TableRow>
-                            <TableCell colSpan={6} className="text-center">
-                              Belum ada data kelas
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {kelasList.map(kelas => (
+                            <TableRow key={kelas.id_kelas} className="hover:bg-slate-50 transition-colors">
+                              <TableCell className="font-mono text-sm">{kelas.id_kelas}</TableCell>
+                              <TableCell className="font-medium">{kelas.nama}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <div className="bg-purple-100 p-1.5 rounded-lg">
+                                    <User className="h-3 w-3 text-purple-600" />
+                                  </div>
+                                  {kelas.guru_nama || "-"}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Badge className={kelas.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"} rounded-full>
+                                  {kelas.aktif ? "Aktif" : "Nonaktif"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-slate-500 text-sm">{new Date(kelas.dibuat_pada).toLocaleDateString()}</TableCell>
+                              <TableCell className="text-center">
+                                <div className="flex gap-1 justify-center">
+                                  <Button variant="ghost" size="sm" onClick={() => handleEditKelas(kelas)} className="h-8 w-8 p-0 rounded-lg">
+                                    <Edit className="h-4 w-4 text-blue-500" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" onClick={() => confirmDeleteKelas(kelas)} className="h-8 w-8 p-0 rounded-lg">
+                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {!kelasList.length && (
+                            <TableRow>
+                              <TableCell colSpan={6} className="text-center py-8 text-slate-500">
+                                <School className="h-8 w-8 mx-auto mb-2 text-slate-300" />
+                                Belum ada data kelas
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
                 )}
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+
+        {/* TIPS SECTION */}
+        <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50 max-w-3xl mx-auto">
+          <CardContent className="p-5">
+            <div className="flex items-start gap-4">
+              <div className="bg-indigo-100 p-3 rounded-xl flex-shrink-0">
+                <Sparkles className="h-6 w-6 text-indigo-600" />
               </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+              <div>
+                <h3 className="font-semibold text-slate-800 mb-1">Tips Mengelola Data</h3>
+                <p className="text-sm text-slate-600">
+                  Gunakan fitur import Excel untuk menambahkan banyak data sekaligus. Pastikan format file sesuai 
+                  dengan template yang disediakan. Data duplikat akan otomatis dilewati saat import.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* FOOTER */}
+        <div className="text-center pt-4">
+          <Separator className="mb-4" />
+          <p className="text-xs text-slate-400">
+            © {new Date().getFullYear()} Manajemen User & Kelas - SmartAS
+          </p>
+          <p className="text-[10px] text-slate-300 mt-1">
+            Sistem Informasi Akademik
+          </p>
+        </div>
+      </div>
 
       {/* Dialog Edit User */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="rounded-2xl">
           <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <Edit className="h-5 w-5 text-blue-600" />
+              Edit User
+            </DialogTitle>
             <DialogDescription>
               Ubah informasi user. Kosongkan password jika tidak ingin mengubah.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Nama</Label>
+              <Label className="text-slate-700">Nama</Label>
               <Input 
                 value={editForm.nama} 
                 onChange={e => setEditForm({...editForm, nama: e.target.value})} 
+                className="rounded-xl mt-1"
               />
             </div>
             <div>
-              <Label>Email</Label>
+              <Label className="text-slate-700">Email</Label>
               <Input 
                 type="email" 
                 value={editForm.email} 
                 onChange={e => setEditForm({...editForm, email: e.target.value})} 
+                className="rounded-xl mt-1"
               />
             </div>
             <div>
-              <Label>Gender</Label>
+              <Label className="text-slate-700">Gender</Label>
               <Select 
                 value={editForm.gender} 
                 onValueChange={v => setEditForm({...editForm, gender: v})}
               >
-                <SelectTrigger>
+                <SelectTrigger className="rounded-xl mt-1">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="rounded-xl">
                   <SelectItem value="L">Laki-laki</SelectItem>
                   <SelectItem value="P">Perempuan</SelectItem>
                 </SelectContent>
@@ -1027,15 +1264,15 @@ export default function UserManagement() {
             </div>
             {userType === "siswa" && (
               <div>
-                <Label>Kelas</Label>
+                <Label className="text-slate-700">Kelas</Label>
                 <Select 
                   value={editForm.kelas_id} 
                   onValueChange={v => setEditForm({...editForm, kelas_id: v})}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="rounded-xl mt-1">
                     <SelectValue placeholder="Pilih kelas" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="rounded-xl">
                     {kelasList.map(k => (
                       <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>
                         {k.nama}
@@ -1046,18 +1283,19 @@ export default function UserManagement() {
               </div>
             )}
             <div>
-              <Label>Password Baru (Opsional)</Label>
+              <Label className="text-slate-700">Password Baru (Opsional)</Label>
               <Input 
                 type="password" 
                 placeholder="Kosongkan jika tidak ingin mengubah" 
                 value={editForm.password} 
                 onChange={e => setEditForm({...editForm, password: e.target.value})} 
+                className="rounded-xl mt-1"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Batal</Button>
-            <Button onClick={handleUpdateUser} disabled={isLoading}>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="rounded-xl">Batal</Button>
+            <Button onClick={handleUpdateUser} disabled={isLoading} className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600">
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Simpan
             </Button>
@@ -1067,16 +1305,19 @@ export default function UserManagement() {
 
       {/* Dialog Delete User */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
+        <DialogContent className="rounded-2xl">
           <DialogHeader>
-            <DialogTitle>Hapus User</DialogTitle>
+            <DialogTitle className="text-xl flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              Hapus User
+            </DialogTitle>
             <DialogDescription>
               Yakin ingin menghapus <strong>{deletingUser?.nama}</strong>? Tindakan tidak dapat dibatalkan.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Batal</Button>
-            <Button variant="destructive" onClick={handleDeleteUser} disabled={isLoading}>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} className="rounded-xl">Batal</Button>
+            <Button variant="destructive" onClick={handleDeleteUser} disabled={isLoading} className="rounded-xl">
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Hapus
             </Button>
@@ -1084,31 +1325,35 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Kelas (Add/Edit) dengan pilihan guru wali */}
+      {/* Dialog Kelas (Add/Edit) */}
       <Dialog open={kelasDialogOpen} onOpenChange={setKelasDialogOpen}>
-        <DialogContent>
+        <DialogContent className="rounded-2xl">
           <DialogHeader>
-            <DialogTitle>{editingKelas ? "Edit Kelas" : "Tambah Kelas Baru"}</DialogTitle>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <School className="h-5 w-5 text-blue-600" />
+              {editingKelas ? "Edit Kelas" : "Tambah Kelas Baru"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Nama Kelas</Label>
+              <Label className="text-slate-700">Nama Kelas</Label>
               <Input 
                 value={kelasForm.nama} 
                 onChange={e => setKelasForm({ ...kelasForm, nama: e.target.value })} 
                 placeholder="Contoh: XII RPL 1" 
+                className="rounded-xl mt-1"
               />
             </div>
             <div>
-              <Label>Wali Kelas</Label>
+              <Label className="text-slate-700">Wali Kelas</Label>
               <Select 
                 value={kelasForm.id_guru} 
                 onValueChange={v => setKelasForm({ ...kelasForm, id_guru: v })}
               >
-                <SelectTrigger>
+                <SelectTrigger className="rounded-xl mt-1">
                   <SelectValue placeholder="Pilih wali kelas (opsional)" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="rounded-xl">
                   <SelectItem value="none">Tidak ada wali kelas</SelectItem>
                   {guruOptions.map(guru => (
                     <SelectItem key={guru.id_guru} value={guru.id_guru.toString()}>
@@ -1120,8 +1365,8 @@ export default function UserManagement() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setKelasDialogOpen(false)}>Batal</Button>
-            <Button onClick={handleSaveKelas} disabled={isSavingKelas}>
+            <Button variant="outline" onClick={() => setKelasDialogOpen(false)} className="rounded-xl">Batal</Button>
+            <Button onClick={handleSaveKelas} disabled={isSavingKelas} className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600">
               {isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Simpan
             </Button>
@@ -1131,17 +1376,20 @@ export default function UserManagement() {
 
       {/* Dialog Delete Kelas */}
       <Dialog open={deleteKelasDialogOpen} onOpenChange={setDeleteKelasDialogOpen}>
-        <DialogContent>
+        <DialogContent className="rounded-2xl">
           <DialogHeader>
-            <DialogTitle>Hapus Kelas</DialogTitle>
+            <DialogTitle className="text-xl flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              Hapus Kelas
+            </DialogTitle>
             <DialogDescription>
               Yakin ingin menghapus kelas <strong>{deletingKelas?.nama}</strong>? 
               Siswa yang memiliki kelas ini akan kehilangan referensi.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteKelasDialogOpen(false)}>Batal</Button>
-            <Button variant="destructive" onClick={handleDeleteKelas} disabled={isSavingKelas}>
+            <Button variant="outline" onClick={() => setDeleteKelasDialogOpen(false)} className="rounded-xl">Batal</Button>
+            <Button variant="destructive" onClick={handleDeleteKelas} disabled={isSavingKelas} className="rounded-xl">
               {isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Hapus
             </Button>

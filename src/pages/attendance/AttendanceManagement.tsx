@@ -132,6 +132,8 @@ export default function AttendanceManagement() {
 
   // State presensi mapel
   const [jadwalList, setJadwalList] = useState<Jadwal[]>([]);
+  const [selectedKelasMapel, setSelectedKelasMapel] = useState<string>("");
+  const [filteredJadwalList, setFilteredJadwalList] = useState<Jadwal[]>([]);
   const [selectedJadwal, setSelectedJadwal] = useState<string>("");
   const [presensiMapel, setPresensiMapel] = useState<PresensiMapel[]>([]);
   const [isFetchingMapel, setIsFetchingMapel] = useState(false);
@@ -173,6 +175,54 @@ export default function AttendanceManagement() {
     if (error) console.error(error);
     else setKelasList(data || []);
   };
+
+  // ==================== FETCH JADWAL ====================
+  const fetchJadwal = async () => {
+    if (!user) return;
+    try {
+      let query = supabase
+        .from("jadwal")
+        .select(`
+          id_jadwal,
+          hari,
+          jam,
+          id_kelas,
+          kelas:kelas (nama),
+          mapel:mata_pelajaran (nama),
+          guru:guru (nama)
+        `)
+        .eq("aktif", true);
+      if (user.peran === "guru" && user.id_guru) {
+        query = query.eq("id_guru", user.id_guru);
+      }
+      const { data, error } = await query.order("hari").order("jam");
+      if (error) throw error;
+      const formatted: Jadwal[] = data.map((item: any) => ({
+        id_jadwal: item.id_jadwal,
+        hari: item.hari,
+        jam: item.jam,
+        mata_pelajaran: item.mapel?.nama || "-",
+        guru: item.guru?.nama || "-",
+        id_kelas: item.id_kelas,
+        kelas_nama: item.kelas?.nama || "-",
+      }));
+      setJadwalList(formatted);
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
+  // ==================== FILTER JADWAL BERDASARKAN KELAS ====================
+  useEffect(() => {
+    if (selectedKelasMapel && selectedKelasMapel !== "all") {
+      const filtered = jadwalList.filter(j => j.id_kelas.toString() === selectedKelasMapel);
+      setFilteredJadwalList(filtered);
+      setSelectedJadwal(""); // Reset pilihan jadwal saat kelas berubah
+    } else {
+      setFilteredJadwalList([]);
+      setSelectedJadwal("");
+    }
+  }, [selectedKelasMapel, jadwalList]);
 
   // ==================== FETCH PRESENSI HARIAN ====================
   const fetchPresensiHarian = async () => {
@@ -258,7 +308,6 @@ export default function AttendanceManagement() {
 
   // ==================== BULK UPDATE PRESENSI HARIAN (CHECKBOX) ====================
   const handleBulkCheckbox = async (status: string) => {
-    // Jika checkbox yang sama diklik lagi, jangan lakukan apa-apa (tetap centang)
     if (selectedBulkStatus === status) return;
     
     setSelectedBulkStatus(status);
@@ -302,49 +351,13 @@ export default function AttendanceManagement() {
     }
   };
 
-  // ==================== FETCH JADWAL ====================
-  const fetchJadwal = async () => {
-    if (!user) return;
-    try {
-      let query = supabase
-        .from("jadwal")
-        .select(`
-          id_jadwal,
-          hari,
-          jam,
-          id_kelas,
-          kelas:kelas (nama),
-          mapel:mata_pelajaran (nama),
-          guru:guru (nama)
-        `)
-        .eq("aktif", true);
-      if (user.peran === "guru" && user.id_guru) {
-        query = query.eq("id_guru", user.id_guru);
-      }
-      const { data, error } = await query.order("hari").order("jam");
-      if (error) throw error;
-      const formatted: Jadwal[] = data.map((item: any) => ({
-        id_jadwal: item.id_jadwal,
-        hari: item.hari,
-        jam: item.jam,
-        mata_pelajaran: item.mapel?.nama || "-",
-        guru: item.guru?.nama || "-",
-        id_kelas: item.id_kelas,
-        kelas_nama: item.kelas?.nama || "-",
-      }));
-      setJadwalList(formatted);
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    }
-  };
-
   // ==================== FETCH PRESENSI MAPEL ====================
   const fetchPresensiMapel = async () => {
     if (!selectedJadwal) return;
     setIsFetchingMapel(true);
     setSelectedBulkStatusMapel(null);
     try {
-      const jadwal = jadwalList.find((j) => j.id_jadwal.toString() === selectedJadwal);
+      const jadwal = filteredJadwalList.find((j) => j.id_jadwal.toString() === selectedJadwal);
       if (!jadwal) return;
 
       const { data: siswaData, error: siswaError } = await supabase
@@ -666,7 +679,7 @@ export default function AttendanceManagement() {
 
               {/* TAB PRESENSI HARIAN */}
               <TabsContent value="harian" className="space-y-5">
-                {/* FILTER FORM */}
+                {/* FILTER FORM - RATA KIRI */}
                 <div className="flex flex-col sm:flex-row gap-3 items-end">
                   <div className="w-56">
                     <Label className="text-slate-700 text-sm font-medium">Kelas</Label>
@@ -707,7 +720,7 @@ export default function AttendanceManagement() {
                   <Alert className="rounded-lg bg-amber-50 border-amber-200">
                     <AlertCircle className="h-4 w-4 text-amber-600" />
                     <AlertDescription className="text-amber-700 text-sm">
-                      Silakan pilih kelas terlebih dahulu
+                      Silakan pilih kelas ter dahulu
                     </AlertDescription>
                   </Alert>
                 )}
@@ -801,17 +814,37 @@ export default function AttendanceManagement() {
 
               {/* TAB PRESENSI MAPEL */}
               <TabsContent value="mapel" className="space-y-5">
-                <div className="flex flex-col sm:flex-row gap-3 items-end">
-                  <div className="flex-1 max-w-md">
-                    <Label className="text-slate-700 text-sm font-medium">Pilih Jadwal</Label>
-                    <Select value={selectedJadwal} onValueChange={setSelectedJadwal}>
+                {/* FILTER FORM - RATA KIRI */}
+                <div className="flex flex-col sm:flex-row gap-3 items-end flex-wrap">
+                  <div className="w-56">
+                    <Label className="text-slate-700 text-sm font-medium">Pilih Kelas</Label>
+                    <Select value={selectedKelasMapel} onValueChange={setSelectedKelasMapel}>
                       <SelectTrigger className="rounded-lg border-slate-200 h-9 text-sm">
-                        <SelectValue placeholder="Pilih Jadwal" />
+                        <SelectValue placeholder="Pilih Kelas" />
                       </SelectTrigger>
                       <SelectContent className="rounded-lg">
-                        {jadwalList.map((j) => (
+                        {kelasList.map((k) => (
+                          <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>
+                            {k.nama}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-64">
+                    <Label className="text-slate-700 text-sm font-medium">Pilih Jadwal</Label>
+                    <Select 
+                      value={selectedJadwal} 
+                      onValueChange={setSelectedJadwal}
+                      disabled={!selectedKelasMapel || filteredJadwalList.length === 0}
+                    >
+                      <SelectTrigger className="rounded-lg border-slate-200 h-9 text-sm">
+                        <SelectValue placeholder={!selectedKelasMapel ? "Pilih kelas dulu" : "Pilih Jadwal"} />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-lg">
+                        {filteredJadwalList.map((j) => (
                           <SelectItem key={j.id_jadwal} value={j.id_jadwal.toString()}>
-                            {j.kelas_nama} - {j.mata_pelajaran} ({j.hari}, {j.jam})
+                            {j.mata_pelajaran} ({j.hari}, {j.jam})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -830,7 +863,7 @@ export default function AttendanceManagement() {
                     <Button 
                       variant="default" 
                       onClick={() => {
-                        const jadwal = jadwalList.find(j => j.id_jadwal.toString() === selectedJadwal);
+                        const jadwal = filteredJadwalList.find(j => j.id_jadwal.toString() === selectedJadwal);
                         if (jadwal) generateQRCode(jadwal);
                       }} 
                       disabled={isGeneratingQR}
@@ -842,11 +875,20 @@ export default function AttendanceManagement() {
                   )}
                 </div>
 
-                {!selectedJadwal && (
+                {!selectedKelasMapel && (
+                  <Alert className="rounded-lg bg-amber-50 border-amber-200">
+                    <School className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-700 text-sm">
+                      Silakan pilih kelas terlebih dahulu
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {selectedKelasMapel && filteredJadwalList.length === 0 && (
                   <Alert className="rounded-lg bg-amber-50 border-amber-200">
                     <BookOpen className="h-4 w-4 text-amber-600" />
                     <AlertDescription className="text-amber-700 text-sm">
-                      Silakan pilih jadwal mata pelajaran terlebih dahulu
+                      Tidak ada jadwal untuk kelas yang dipilih
                     </AlertDescription>
                   </Alert>
                 )}

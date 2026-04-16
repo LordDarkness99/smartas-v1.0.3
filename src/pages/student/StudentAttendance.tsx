@@ -508,7 +508,7 @@ export default function StudentAttendance() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 overflow-x-hidden">
       
       {/* HEADER SECTION */}
       <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
@@ -659,8 +659,7 @@ export default function StudentAttendance() {
               <TabsContent value="harian" className="space-y-6">
                 <div className="grid gap-6 md:grid-cols-2">
                   {/* Card Masuk */}
-                  <Card className="rounded-xl border-0 shadow-md overflow-hidden">
-                    <div className="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 bg-emerald-500/10 rounded-full" />
+                  <Card className="rounded-xl border-0 shadow-md overflow-hidden relative">
                     <CardHeader className="pb-3">
                       <div className="flex items-center gap-2">
                         <div className="bg-emerald-100 p-2 rounded-xl">
@@ -700,8 +699,7 @@ export default function StudentAttendance() {
                   </Card>
 
                   {/* Card Pulang */}
-                  <Card className="rounded-xl border-0 shadow-md overflow-hidden">
-                    <div className="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 bg-orange-500/10 rounded-full" />
+                  <Card className="rounded-xl border-0 shadow-md overflow-hidden relative">
                     <CardHeader className="pb-3">
                       <div className="flex items-center gap-2">
                         <div className="bg-orange-100 p-2 rounded-xl">
@@ -805,7 +803,7 @@ export default function StudentAttendance() {
                       </h3>
                       <div className="grid gap-4">
                         {jadwalHariIni.map((jadwal, index) => (
-                          <Card key={jadwal.id_jadwal} className="rounded-xl border-0 shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden group">
+                          <Card key={jadwal.id_jadwal} className="rounded-xl border-0 shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden group relative">
                             <div className={`absolute top-0 left-0 w-1 h-full ${jadwal.sudah_presensi ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                             <CardContent className="pt-5 pb-5 pl-6">
                               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
