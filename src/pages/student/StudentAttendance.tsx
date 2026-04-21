@@ -216,19 +216,49 @@ export default function StudentAttendance() {
         resolve({ valid: false, message: "Browser tidak mendukung geolocation" });
         return;
       }
+
       navigator.geolocation.getCurrentPosition(
         async (position) => {
-          const { latitude, longitude } = position.coords;
-          
+          const { latitude, longitude, accuracy, speed } = position.coords;
+          const timestamp = position.timestamp;
+
+          // ==================== DETEKSI FAKE GPS DASAR ====================
+
+          // 1. Akurasi mencurigakan (terlalu bagus / terlalu buruk)
+          if (accuracy < 5) {
+            resolve({ valid: false, message: "⚠️ Lokasi terdeteksi tidak wajar (akurasi terlalu tinggi)" });
+            return;
+          }
+
+          if (accuracy > 1000) {
+            resolve({ valid: false, message: "⚠️ GPS tidak stabil, coba aktifkan ulang lokasi" });
+            return;
+          }
+
+          // 2. Timestamp terlalu lama (fake GPS kadang statis)
+          const now = Date.now();
+          if (now - timestamp > 10000) {
+            resolve({ valid: false, message: "⚠️ Lokasi tidak real-time (terdeteksi delay)" });
+            return;
+          }
+
+          // 3. Speed tidak wajar (loncat lokasi)
+          if (speed && speed > 50) {
+            resolve({ valid: false, message: "⚠️ Pergerakan tidak wajar terdeteksi" });
+            return;
+          }
+
+          // ==================== VALIDASI LOKASI ASLI ====================
+
           let targetCoord = SCHOOL_COORD;
           let targetName = "Sekolah";
-          
+
           if (siswa?.id_pkl && siswa.koordinat_pkl) {
             const [pklLat, pklLng] = siswa.koordinat_pkl.split(",").map(Number);
             targetCoord = { lat: pklLat, lng: pklLng };
             targetName = siswa.tempat_pkl || "Tempat PKL";
           }
-          
+
           const R = 6371;
           const dLat = (targetCoord.lat - latitude) * Math.PI / 180;
           const dLng = (targetCoord.lng - longitude) * Math.PI / 180;
@@ -238,7 +268,7 @@ export default function StudentAttendance() {
           const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
           const distance = R * c;
           const radius = 0.1; // 100 meter
-          
+
           if (distance <= radius) {
             resolve({ valid: true, message: `✅ Berada di ${targetName} (jarak ${distance.toFixed(2)} km)` });
           } else {
@@ -247,6 +277,11 @@ export default function StudentAttendance() {
         },
         (error) => {
           resolve({ valid: false, message: `Gagal mendapatkan lokasi: ${error.message}` });
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 10000
         }
       );
     });
