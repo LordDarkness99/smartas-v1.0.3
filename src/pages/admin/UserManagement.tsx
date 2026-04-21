@@ -41,8 +41,11 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Upload,
   Download,
   AlertCircle,
@@ -57,42 +60,14 @@ import {
   Cloud,
   Users,
   School,
-  BookOpen,
   User,
-  Mail,
-  Phone,
-  MapPin,
-  Calendar,
-  Clock,
-  Sparkles,
-  Trophy,
-  Activity,
-  Shield,
-  Fingerprint,
-  Smartphone,
-  Home,
-  Briefcase,
-  Star,
-  Heart,
-  Smile,
-  ThumbsUp,
-  GraduationCap,
   UserCheck,
-  UserPlus,
-  FileText,
-  UploadCloud,
-  DownloadCloud,
-  Filter,
+  Sparkles,
+  Shield,
+  GraduationCap,
   Search,
-  ChevronLeft,
-  ChevronRight,
-  Maximize2,
-  Minimize2,
-  Eye,
-  EyeOff,
-  Settings,
-  Bell,
-  Info
+  X,
+  Filter
 } from "lucide-react";
 
 // ==================== TYPES ====================
@@ -156,6 +131,19 @@ export default function UserManagement() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
 
+  // State untuk search
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchKelasQuery, setSearchKelasQuery] = useState("");
+  
+  // State untuk filter kelas (BARU)
+  const [filterKelas, setFilterKelas] = useState<string>("all");
+  const [showFilter, setShowFilter] = useState(false);
+
+  // State untuk pagination (BARU)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [totalData, setTotalData] = useState(0);
+
   // State untuk import
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -214,6 +202,70 @@ export default function UserManagement() {
       day: 'numeric' 
     });
   };
+
+  // ==================== RESET PAGINATION ====================
+  const resetPagination = () => {
+    setCurrentPage(1);
+  };
+
+  // ==================== FILTER DATA BERDASARKAN SEARCH & KELAS ====================
+  const filteredGuruList = guruList.filter(guru => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      guru.nama.toLowerCase().includes(query) ||
+      guru.nip.toLowerCase().includes(query) ||
+      guru.email.toLowerCase().includes(query) ||
+      guru.id_guru.toString().includes(query)
+    );
+  });
+
+  const filteredSiswaList = siswaList.filter(siswa => {
+    // Filter berdasarkan search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch = (
+        siswa.nama.toLowerCase().includes(query) ||
+        siswa.nis.toLowerCase().includes(query) ||
+        siswa.email.toLowerCase().includes(query) ||
+        siswa.id_siswa.toString().includes(query) ||
+        (siswa.nama_kelas && siswa.nama_kelas.toLowerCase().includes(query))
+      );
+      if (!matchesSearch) return false;
+    }
+    
+    // Filter berdasarkan kelas
+    if (filterKelas !== "all") {
+      if (filterKelas === "unassigned") {
+        return siswa.id_kelas === null;
+      }
+      return siswa.id_kelas?.toString() === filterKelas;
+    }
+    
+    return true;
+  });
+
+  // Pagination untuk filtered data
+  const getPaginatedData = (data: any[]) => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return data.slice(startIndex, endIndex);
+  };
+
+  const paginatedGuruList = getPaginatedData(filteredGuruList);
+  const paginatedSiswaList = getPaginatedData(filteredSiswaList);
+  const totalFilteredData = userType === "guru" ? filteredGuruList.length : filteredSiswaList.length;
+  const totalPages = Math.ceil(totalFilteredData / itemsPerPage);
+
+  const filteredKelasList = kelasList.filter(kelas => {
+    if (!searchKelasQuery) return true;
+    const query = searchKelasQuery.toLowerCase();
+    return (
+      kelas.nama.toLowerCase().includes(query) ||
+      (kelas.guru_nama && kelas.guru_nama.toLowerCase().includes(query)) ||
+      kelas.id_kelas.toString().includes(query)
+    );
+  });
 
   // ==================== FETCH GURU UNTUK WALI KELAS ====================
   const fetchGuruOptions = async () => {
@@ -362,14 +414,28 @@ export default function UserManagement() {
     }
   };
 
-  // ==================== FETCH USERS ====================
+  // ==================== FETCH USERS WITH PAGINATION ====================
   const fetchGuru = async () => {
     setIsFetching(true);
     try {
+      // Hitung total data terlebih dahulu
+      const { count: totalCount, error: countError } = await supabase
+        .from("guru")
+        .select("*", { count: "exact", head: true });
+      
+      if (countError) throw countError;
+      setTotalData(totalCount || 0);
+
+      // Ambil data dengan limit dan offset
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+
       const { data: guruData, error: guruError } = await supabase
         .from("guru")
         .select("id_guru, nama, nip, gender, aktif")
-        .order("id_guru");
+        .order("id_guru")
+        .range(from, to);
+      
       if (guruError) throw guruError;
       
       const guruIds = guruData?.map(g => g.id_guru) || [];
@@ -398,10 +464,43 @@ export default function UserManagement() {
   const fetchSiswa = async () => {
     setIsFetching(true);
     try {
-      const { data: siswaData, error: siswaError } = await supabase
+      // Hitung total data terlebih dahulu
+      let query = supabase.from("siswa").select("*", { count: "exact", head: true });
+      
+      // Jika ada filter kelas, terapkan ke count juga
+      if (filterKelas !== "all") {
+        if (filterKelas === "unassigned") {
+          query = query.is("id_kelas", null);
+        } else {
+          query = query.eq("id_kelas", parseInt(filterKelas));
+        }
+      }
+      
+      const { count: totalCount, error: countError } = await query;
+      
+      if (countError) throw countError;
+      setTotalData(totalCount || 0);
+
+      // Ambil data dengan limit dan offset
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+
+      let siswaQuery = supabase
         .from("siswa")
         .select("id_siswa, nama, nis, gender, aktif, id_kelas")
-        .order("id_siswa");
+        .order("id_siswa")
+        .range(from, to);
+      
+      // Terapkan filter kelas
+      if (filterKelas !== "all") {
+        if (filterKelas === "unassigned") {
+          siswaQuery = siswaQuery.is("id_kelas", null);
+        } else {
+          siswaQuery = siswaQuery.eq("id_kelas", parseInt(filterKelas));
+        }
+      }
+      
+      const { data: siswaData, error: siswaError } = await siswaQuery;
       if (siswaError) throw siswaError;
       
       const siswaIds = siswaData?.map(s => s.id_siswa) || [];
@@ -415,14 +514,16 @@ export default function UserManagement() {
       akunData?.forEach(akun => emailMap.set(akun.id_siswa, akun.email));
       
       const kelasIds = siswaData?.map(s => s.id_kelas).filter(Boolean) || [];
-      const { data: kelasData, error: kelasError } = await supabase
-        .from("kelas")
-        .select("id_kelas, nama")
-        .in("id_kelas", kelasIds);
-      if (kelasError) throw kelasError;
-      
-      const kelasMap = new Map();
-      kelasData?.forEach(k => kelasMap.set(k.id_kelas, k.nama));
+      let kelasMap = new Map();
+      if (kelasIds.length > 0) {
+        const { data: kelasData, error: kelasError } = await supabase
+          .from("kelas")
+          .select("id_kelas, nama")
+          .in("id_kelas", kelasIds);
+        if (!kelasError && kelasData) {
+          kelasData?.forEach(k => kelasMap.set(k.id_kelas, k.nama));
+        }
+      }
       
       const combined: SiswaData[] = siswaData?.map(siswa => ({
         id_siswa: siswa.id_siswa,
@@ -449,12 +550,38 @@ export default function UserManagement() {
 
   useEffect(() => {
     if (activeTab === "list") {
-      if (userType === "guru") fetchGuru();
-      else fetchSiswa();
+      resetPagination();
+      if (userType === "guru") {
+        fetchGuru();
+      } else {
+        fetchSiswa();
+      }
     } else if (activeTab === "kelas") {
       fetchKelas();
     }
-  }, [activeTab, userType]);
+  }, [activeTab, userType, currentPage, itemsPerPage, filterKelas]);
+
+  // Reset page when search changes
+  useEffect(() => {
+    resetPagination();
+  }, [searchQuery, filterKelas]);
+
+  // ==================== RESET FILTER ====================
+  const resetFilters = () => {
+    setSearchQuery("");
+    setFilterKelas("all");
+    resetPagination();
+  };
+
+  // ==================== PAGINATION HANDLERS ====================
+  const goToFirstPage = () => setCurrentPage(1);
+  const goToPreviousPage = () => setCurrentPage(prev => Math.max(1, prev - 1));
+  const goToNextPage = () => setCurrentPage(prev => Math.min(totalPages, prev + 1));
+  const goToLastPage = () => setCurrentPage(totalPages);
+  const handleItemsPerPageChange = (value: string) => {
+    setItemsPerPage(parseInt(value));
+    setCurrentPage(1);
+  };
 
   // ==================== IMPORT FUNCTIONS ====================
   const downloadTemplate = (type: "guru" | "siswa") => {
@@ -668,6 +795,7 @@ export default function UserManagement() {
       });
       setPreviewData([]);
       if (activeTab === "list") {
+        resetPagination();
         if (userType === "guru") fetchGuru();
         else fetchSiswa();
       }
@@ -730,6 +858,7 @@ export default function UserManagement() {
       
       toast({ title: "Berhasil", description: "Data user berhasil diupdate" });
       setEditDialogOpen(false);
+      resetPagination();
       if (isGuru) fetchGuru(); else fetchSiswa();
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -766,6 +895,7 @@ export default function UserManagement() {
       
       toast({ title: "Berhasil", description: "User berhasil dihapus" });
       setDeleteDialogOpen(false);
+      resetPagination();
       if (isGuru) fetchGuru(); else fetchSiswa();
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -778,6 +908,11 @@ export default function UserManagement() {
   const totalGuru = guruList.length;
   const totalSiswa = siswaList.length;
   const totalKelas = kelasList.length;
+  
+  // Hitung jumlah siswa per kelas untuk ditampilkan di filter
+  const getSiswaCountByKelas = (kelasId: number) => {
+    return siswaList.filter(s => s.id_kelas === kelasId).length;
+  };
 
   // ==================== RENDER ====================
   return (
@@ -887,7 +1022,7 @@ export default function UserManagement() {
           
           <CardContent className="p-6">
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-6">
-              {/* TABS LIST - DIPERKECIL DAN DITENGAH */}
+              {/* TABS LIST */}
               <div className="flex justify-center">
                 <TabsList className="bg-slate-100 p-1 rounded-xl w-auto inline-flex">
                   <TabsTrigger value="import" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2 px-4 py-1.5 text-sm">
@@ -989,122 +1124,330 @@ export default function UserManagement() {
                 )}
               </TabsContent>
 
-              {/* TAB DAFTAR USER */}
+              {/* TAB DAFTAR USER - DENGAN PAGINATION */}
               <TabsContent value="list" className="space-y-6">
-                <div className="flex justify-between items-center flex-wrap gap-3">
-                  <Select value={userType} onValueChange={(v) => setUserType(v as "guru" | "siswa")}>
-                    <SelectTrigger className="w-[180px] rounded-xl border-slate-200 h-9 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      <SelectItem value="guru">Guru</SelectItem>
-                      <SelectItem value="siswa">Siswa</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => userType === "guru" ? fetchGuru() : fetchSiswa()} 
-                    disabled={isFetching}
-                    className="rounded-xl h-9 text-sm"
-                  >
-                    <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} /> 
-                    Refresh
-                  </Button>
+                <div className="flex flex-col gap-4">
+                  {/* Baris pertama: Pilih tipe user dan tombol refresh */}
+                  <div className="flex justify-between items-center flex-wrap gap-3">
+                    <Select value={userType} onValueChange={(v) => {
+                      setUserType(v as "guru" | "siswa");
+                      resetFilters();
+                    }}>
+                      <SelectTrigger className="w-[180px] rounded-xl border-slate-200 h-9 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="guru">Guru</SelectItem>
+                        <SelectItem value="siswa">Siswa</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        resetPagination();
+                        userType === "guru" ? fetchGuru() : fetchSiswa();
+                      }} 
+                      disabled={isFetching}
+                      className="rounded-xl h-9 text-sm"
+                    >
+                      <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} /> 
+                      Refresh
+                    </Button>
+                  </div>
+                  
+                  {/* Baris kedua: Search bar dan filter kelas (khusus siswa) */}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {/* SEARCH BAR */}
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        type="text"
+                        placeholder={`Cari ${userType === "guru" ? "guru" : "siswa"} (nama, NIP/NIS, email, ID)...`}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10 pr-10 rounded-xl border-slate-200 h-9 text-sm"
+                      />
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery("")}
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                        >
+                          <X className="h-4 w-4 text-slate-400 hover:text-slate-600" />
+                        </button>
+                      )}
+                    </div>
+                    
+                    {/* FILTER KELAS - KHUSUS UNTUK SISWA */}
+                    {userType === "siswa" && (
+                      <div className="relative">
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowFilter(!showFilter)}
+                          className={`rounded-xl h-9 text-sm gap-2 ${filterKelas !== "all" ? "bg-blue-50 border-blue-300 text-blue-700" : ""}`}
+                        >
+                          <Filter className="h-3.5 w-3.5" />
+                          Filter Kelas
+                          {filterKelas !== "all" && (
+                            <Badge className="bg-blue-500 text-white text-xs ml-1">
+                              {filterKelas === "unassigned" ? "Tanpa Kelas" : kelasList.find(k => k.id_kelas.toString() === filterKelas)?.nama || "1"}
+                            </Badge>
+                          )}
+                        </Button>
+                        
+                        {/* Dropdown filter */}
+                        {showFilter && (
+                          <div className="absolute top-full mt-2 right-0 z-20 bg-white rounded-xl shadow-xl border p-2 min-w-[220px]">
+                            <div className="text-xs font-medium text-slate-500 px-2 py-1 border-b mb-1">Filter berdasarkan kelas</div>
+                            <button
+                              onClick={() => {
+                                setFilterKelas("all");
+                                setShowFilter(false);
+                                resetPagination();
+                              }}
+                              className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors flex justify-between items-center ${filterKelas === "all" ? "bg-blue-50 text-blue-700" : ""}`}
+                            >
+                              <span>Semua Kelas</span>
+                              <Badge className="bg-slate-100 text-slate-600">{siswaList.length}</Badge>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setFilterKelas("unassigned");
+                                setShowFilter(false);
+                                resetPagination();
+                              }}
+                              className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors flex justify-between items-center ${filterKelas === "unassigned" ? "bg-blue-50 text-blue-700" : ""}`}
+                            >
+                              <span className="text-amber-600">⚠️ Tanpa Kelas</span>
+                              <Badge className="bg-amber-100 text-amber-600">{siswaList.filter(s => s.id_kelas === null).length}</Badge>
+                            </button>
+                            <div className="border-t my-1"></div>
+                            {kelasList.map(kelas => (
+                              <button
+                                key={kelas.id_kelas}
+                                onClick={() => {
+                                  setFilterKelas(kelas.id_kelas.toString());
+                                  setShowFilter(false);
+                                  resetPagination();
+                                }}
+                                className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors flex justify-between items-center ${filterKelas === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700" : ""}`}
+                              >
+                                <span>{kelas.nama}</span>
+                                <Badge className="bg-slate-100 text-slate-600">{getSiswaCountByKelas(kelas.id_kelas)}</Badge>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
+                
+                {/* Hasil pencarian & filter info */}
+                {(searchQuery || filterKelas !== "all") && (
+                  <div className="flex items-center justify-between bg-slate-50 p-2 rounded-lg">
+                    <div className="text-sm text-slate-500">
+                      Menampilkan {totalFilteredData} dari {userType === "guru" ? guruList.length : siswaList.length} data
+                      {filterKelas !== "all" && filterKelas !== "unassigned" && (
+                        <span className="ml-2 text-blue-600">
+                          (Kelas: {kelasList.find(k => k.id_kelas.toString() === filterKelas)?.nama})
+                        </span>
+                      )}
+                      {filterKelas === "unassigned" && (
+                        <span className="ml-2 text-amber-600">(Tanpa Kelas)</span>
+                      )}
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={resetFilters} className="h-7 text-xs">
+                      <X className="h-3 w-3 mr-1" /> Reset Filter
+                    </Button>
+                  </div>
+                )}
                 
                 {isFetching ? (
                   <div className="flex justify-center py-12">
                     <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
                   </div>
                 ) : (
-                  <div className="border rounded-xl overflow-hidden shadow-sm">
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-slate-50">
-                            <TableHead className="font-semibold">ID</TableHead>
-                            <TableHead className="font-semibold">Nama</TableHead>
-                            <TableHead className="font-semibold">{userType === "guru" ? "NIP" : "NIS"}</TableHead>
-                            <TableHead className="font-semibold">Email</TableHead>
-                            <TableHead className="font-semibold">Gender</TableHead>
-                            {userType === "siswa" && <TableHead className="font-semibold">Kelas</TableHead>}
-                            <TableHead className="font-semibold text-center">Status</TableHead>
-                            <TableHead className="font-semibold text-center">Aksi</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {userType === "guru" ? (
-                            guruList.map(guru => (
-                              <TableRow key={guru.id_guru} className="hover:bg-slate-50 transition-colors">
-                                <TableCell className="font-mono text-sm">{guru.id_guru}</TableCell>
-                                <TableCell className="font-medium">{guru.nama}</TableCell>
-                                <TableCell className="font-mono text-sm">{guru.nip}</TableCell>
-                                <TableCell>{guru.email}</TableCell>
-                                <TableCell>
-                                  <Badge className={guru.gender === "L" ? "bg-blue-100 text-blue-700" : "bg-pink-100 text-pink-700"} rounded-full>
-                                    {guru.gender === "L" ? "Laki-laki" : "Perempuan"}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <Badge className={guru.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"} rounded-full>
-                                    {guru.aktif ? "Aktif" : "Nonaktif"}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <div className="flex gap-1 justify-center">
-                                    <Button variant="ghost" size="sm" onClick={() => openEditDialog(guru)} className="h-8 w-8 p-0 rounded-lg">
-                                      <Edit className="h-4 w-4 text-blue-500" />
-                                    </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => confirmDelete(guru)} className="h-8 w-8 p-0 rounded-lg">
-                                      <Trash2 className="h-4 w-4 text-red-500" />
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ))
-                          ) : (
-                            siswaList.map(siswa => (
-                              <TableRow key={siswa.id_siswa} className="hover:bg-slate-50 transition-colors">
-                                <TableCell className="font-mono text-sm">{siswa.id_siswa}</TableCell>
-                                <TableCell className="font-medium">{siswa.nama}</TableCell>
-                                <TableCell className="font-mono text-sm">{siswa.nis}</TableCell>
-                                <TableCell>{siswa.email}</TableCell>
-                                <TableCell>
-                                  <Badge className={siswa.gender === "L" ? "bg-blue-100 text-blue-700" : "bg-pink-100 text-pink-700"} rounded-full>
-                                    {siswa.gender === "L" ? "Laki-laki" : "Perempuan"}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>{siswa.nama_kelas || "-"}</TableCell>
-                                <TableCell className="text-center">
-                                  <Badge className={siswa.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"} rounded-full>
-                                    {siswa.aktif ? "Aktif" : "Nonaktif"}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <div className="flex gap-1 justify-center">
-                                    <Button variant="ghost" size="sm" onClick={() => openEditDialog(siswa)} className="h-8 w-8 p-0 rounded-lg">
-                                      <Edit className="h-4 w-4 text-blue-500" />
-                                    </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => confirmDelete(siswa)} className="h-8 w-8 p-0 rounded-lg">
-                                      <Trash2 className="h-4 w-4 text-red-500" />
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ))
-                          )}
-                          {((userType === "guru" && !guruList.length) || (userType === "siswa" && !siswaList.length)) && (
-                            <TableRow>
-                              <TableCell colSpan={userType === "guru" ? 7 : 8} className="text-center py-8 text-slate-500">
-                                <Users className="h-8 w-8 mx-auto mb-2 text-slate-300" />
-                                Tidak ada data
-                              </TableCell>
+                  <>
+                    <div className="border rounded-xl overflow-hidden shadow-sm">
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-slate-50">
+                              <TableHead className="font-semibold">ID</TableHead>
+                              <TableHead className="font-semibold">Nama</TableHead>
+                              <TableHead className="font-semibold">{userType === "guru" ? "NIP" : "NIS"}</TableHead>
+                              <TableHead className="font-semibold">Email</TableHead>
+                              <TableHead className="font-semibold">Gender</TableHead>
+                              {userType === "siswa" && <TableHead className="font-semibold">Kelas</TableHead>}
+                              <TableHead className="font-semibold text-center">Status</TableHead>
+                              <TableHead className="font-semibold text-center">Aksi</TableHead>
                             </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {userType === "guru" ? (
+                              paginatedGuruList.map(guru => (
+                                <TableRow key={guru.id_guru} className="hover:bg-slate-50 transition-colors">
+                                  <TableCell className="font-mono text-sm">{guru.id_guru}</TableCell>
+                                  <TableCell className="font-medium">{guru.nama}</TableCell>
+                                  <TableCell className="font-mono text-sm">{guru.nip}</TableCell>
+                                  <TableCell>{guru.email}</TableCell>
+                                  <TableCell>
+                                    <Badge className={guru.gender === "L" ? "bg-blue-100 text-blue-700" : "bg-pink-100 text-pink-700"} rounded-full>
+                                      {guru.gender === "L" ? "Laki-laki" : "Perempuan"}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <Badge className={guru.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"} rounded-full>
+                                      {guru.aktif ? "Aktif" : "Nonaktif"}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <div className="flex gap-1 justify-center">
+                                      <Button variant="ghost" size="sm" onClick={() => openEditDialog(guru)} className="h-8 w-8 p-0 rounded-lg">
+                                        <Edit className="h-4 w-4 text-blue-500" />
+                                      </Button>
+                                      <Button variant="ghost" size="sm" onClick={() => confirmDelete(guru)} className="h-8 w-8 p-0 rounded-lg">
+                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            ) : (
+                              paginatedSiswaList.map(siswa => (
+                                <TableRow key={siswa.id_siswa} className="hover:bg-slate-50 transition-colors">
+                                  <TableCell className="font-mono text-sm">{siswa.id_siswa}</TableCell>
+                                  <TableCell className="font-medium">{siswa.nama}</TableCell>
+                                  <TableCell className="font-mono text-sm">{siswa.nis}</TableCell>
+                                  <TableCell>{siswa.email}</TableCell>
+                                  <TableCell>
+                                    <Badge className={siswa.gender === "L" ? "bg-blue-100 text-blue-700" : "bg-pink-100 text-pink-700"} rounded-full>
+                                      {siswa.gender === "L" ? "Laki-laki" : "Perempuan"}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    {siswa.nama_kelas ? (
+                                      <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                                        {siswa.nama_kelas}
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200">
+                                        Belum punya kelas
+                                      </Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <Badge className={siswa.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"} rounded-full>
+                                      {siswa.aktif ? "Aktif" : "Nonaktif"}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <div className="flex gap-1 justify-center">
+                                      <Button variant="ghost" size="sm" onClick={() => openEditDialog(siswa)} className="h-8 w-8 p-0 rounded-lg">
+                                        <Edit className="h-4 w-4 text-blue-500" />
+                                      </Button>
+                                      <Button variant="ghost" size="sm" onClick={() => confirmDelete(siswa)} className="h-8 w-8 p-0 rounded-lg">
+                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            )}
+                            {((userType === "guru" && !paginatedGuruList.length) || (userType === "siswa" && !paginatedSiswaList.length)) && (
+                              <TableRow>
+                                <TableCell colSpan={userType === "guru" ? 7 : 8} className="text-center py-8 text-slate-500">
+                                  {searchQuery || filterKelas !== "all" ? (
+                                    <>
+                                      <Search className="h-8 w-8 mx-auto mb-2 text-slate-300" />
+                                      Tidak ada data yang cocok dengan kriteria pencarian
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Users className="h-8 w-8 mx-auto mb-2 text-slate-300" />
+                                      Tidak ada data
+                                    </>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
-                  </div>
+                    
+                    {/* PAGINATION CONTROLS */}
+                    {totalFilteredData > 0 && (
+                      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-slate-500">Tampilkan</span>
+                          <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
+                            <SelectTrigger className="w-[70px] h-8 text-sm rounded-lg">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-lg">
+                              <SelectItem value="10">10</SelectItem>
+                              <SelectItem value="20">20</SelectItem>
+                              <SelectItem value="50">50</SelectItem>
+                              <SelectItem value="100">100</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <span className="text-sm text-slate-500">per halaman</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={goToFirstPage}
+                            disabled={currentPage === 1}
+                            className="h-8 w-8 p-0 rounded-lg"
+                          >
+                            <ChevronsLeft className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={goToPreviousPage}
+                            disabled={currentPage === 1}
+                            className="h-8 w-8 p-0 rounded-lg"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          
+                          <div className="flex items-center gap-1 px-2">
+                            <span className="text-sm font-medium">{currentPage}</span>
+                            <span className="text-sm text-slate-400">/</span>
+                            <span className="text-sm text-slate-500">{totalPages || 1}</span>
+                          </div>
+                          
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={goToNextPage}
+                            disabled={currentPage === totalPages || totalPages === 0}
+                            className="h-8 w-8 p-0 rounded-lg"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={goToLastPage}
+                            disabled={currentPage === totalPages || totalPages === 0}
+                            className="h-8 w-8 p-0 rounded-lg"
+                          >
+                            <ChevronsRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        
+                        <div className="text-sm text-slate-500">
+                          Menampilkan {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, totalFilteredData)} dari {totalFilteredData} data
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </TabsContent>
 
@@ -1114,11 +1457,37 @@ export default function UserManagement() {
                   <Button onClick={handleAddKelas} className="rounded-xl h-9 text-sm bg-gradient-to-r from-blue-600 to-indigo-600">
                     <Plus className="mr-1.5 h-3.5 w-3.5" /> Tambah Kelas
                   </Button>
+                  
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                      type="text"
+                      placeholder="Cari kelas (nama kelas, wali kelas, ID)..."
+                      value={searchKelasQuery}
+                      onChange={(e) => setSearchKelasQuery(e.target.value)}
+                      className="pl-10 pr-10 rounded-xl border-slate-200 h-9 text-sm"
+                    />
+                    {searchKelasQuery && (
+                      <button
+                        onClick={() => setSearchKelasQuery("")}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                      >
+                        <X className="h-4 w-4 text-slate-400 hover:text-slate-600" />
+                      </button>
+                    )}
+                  </div>
+                  
                   <Button variant="outline" onClick={fetchKelas} disabled={isFetchingKelas} className="rounded-xl h-9 text-sm">
                     <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingKelas ? "animate-spin" : ""}`} /> 
                     Refresh
                   </Button>
                 </div>
+                
+                {searchKelasQuery && (
+                  <div className="text-sm text-slate-500 bg-slate-50 p-2 rounded-lg">
+                    Menampilkan {filteredKelasList.length} dari {kelasList.length} kelas
+                  </div>
+                )}
                 
                 {isFetchingKelas ? (
                   <div className="flex justify-center py-12">
@@ -1139,7 +1508,7 @@ export default function UserManagement() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {kelasList.map(kelas => (
+                          {filteredKelasList.map(kelas => (
                             <TableRow key={kelas.id_kelas} className="hover:bg-slate-50 transition-colors">
                               <TableCell className="font-mono text-sm">{kelas.id_kelas}</TableCell>
                               <TableCell className="font-medium">{kelas.nama}</TableCell>
@@ -1169,11 +1538,20 @@ export default function UserManagement() {
                               </TableCell>
                             </TableRow>
                           ))}
-                          {!kelasList.length && (
+                          {!filteredKelasList.length && (
                             <TableRow>
                               <TableCell colSpan={6} className="text-center py-8 text-slate-500">
-                                <School className="h-8 w-8 mx-auto mb-2 text-slate-300" />
-                                Belum ada data kelas
+                                {searchKelasQuery ? (
+                                  <>
+                                    <Search className="h-8 w-8 mx-auto mb-2 text-slate-300" />
+                                    Tidak ada kelas yang cocok dengan "{searchKelasQuery}"
+                                  </>
+                                ) : (
+                                  <>
+                                    <School className="h-8 w-8 mx-auto mb-2 text-slate-300" />
+                                    Belum ada data kelas
+                                  </>
+                                )}
                               </TableCell>
                             </TableRow>
                           )}
@@ -1198,7 +1576,9 @@ export default function UserManagement() {
                 <h3 className="font-semibold text-slate-800 mb-1">Tips Mengelola Data</h3>
                 <p className="text-sm text-slate-600">
                   Gunakan fitur import Excel untuk menambahkan banyak data sekaligus. Pastikan format file sesuai 
-                  dengan template yang disediakan. Data duplikat akan otomatis dilewati saat import.
+                  dengan template yang disediakan. Data duplikat akan otomatis dilewati saat import. Gunakan fitur 
+                  pencarian dan filter kelas untuk menemukan data siswa dengan cepat. Data ditampilkan dengan sistem 
+                  pagination untuk performa yang lebih baik.
                 </p>
               </div>
             </div>
@@ -1273,6 +1653,7 @@ export default function UserManagement() {
                     <SelectValue placeholder="Pilih kelas" />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
+                    <SelectItem value="">Tidak ada kelas</SelectItem>
                     {kelasList.map(k => (
                       <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>
                         {k.nama}
@@ -1354,7 +1735,7 @@ export default function UserManagement() {
                   <SelectValue placeholder="Pilih wali kelas (opsional)" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
-                  <SelectItem value="none">Tidak ada wali kelas</SelectItem>
+                  <SelectItem value="">Tidak ada wali kelas</SelectItem>
                   {guruOptions.map(guru => (
                     <SelectItem key={guru.id_guru} value={guru.id_guru.toString()}>
                       {guru.nama} (NIP: {guru.nip})
