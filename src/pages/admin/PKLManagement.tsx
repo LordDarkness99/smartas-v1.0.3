@@ -1014,7 +1014,7 @@ export default function PklManagement() {
                   <SelectValue placeholder="Pilih guru pendamping" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
-                  <SelectItem value="">- Tidak ada -</SelectItem>
+                  <SelectItem value="none">- Tidak ada -</SelectItem>
                   {guruList.map((guru) => (
                     <SelectItem key={guru.id_guru} value={guru.id_guru.toString()}>
                       {guru.nama} (NIP: {guru.nip})

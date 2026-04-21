@@ -131,15 +131,15 @@ export default function UserManagement() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
 
-  // State untuk search
+  // State untuk search client-side (hanya untuk data yang sudah ada di state)
   const [searchQuery, setSearchQuery] = useState("");
   const [searchKelasQuery, setSearchKelasQuery] = useState("");
   
-  // State untuk filter kelas (BARU)
+  // State untuk filter kelas
   const [filterKelas, setFilterKelas] = useState<string>("all");
   const [showFilter, setShowFilter] = useState(false);
 
-  // State untuk pagination (BARU)
+  // State untuk pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [totalData, setTotalData] = useState(0);
@@ -149,7 +149,7 @@ export default function UserManagement() {
   const [isLoading, setIsLoading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // State untuk daftar user
+  // State untuk daftar user (berisi data halaman aktif dari server)
   const [guruList, setGuruList] = useState<GuruData[]>([]);
   const [siswaList, setSiswaList] = useState<SiswaData[]>([]);
   const [isFetching, setIsFetching] = useState(false);
@@ -208,7 +208,8 @@ export default function UserManagement() {
     setCurrentPage(1);
   };
 
-  // ==================== FILTER DATA BERDASARKAN SEARCH & KELAS ====================
+  // ==================== FILTER DATA CLIENT-SIDE UNTUK SEARCH (tidak untuk pagination) ====================
+  // Karena server sudah mengirim data per halaman, search hanya mencari dalam data yang sudah ada di halaman aktif
   const filteredGuruList = guruList.filter(guru => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
@@ -221,42 +222,27 @@ export default function UserManagement() {
   });
 
   const filteredSiswaList = siswaList.filter(siswa => {
-    // Filter berdasarkan search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      const matchesSearch = (
+      return (
         siswa.nama.toLowerCase().includes(query) ||
         siswa.nis.toLowerCase().includes(query) ||
         siswa.email.toLowerCase().includes(query) ||
         siswa.id_siswa.toString().includes(query) ||
         (siswa.nama_kelas && siswa.nama_kelas.toLowerCase().includes(query))
       );
-      if (!matchesSearch) return false;
     }
-    
-    // Filter berdasarkan kelas
-    if (filterKelas !== "all") {
-      if (filterKelas === "unassigned") {
-        return siswa.id_kelas === null;
-      }
-      return siswa.id_kelas?.toString() === filterKelas;
-    }
-    
     return true;
   });
 
-  // Pagination untuk filtered data
-  const getPaginatedData = (data: any[]) => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return data.slice(startIndex, endIndex);
-  };
+  // Data yang akan ditampilkan di tabel (sudah sesuai halaman dari server, tanpa slice tambahan)
+  const displayedGuruList = filteredGuruList;
+  const displayedSiswaList = filteredSiswaList;
+  
+  // Total halaman dihitung dari totalData server
+  const totalPages = Math.ceil(totalData / itemsPerPage);
 
-  const paginatedGuruList = getPaginatedData(filteredGuruList);
-  const paginatedSiswaList = getPaginatedData(filteredSiswaList);
-  const totalFilteredData = userType === "guru" ? filteredGuruList.length : filteredSiswaList.length;
-  const totalPages = Math.ceil(totalFilteredData / itemsPerPage);
-
+  // Filter kelas untuk halaman kelas (client-side)
   const filteredKelasList = kelasList.filter(kelas => {
     if (!searchKelasQuery) return true;
     const query = searchKelasQuery.toLowerCase();
@@ -267,7 +253,7 @@ export default function UserManagement() {
     );
   });
 
-  // ==================== FETCH GURU UNTUK WALI KELAS ====================
+  // ==================== FETCH GURU ====================
   const fetchGuruOptions = async () => {
     try {
       const { data, error } = await supabase
@@ -286,7 +272,6 @@ export default function UserManagement() {
     }
   };
 
-  // ==================== FETCH KELAS ====================
   const fetchKelas = async () => {
     setIsFetchingKelas(true);
     try {
@@ -383,15 +368,15 @@ export default function UserManagement() {
     if (!deletingKelas) return;
     setIsSavingKelas(true);
     try {
-      const { data: siswaCount, error: countError } = await supabase
+      const { count, error: countError } = await supabase
         .from("siswa")
-        .select("id_siswa", { count: "exact", head: true })
+        .select("*", { count: "exact", head: true })
         .eq("id_kelas", deletingKelas.id_kelas);
       if (countError) throw countError;
-      if (siswaCount && siswaCount.length > 0) {
+      if (count && count > 0) {
         toast({
           title: "Tidak bisa menghapus",
-          description: `Masih ada ${siswaCount.length} siswa yang terdaftar di kelas ini. Pindahkan atau hapus siswa terlebih dahulu.`,
+          description: `Masih ada ${count} siswa yang terdaftar di kelas ini. Pindahkan atau hapus siswa terlebih dahulu.`,
           variant: "destructive",
         });
         setDeleteKelasDialogOpen(false);
@@ -414,11 +399,11 @@ export default function UserManagement() {
     }
   };
 
-  // ==================== FETCH USERS WITH PAGINATION ====================
+  // ==================== FETCH USERS WITH SERVER-SIDE PAGINATION ====================
   const fetchGuru = async () => {
     setIsFetching(true);
     try {
-      // Hitung total data terlebih dahulu
+      // Hitung total data guru
       const { count: totalCount, error: countError } = await supabase
         .from("guru")
         .select("*", { count: "exact", head: true });
@@ -426,7 +411,7 @@ export default function UserManagement() {
       if (countError) throw countError;
       setTotalData(totalCount || 0);
 
-      // Ambil data dengan limit dan offset
+      // Ambil data sesuai halaman
       const from = (currentPage - 1) * itemsPerPage;
       const to = from + itemsPerPage - 1;
 
@@ -464,34 +449,28 @@ export default function UserManagement() {
   const fetchSiswa = async () => {
     setIsFetching(true);
     try {
-      // Hitung total data terlebih dahulu
-      let query = supabase.from("siswa").select("*", { count: "exact", head: true });
+      // Hitung total data dengan filter kelas
+      let countQuery = supabase.from("siswa").select("*", { count: "exact", head: true });
       
-      // Jika ada filter kelas, terapkan ke count juga
       if (filterKelas !== "all") {
         if (filterKelas === "unassigned") {
-          query = query.is("id_kelas", null);
+          countQuery = countQuery.is("id_kelas", null);
         } else {
-          query = query.eq("id_kelas", parseInt(filterKelas));
+          countQuery = countQuery.eq("id_kelas", parseInt(filterKelas));
         }
       }
       
-      const { count: totalCount, error: countError } = await query;
-      
+      const { count: totalCount, error: countError } = await countQuery;
       if (countError) throw countError;
       setTotalData(totalCount || 0);
 
-      // Ambil data dengan limit dan offset
-      const from = (currentPage - 1) * itemsPerPage;
-      const to = from + itemsPerPage - 1;
-
+      // Ambil data sesuai halaman dengan filter kelas yang sama
       let siswaQuery = supabase
         .from("siswa")
         .select("id_siswa, nama, nis, gender, aktif, id_kelas")
         .order("id_siswa")
-        .range(from, to);
+        .range((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage - 1);
       
-      // Terapkan filter kelas
       if (filterKelas !== "all") {
         if (filterKelas === "unassigned") {
           siswaQuery = siswaQuery.is("id_kelas", null);
@@ -543,28 +522,27 @@ export default function UserManagement() {
     }
   };
 
+  // Fetch initial data
   useEffect(() => {
     fetchGuruOptions();
     fetchKelas();
   }, []);
 
+  // Fetch users when dependencies change (tanpa resetPagination di sini!)
   useEffect(() => {
     if (activeTab === "list") {
-      resetPagination();
       if (userType === "guru") {
         fetchGuru();
       } else {
         fetchSiswa();
       }
-    } else if (activeTab === "kelas") {
-      fetchKelas();
     }
   }, [activeTab, userType, currentPage, itemsPerPage, filterKelas]);
 
-  // Reset page when search changes
+  // Reset halaman hanya ketika filter atau search berubah (bukan ketika currentPage berubah)
   useEffect(() => {
     resetPagination();
-  }, [searchQuery, filterKelas]);
+  }, [searchQuery, filterKelas, userType, itemsPerPage]);
 
   // ==================== RESET FILTER ====================
   const resetFilters = () => {
@@ -729,7 +707,7 @@ export default function UserManagement() {
     const kelasMap = new Map<string, number>();
     for (const nama of kelasNames) {
       const id = await getKelasIdFromName(nama);
-      if (!id) throw new Error(`Kelas "${nama}" tidak ditemukan. Silakan tambah kelas ter dahulu.`);
+      if (!id) throw new Error(`Kelas "${nama}" tidak ditemukan. Silakan tambah kelas terlebih dahulu.`);
       kelasMap.set(nama, id);
     }
     
@@ -796,8 +774,7 @@ export default function UserManagement() {
       setPreviewData([]);
       if (activeTab === "list") {
         resetPagination();
-        if (userType === "guru") fetchGuru();
-        else fetchSiswa();
+        if (userType === "guru") fetchGuru(); else fetchSiswa();
       }
     } catch (error: any) {
       toast({ title: "Import Gagal", description: error.message, variant: "destructive" });
@@ -832,8 +809,10 @@ export default function UserManagement() {
         nama: editForm.nama, 
         gender: editForm.gender.toUpperCase() 
       };
-      if (!isGuru && editForm.kelas_id) {
+      if (!isGuru && editForm.kelas_id && editForm.kelas_id !== "none") {
         updateData.id_kelas = parseInt(editForm.kelas_id);
+      } else if (!isGuru && editForm.kelas_id === "none") {
+        updateData.id_kelas = null;
       }
       
       const { error: updateError } = await supabase
@@ -904,12 +883,11 @@ export default function UserManagement() {
     }
   };
 
-  // Hitung statistik
+  // Statistik sementara (tidak akurat untuk total keseluruhan, hanya untuk tampilan)
   const totalGuru = guruList.length;
   const totalSiswa = siswaList.length;
   const totalKelas = kelasList.length;
   
-  // Hitung jumlah siswa per kelas untuk ditampilkan di filter
   const getSiswaCountByKelas = (kelasId: number) => {
     return siswaList.filter(s => s.id_kelas === kelasId).length;
   };
@@ -1124,10 +1102,9 @@ export default function UserManagement() {
                 )}
               </TabsContent>
 
-              {/* TAB DAFTAR USER - DENGAN PAGINATION */}
+              {/* TAB DAFTAR USER - dengan server-side pagination */}
               <TabsContent value="list" className="space-y-6">
                 <div className="flex flex-col gap-4">
-                  {/* Baris pertama: Pilih tipe user dan tombol refresh */}
                   <div className="flex justify-between items-center flex-wrap gap-3">
                     <Select value={userType} onValueChange={(v) => {
                       setUserType(v as "guru" | "siswa");
@@ -1156,9 +1133,7 @@ export default function UserManagement() {
                     </Button>
                   </div>
                   
-                  {/* Baris kedua: Search bar dan filter kelas (khusus siswa) */}
                   <div className="flex flex-col sm:flex-row gap-3">
-                    {/* SEARCH BAR */}
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
                       <Input
@@ -1178,7 +1153,6 @@ export default function UserManagement() {
                       )}
                     </div>
                     
-                    {/* FILTER KELAS - KHUSUS UNTUK SISWA */}
                     {userType === "siswa" && (
                       <div className="relative">
                         <Button
@@ -1195,7 +1169,6 @@ export default function UserManagement() {
                           )}
                         </Button>
                         
-                        {/* Dropdown filter */}
                         {showFilter && (
                           <div className="absolute top-full mt-2 right-0 z-20 bg-white rounded-xl shadow-xl border p-2 min-w-[220px]">
                             <div className="text-xs font-medium text-slate-500 px-2 py-1 border-b mb-1">Filter berdasarkan kelas</div>
@@ -1208,7 +1181,7 @@ export default function UserManagement() {
                               className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors flex justify-between items-center ${filterKelas === "all" ? "bg-blue-50 text-blue-700" : ""}`}
                             >
                               <span>Semua Kelas</span>
-                              <Badge className="bg-slate-100 text-slate-600">{siswaList.length}</Badge>
+                              <Badge className="bg-slate-100 text-slate-600">{totalData}</Badge>
                             </button>
                             <button
                               onClick={() => {
@@ -1219,7 +1192,7 @@ export default function UserManagement() {
                               className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors flex justify-between items-center ${filterKelas === "unassigned" ? "bg-blue-50 text-blue-700" : ""}`}
                             >
                               <span className="text-amber-600">⚠️ Tanpa Kelas</span>
-                              <Badge className="bg-amber-100 text-amber-600">{siswaList.filter(s => s.id_kelas === null).length}</Badge>
+                              <Badge className="bg-amber-100 text-amber-600">-</Badge>
                             </button>
                             <div className="border-t my-1"></div>
                             {kelasList.map(kelas => (
@@ -1233,7 +1206,7 @@ export default function UserManagement() {
                                 className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors flex justify-between items-center ${filterKelas === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700" : ""}`}
                               >
                                 <span>{kelas.nama}</span>
-                                <Badge className="bg-slate-100 text-slate-600">{getSiswaCountByKelas(kelas.id_kelas)}</Badge>
+                                <Badge className="bg-slate-100 text-slate-600">-</Badge>
                               </button>
                             ))}
                           </div>
@@ -1243,11 +1216,10 @@ export default function UserManagement() {
                   </div>
                 </div>
                 
-                {/* Hasil pencarian & filter info */}
                 {(searchQuery || filterKelas !== "all") && (
                   <div className="flex items-center justify-between bg-slate-50 p-2 rounded-lg">
                     <div className="text-sm text-slate-500">
-                      Menampilkan {totalFilteredData} dari {userType === "guru" ? guruList.length : siswaList.length} data
+                      Menampilkan {totalData} data {userType === "guru" ? "guru" : "siswa"}
                       {filterKelas !== "all" && filterKelas !== "unassigned" && (
                         <span className="ml-2 text-blue-600">
                           (Kelas: {kelasList.find(k => k.id_kelas.toString() === filterKelas)?.nama})
@@ -1286,7 +1258,7 @@ export default function UserManagement() {
                           </TableHeader>
                           <TableBody>
                             {userType === "guru" ? (
-                              paginatedGuruList.map(guru => (
+                              displayedGuruList.map(guru => (
                                 <TableRow key={guru.id_guru} className="hover:bg-slate-50 transition-colors">
                                   <TableCell className="font-mono text-sm">{guru.id_guru}</TableCell>
                                   <TableCell className="font-medium">{guru.nama}</TableCell>
@@ -1315,7 +1287,7 @@ export default function UserManagement() {
                                 </TableRow>
                               ))
                             ) : (
-                              paginatedSiswaList.map(siswa => (
+                              displayedSiswaList.map(siswa => (
                                 <TableRow key={siswa.id_siswa} className="hover:bg-slate-50 transition-colors">
                                   <TableCell className="font-mono text-sm">{siswa.id_siswa}</TableCell>
                                   <TableCell className="font-medium">{siswa.nama}</TableCell>
@@ -1355,7 +1327,7 @@ export default function UserManagement() {
                                 </TableRow>
                               ))
                             )}
-                            {((userType === "guru" && !paginatedGuruList.length) || (userType === "siswa" && !paginatedSiswaList.length)) && (
+                            {((userType === "guru" && !displayedGuruList.length) || (userType === "siswa" && !displayedSiswaList.length)) && (
                               <TableRow>
                                 <TableCell colSpan={userType === "guru" ? 7 : 8} className="text-center py-8 text-slate-500">
                                   {searchQuery || filterKelas !== "all" ? (
@@ -1378,7 +1350,7 @@ export default function UserManagement() {
                     </div>
                     
                     {/* PAGINATION CONTROLS */}
-                    {totalFilteredData > 0 && (
+                    {totalData > 0 && (
                       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
                         <div className="flex items-center gap-2">
                           <span className="text-sm text-slate-500">Tampilkan</span>
@@ -1443,7 +1415,7 @@ export default function UserManagement() {
                         </div>
                         
                         <div className="text-sm text-slate-500">
-                          Menampilkan {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, totalFilteredData)} dari {totalFilteredData} data
+                          Menampilkan {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, totalData)} dari {totalData} data
                         </div>
                       </div>
                     )}
@@ -1653,7 +1625,7 @@ export default function UserManagement() {
                     <SelectValue placeholder="Pilih kelas" />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
-                    <SelectItem value="">Tidak ada kelas</SelectItem>
+                    <SelectItem value="none">Tidak ada kelas</SelectItem>
                     {kelasList.map(k => (
                       <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>
                         {k.nama}
@@ -1735,7 +1707,7 @@ export default function UserManagement() {
                   <SelectValue placeholder="Pilih wali kelas (opsional)" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
-                  <SelectItem value="">Tidak ada wali kelas</SelectItem>
+                  <SelectItem value="none">Tidak ada wali kelas</SelectItem>
                   {guruOptions.map(guru => (
                     <SelectItem key={guru.id_guru} value={guru.id_guru.toString()}>
                       {guru.nama} (NIP: {guru.nip})
