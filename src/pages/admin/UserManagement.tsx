@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   ChevronLeft,
   ChevronRight,
@@ -131,7 +132,7 @@ export default function UserManagement() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
 
-  // State untuk search client-side (hanya untuk data yang sudah ada di state)
+  // State untuk search client-side
   const [searchQuery, setSearchQuery] = useState("");
   const [searchKelasQuery, setSearchKelasQuery] = useState("");
   
@@ -149,7 +150,7 @@ export default function UserManagement() {
   const [isLoading, setIsLoading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // State untuk daftar user (berisi data halaman aktif dari server)
+  // State untuk daftar user
   const [guruList, setGuruList] = useState<GuruData[]>([]);
   const [siswaList, setSiswaList] = useState<SiswaData[]>([]);
   const [isFetching, setIsFetching] = useState(false);
@@ -166,13 +167,16 @@ export default function UserManagement() {
     nama: "",
     email: "",
     gender: "",
+    nip: "",      // untuk guru
+    nis: "",      // untuk siswa
     kelas_id: "",
     password: "",
   });
 
-  // State untuk delete dialog (user)
+  // State untuk delete dialog (user) - single delete
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingUser, setDeletingUser] = useState<any>(null);
+  const [deleteConstraints, setDeleteConstraints] = useState<string[]>([]);
 
   // State untuk dialog kelas
   const [kelasDialogOpen, setKelasDialogOpen] = useState(false);
@@ -181,6 +185,17 @@ export default function UserManagement() {
   const [isSavingKelas, setIsSavingKelas] = useState(false);
   const [deleteKelasDialogOpen, setDeleteKelasDialogOpen] = useState(false);
   const [deletingKelas, setDeletingKelas] = useState<Kelas | null>(null);
+
+  // ==================== STATE FOR SELECT & DELETE MASSAL ====================
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isDeletingSelected, setIsDeletingSelected] = useState(false);
+  const [deleteConfirmDialogOpen, setDeleteConfirmDialogOpen] = useState(false);
+  const [deleteConfirmData, setDeleteConfirmData] = useState<{
+    users: { id: number; nama: string }[];
+    cannotDelete: { id: number; nama: string; reasons: string[] }[];
+    canDeleteIds: number[];
+  } | null>(null);
 
   // ==================== GREETING EFFECT ====================
   useEffect(() => {
@@ -208,8 +223,21 @@ export default function UserManagement() {
     setCurrentPage(1);
   };
 
-  // ==================== FILTER DATA CLIENT-SIDE UNTUK SEARCH (tidak untuk pagination) ====================
-  // Karena server sudah mengirim data per halaman, search hanya mencari dalam data yang sudah ada di halaman aktif
+  // Reset selectedIds ketika selectMode dimatikan
+  useEffect(() => {
+    if (!selectMode) {
+      setSelectedIds([]);
+    }
+  }, [selectMode]);
+
+  // Reset seleksi saat pindah halaman atau filter berubah
+  useEffect(() => {
+    if (selectMode) {
+      setSelectedIds([]);
+    }
+  }, [currentPage, filterKelas, searchQuery, userType]);
+
+  // ==================== FILTER DATA CLIENT-SIDE ====================
   const filteredGuruList = guruList.filter(guru => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
@@ -235,14 +263,11 @@ export default function UserManagement() {
     return true;
   });
 
-  // Data yang akan ditampilkan di tabel (sudah sesuai halaman dari server, tanpa slice tambahan)
   const displayedGuruList = filteredGuruList;
   const displayedSiswaList = filteredSiswaList;
   
-  // Total halaman dihitung dari totalData server
   const totalPages = Math.ceil(totalData / itemsPerPage);
 
-  // Filter kelas untuk halaman kelas (client-side)
   const filteredKelasList = kelasList.filter(kelas => {
     if (!searchKelasQuery) return true;
     const query = searchKelasQuery.toLowerCase();
@@ -253,7 +278,7 @@ export default function UserManagement() {
     );
   });
 
-  // ==================== FETCH GURU ====================
+  // ==================== FETCH GURU & KELAS ====================
   const fetchGuruOptions = async () => {
     try {
       const { data, error } = await supabase
@@ -399,19 +424,16 @@ export default function UserManagement() {
     }
   };
 
-  // ==================== FETCH USERS WITH SERVER-SIDE PAGINATION ====================
+  // ==================== FETCH USERS ====================
   const fetchGuru = async () => {
     setIsFetching(true);
     try {
-      // Hitung total data guru
       const { count: totalCount, error: countError } = await supabase
         .from("guru")
         .select("*", { count: "exact", head: true });
-      
       if (countError) throw countError;
       setTotalData(totalCount || 0);
 
-      // Ambil data sesuai halaman
       const from = (currentPage - 1) * itemsPerPage;
       const to = from + itemsPerPage - 1;
 
@@ -420,7 +442,6 @@ export default function UserManagement() {
         .select("id_guru, nama, nip, gender, aktif")
         .order("id_guru")
         .range(from, to);
-      
       if (guruError) throw guruError;
       
       const guruIds = guruData?.map(g => g.id_guru) || [];
@@ -449,9 +470,7 @@ export default function UserManagement() {
   const fetchSiswa = async () => {
     setIsFetching(true);
     try {
-      // Hitung total data dengan filter kelas
       let countQuery = supabase.from("siswa").select("*", { count: "exact", head: true });
-      
       if (filterKelas !== "all") {
         if (filterKelas === "unassigned") {
           countQuery = countQuery.is("id_kelas", null);
@@ -459,18 +478,15 @@ export default function UserManagement() {
           countQuery = countQuery.eq("id_kelas", parseInt(filterKelas));
         }
       }
-      
       const { count: totalCount, error: countError } = await countQuery;
       if (countError) throw countError;
       setTotalData(totalCount || 0);
 
-      // Ambil data sesuai halaman dengan filter kelas yang sama
       let siswaQuery = supabase
         .from("siswa")
         .select("id_siswa, nama, nis, gender, aktif, id_kelas")
         .order("id_siswa")
         .range((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage - 1);
-      
       if (filterKelas !== "all") {
         if (filterKelas === "unassigned") {
           siswaQuery = siswaQuery.is("id_kelas", null);
@@ -478,7 +494,6 @@ export default function UserManagement() {
           siswaQuery = siswaQuery.eq("id_kelas", parseInt(filterKelas));
         }
       }
-      
       const { data: siswaData, error: siswaError } = await siswaQuery;
       if (siswaError) throw siswaError;
       
@@ -528,7 +543,6 @@ export default function UserManagement() {
     fetchKelas();
   }, []);
 
-  // Fetch users when dependencies change (tanpa resetPagination di sini!)
   useEffect(() => {
     if (activeTab === "list") {
       if (userType === "guru") {
@@ -539,12 +553,10 @@ export default function UserManagement() {
     }
   }, [activeTab, userType, currentPage, itemsPerPage, filterKelas]);
 
-  // Reset halaman hanya ketika filter atau search berubah (bukan ketika currentPage berubah)
   useEffect(() => {
     resetPagination();
   }, [searchQuery, filterKelas, userType, itemsPerPage]);
 
-  // ==================== RESET FILTER ====================
   const resetFilters = () => {
     setSearchQuery("");
     setFilterKelas("all");
@@ -783,13 +795,46 @@ export default function UserManagement() {
     }
   };
 
-  // ==================== UPDATE & DELETE USER ====================
+  // ==================== UPDATE USER (dengan validasi duplikat NIP/NIS) ====================
+  const checkDuplicateEmail = async (email: string, excludeId?: { type: 'guru' | 'siswa', id: number }): Promise<boolean> => {
+    let query = supabase.from('akun').select('email').eq('email', email);
+    if (excludeId) {
+      if (excludeId.type === 'guru') query = query.not('id_guru', 'eq', excludeId.id);
+      else query = query.not('id_siswa', 'eq', excludeId.id);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data && data.length > 0);
+  };
+
+  const checkDuplicateNip = async (nip: string, excludeGuruId?: number): Promise<boolean> => {
+    const numericNip = parseInt(nip);
+    if (isNaN(numericNip)) return false;
+    let query = supabase.from('guru').select('nip').eq('nip', numericNip);
+    if (excludeGuruId) query = query.not('id_guru', 'eq', excludeGuruId);
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data && data.length > 0);
+  };
+
+  const checkDuplicateNis = async (nis: string, excludeSiswaId?: number): Promise<boolean> => {
+    const numericNis = parseInt(nis);
+    if (isNaN(numericNis)) return false;
+    let query = supabase.from('siswa').select('nis').eq('nis', numericNis);
+    if (excludeSiswaId) query = query.not('id_siswa', 'eq', excludeSiswaId);
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data && data.length > 0);
+  };
+
   const openEditDialog = (user: any) => {
     setEditingUser(user);
     setEditForm({
       nama: user.nama,
       email: user.email,
       gender: user.gender,
+      nip: user.nip || "",
+      nis: user.nis || "",
       kelas_id: user.id_kelas?.toString() || "",
       password: "",
     });
@@ -802,13 +847,47 @@ export default function UserManagement() {
     try {
       const isGuru = userType === "guru";
       const userId = isGuru ? editingUser.id_guru : editingUser.id_siswa;
+
+      // Validasi duplikat email
+      const isEmailExist = await checkDuplicateEmail(editForm.email, { type: userType, id: userId });
+      if (isEmailExist) {
+        toast({ title: "Error", description: "Email sudah digunakan oleh user lain.", variant: "destructive" });
+        return;
+      }
+
+      if (isGuru) {
+        // Validasi duplikat NIP
+        if (editForm.nip && editForm.nip !== editingUser.nip) {
+          const isNipExist = await checkDuplicateNip(editForm.nip, userId);
+          if (isNipExist) {
+            toast({ title: "Error", description: "NIP sudah digunakan oleh guru lain.", variant: "destructive" });
+            return;
+          }
+        }
+      } else {
+        // Validasi duplikat NIS
+        if (editForm.nis && editForm.nis !== editingUser.nis) {
+          const isNisExist = await checkDuplicateNis(editForm.nis, userId);
+          if (isNisExist) {
+            toast({ title: "Error", description: "NIS sudah digunakan oleh siswa lain.", variant: "destructive" });
+            return;
+          }
+        }
+      }
+
       const tableName = isGuru ? "guru" : "siswa";
       const idField = isGuru ? "id_guru" : "id_siswa";
-      
       const updateData: any = { 
         nama: editForm.nama, 
         gender: editForm.gender.toUpperCase() 
       };
+      
+      if (isGuru && editForm.nip && editForm.nip !== editingUser.nip) {
+        updateData.nip = parseInt(editForm.nip);
+      }
+      if (!isGuru && editForm.nis && editForm.nis !== editingUser.nis) {
+        updateData.nis = parseInt(editForm.nis);
+      }
       if (!isGuru && editForm.kelas_id && editForm.kelas_id !== "none") {
         updateData.id_kelas = parseInt(editForm.kelas_id);
       } else if (!isGuru && editForm.kelas_id === "none") {
@@ -846,51 +925,303 @@ export default function UserManagement() {
     }
   };
 
-  const confirmDelete = (user: any) => {
+  // ==================== DELETE SINGLE USER (with custom dialog) ====================
+  const checkUserConstraints = async (type: "guru" | "siswa", id: number): Promise<string[]> => {
+    const constraints: string[] = [];
+    if (type === "guru") {
+      // Ambil detail jadwal (nama mapel dan kelas)
+      const { data: jadwalData, error: jadwalError } = await supabase
+        .from("jadwal")
+        .select(`
+          id_jadwal,
+          mata_pelajaran (nama),
+          kelas (nama)
+        `)
+        .eq("id_guru", id);
+      if (!jadwalError && jadwalData && jadwalData.length > 0) {
+        const detail = jadwalData.map(j => {
+          const mapel = (j.mata_pelajaran as any)?.nama || "?";
+          const kelas = (j.kelas as any)?.nama || "?";
+          return `${mapel} (kelas ${kelas})`;
+        }).join(", ");
+        constraints.push(`📚 Masih mengajar di ${jadwalData.length} jadwal: ${detail} (referensi akan dihapus)`);
+      }
+      
+      const { data: kelasData, error: kelasError } = await supabase
+        .from("kelas")
+        .select("nama")
+        .eq("id_guru", id);
+      if (!kelasError && kelasData && kelasData.length > 0) {
+        const namaKelas = kelasData.map(k => k.nama).join(", ");
+        constraints.push(`🏫 Masih menjadi wali kelas di ${kelasData.length} kelas: ${namaKelas} (referensi akan dihapus)`);
+      }
+      
+      const { data: pklData, error: pklError } = await supabase
+        .from("pkl")
+        .select("tempat_pkl")
+        .eq("id_guru", id);
+      if (!pklError && pklData && pklData.length > 0) {
+        const tempat = pklData.map(p => p.tempat_pkl).join(", ");
+        constraints.push(`🏢 Masih membimbing PKL di ${pklData.length} tempat: ${tempat} (referensi akan dihapus)`);
+      }
+    } else {
+      // SISWA
+      // Presensi harian
+      const { data: presHarianData, error: presError } = await supabase
+        .from("presensi_harian")
+        .select("waktu_presensi, status_presensi")
+        .eq("id_siswa", id);
+      if (!presError && presHarianData && presHarianData.length > 0) {
+        constraints.push(`📅 Memiliki ${presHarianData.length} data presensi harian (referensi akan dihapus)`);
+      }
+      
+      // Presensi mata pelajaran dengan detail jadwal
+      const { data: presMapelData, error: mapelError } = await supabase
+        .from("presensi_siswa_mapel")
+        .select(`
+          id_pre_siswa,
+          status,
+          waktu_presensi,
+          jadwal (
+            mata_pelajaran (nama),
+            kelas (nama),
+            hari,
+            jam
+          )
+        `)
+        .eq("id_siswa", id);
+      if (!mapelError && presMapelData && presMapelData.length > 0) {
+        const detail = presMapelData.map(p => {
+          const jadwal = p.jadwal as any;
+          const mapel = jadwal?.mata_pelajaran?.nama || "?";
+          const kelas = jadwal?.kelas?.nama || "?";
+          const hari = jadwal?.hari || "?";
+          return `${mapel} (kelas ${kelas}, ${hari})`;
+        }).join(", ");
+        constraints.push(`📖 Memiliki ${presMapelData.length} data presensi mata pelajaran: ${detail} (referensi akan dihapus)`);
+      }
+    }
+    return constraints;
+  };
+
+  const setNullForeignKeysForGuru = async (guruId: number) => {
+    await supabase.from("jadwal").update({ id_guru: null }).eq("id_guru", guruId);
+    await supabase.from("kelas").update({ id_guru: null }).eq("id_guru", guruId);
+    await supabase.from("pkl").update({ id_guru: null }).eq("id_guru", guruId);
+  };
+
+  const setNullForeignKeysForSiswa = async (siswaId: number) => {
+    // Update presensi harian
+    const { error: err1 } = await supabase
+      .from("presensi_harian")
+      .update({ id_siswa: null })
+      .eq("id_siswa", siswaId);
+    if (err1) console.error("Gagal update presensi_harian:", err1);
+    
+    // Update presensi siswa mapel
+    const { error: err2 } = await supabase
+      .from("presensi_siswa_mapel")
+      .update({ id_siswa: null })
+      .eq("id_siswa", siswaId);
+    if (err2) console.error("Gagal update presensi_siswa_mapel:", err2);
+  };
+
+  const confirmDelete = async (user: any) => {
+    const isGuru = userType === "guru";
+    const userId = isGuru ? user.id_guru : user.id_siswa;
+    const constraints = await checkUserConstraints(userType, userId);
     setDeletingUser(user);
+    setDeleteConstraints(constraints);
     setDeleteDialogOpen(true);
   };
 
-  const handleDeleteUser = async () => {
+  const executeDeleteUser = async () => {
     if (!deletingUser) return;
     setIsLoading(true);
+    setDeleteDialogOpen(false);
+    const isGuru = userType === "guru";
+    const userId = isGuru ? deletingUser.id_guru : deletingUser.id_siswa;
+    const tableName = isGuru ? "guru" : "siswa";
+    const idField = isGuru ? "id_guru" : "id_siswa";
+
     try {
-      const isGuru = userType === "guru";
-      const userId = isGuru ? deletingUser.id_guru : deletingUser.id_siswa;
-      const tableName = isGuru ? "guru" : "siswa";
-      const idField = isGuru ? "id_guru" : "id_siswa";
-      
+      // 1. Set NULL foreign keys
+      if (isGuru) {
+        await setNullForeignKeysForGuru(userId);
+      } else {
+        await setNullForeignKeysForSiswa(userId);
+      }
+
+      // 2. Hapus akun
       const { error: akunError } = await supabase
         .from("akun")
         .delete()
-        .eq(isGuru ? "id_guru" : "id_siswa", userId as any);
+        .eq(isGuru ? "id_guru" : "id_siswa", userId);
       if (akunError) throw akunError;
-      
+
+      // 3. Hapus data utama
       const { error: deleteError } = await supabase
-        .from(tableName as any)
+        .from(tableName)
         .delete()
-        .eq(idField, userId as any);
+        .eq(idField, userId);
       if (deleteError) throw deleteError;
-      
-      toast({ title: "Berhasil", description: "User berhasil dihapus" });
-      setDeleteDialogOpen(false);
+
+      toast({
+        title: "Berhasil",
+        description: `User ${deletingUser.nama} berhasil dihapus${deleteConstraints.length > 0 ? `\nCatatan: ${deleteConstraints.length} data terkait telah dihapus referensinya.` : ""}`,
+      });
       resetPagination();
       if (isGuru) fetchGuru(); else fetchSiswa();
+      if (selectMode) {
+        setSelectMode(false);
+        setSelectedIds([]);
+      }
     } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      console.error("Error saat menghapus user:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Gagal menghapus user. Periksa konsol.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
+      setDeletingUser(null);
+      setDeleteConstraints([]);
     }
   };
 
-  // Statistik sementara (tidak akurat untuk total keseluruhan, hanya untuk tampilan)
+  // ==================== SELECT & DELETE MASSAL ====================
+  const toggleSelectMode = () => {
+    setSelectMode(!selectMode);
+    if (selectMode) setSelectedIds([]);
+  };
+
+  const handleSelectAll = () => {
+    const currentIds = userType === "guru"
+      ? displayedGuruList.map(g => g.id_guru)
+      : displayedSiswaList.map(s => s.id_siswa);
+    
+    if (selectedIds.length === currentIds.length && currentIds.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(currentIds);
+    }
+  };
+
+  const handleSelectItem = (id: number) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) {
+      toast({
+        title: "Tidak ada data dipilih",
+        description: "Silakan pilih minimal satu user yang akan dihapus.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const isGuru = userType === "guru";
+    const usersToDelete = selectedIds.map(id => {
+      if (isGuru) {
+        const guru = guruList.find(g => g.id_guru === id);
+        return { id, nama: guru?.nama || `ID ${id}` };
+      } else {
+        const siswa = siswaList.find(s => s.id_siswa === id);
+        return { id, nama: siswa?.nama || `ID ${id}` };
+      }
+    });
+
+    // Cek constraints untuk semua
+    const cannotDelete: { id: number; nama: string; reasons: string[] }[] = [];
+    const canDeleteIds: number[] = [];
+    for (const user of usersToDelete) {
+      const constraints = await checkUserConstraints(userType, user.id);
+      if (constraints.length > 0) {
+        cannotDelete.push({ ...user, reasons: constraints });
+      } else {
+        canDeleteIds.push(user.id);
+      }
+    }
+
+    setDeleteConfirmData({
+      users: usersToDelete,
+      cannotDelete,
+      canDeleteIds,
+    });
+    setDeleteConfirmDialogOpen(true);
+  };
+
+  const executeDeleteSelected = async () => {
+    if (!deleteConfirmData) return;
+    const { users, cannotDelete } = deleteConfirmData;
+    setIsDeletingSelected(true);
+    setDeleteConfirmDialogOpen(false);
+
+    const isGuru = userType === "guru";
+    const tableName = isGuru ? "guru" : "siswa";
+    const idField = isGuru ? "id_guru" : "id_siswa";
+
+    const allIds = users.map(u => u.id);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const id of allIds) {
+      try {
+        if (isGuru) {
+          await setNullForeignKeysForGuru(id);
+        } else {
+          await setNullForeignKeysForSiswa(id);
+        }
+        
+        const { error: akunError } = await supabase
+          .from("akun")
+          .delete()
+          .eq(isGuru ? "id_guru" : "id_siswa", id);
+        if (akunError) throw akunError;
+
+        const { error: deleteError } = await supabase
+          .from(tableName)
+          .delete()
+          .eq(idField, id);
+        if (deleteError) throw deleteError;
+        successCount++;
+      } catch (err) {
+        console.error(`Gagal hapus ID ${id}:`, err);
+        failCount++;
+      }
+    }
+
+    if (successCount > 0) {
+      toast({
+        title: "Penghapusan selesai",
+        description: `${successCount} user berhasil dihapus${failCount > 0 ? `, ${failCount} gagal` : ""}${
+          cannotDelete.length > 0 ? `\n${cannotDelete.length} user memiliki data terkait yang referensinya telah dihapus.` : ""
+        }`,
+        variant: failCount > 0 ? "destructive" : "default",
+      });
+      resetPagination();
+      if (isGuru) fetchGuru(); else fetchSiswa();
+      setSelectMode(false);
+      setSelectedIds([]);
+    } else {
+      toast({
+        title: "Penghapusan gagal",
+        description: "Tidak ada user yang berhasil dihapus. Cek log error.",
+        variant: "destructive",
+      });
+    }
+    setIsDeletingSelected(false);
+    setDeleteConfirmData(null);
+  };
+
+  // ==================== STATS ====================
   const totalGuru = guruList.length;
   const totalSiswa = siswaList.length;
   const totalKelas = kelasList.length;
-  
-  const getSiswaCountByKelas = (kelasId: number) => {
-    return siswaList.filter(s => s.id_kelas === kelasId).length;
-  };
 
   // ==================== RENDER ====================
   return (
@@ -1102,7 +1433,7 @@ export default function UserManagement() {
                 )}
               </TabsContent>
 
-              {/* TAB DAFTAR USER - dengan server-side pagination */}
+              {/* TAB DAFTAR USER */}
               <TabsContent value="list" className="space-y-6">
                 <div className="flex flex-col gap-4">
                   <div className="flex justify-between items-center flex-wrap gap-3">
@@ -1133,86 +1464,107 @@ export default function UserManagement() {
                     </Button>
                   </div>
                   
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <Input
-                        type="text"
-                        placeholder={`Cari ${userType === "guru" ? "guru" : "siswa"} (nama, NIP/NIS, email, ID)...`}
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10 pr-10 rounded-xl border-slate-200 h-9 text-sm"
-                      />
-                      {searchQuery && (
-                        <button
-                          onClick={() => setSearchQuery("")}
-                          className="absolute right-3 top-1/2 transform -translate-y-1/2"
-                        >
-                          <X className="h-4 w-4 text-slate-400 hover:text-slate-600" />
-                        </button>
-                      )}
-                    </div>
-                    
-                    {userType === "siswa" && (
-                      <div className="relative">
-                        <Button
-                          variant="outline"
-                          onClick={() => setShowFilter(!showFilter)}
-                          className={`rounded-xl h-9 text-sm gap-2 ${filterKelas !== "all" ? "bg-blue-50 border-blue-300 text-blue-700" : ""}`}
-                        >
-                          <Filter className="h-3.5 w-3.5" />
-                          Filter Kelas
-                          {filterKelas !== "all" && (
-                            <Badge className="bg-blue-500 text-white text-xs ml-1">
-                              {filterKelas === "unassigned" ? "Tanpa Kelas" : kelasList.find(k => k.id_kelas.toString() === filterKelas)?.nama || "1"}
-                            </Badge>
-                          )}
-                        </Button>
-                        
-                        {showFilter && (
-                          <div className="absolute top-full mt-2 right-0 z-20 bg-white rounded-xl shadow-xl border p-2 min-w-[220px]">
-                            <div className="text-xs font-medium text-slate-500 px-2 py-1 border-b mb-1">Filter berdasarkan kelas</div>
-                            <button
-                              onClick={() => {
-                                setFilterKelas("all");
-                                setShowFilter(false);
-                                resetPagination();
-                              }}
-                              className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors flex justify-between items-center ${filterKelas === "all" ? "bg-blue-50 text-blue-700" : ""}`}
-                            >
-                              <span>Semua Kelas</span>
-                              <Badge className="bg-slate-100 text-slate-600">{totalData}</Badge>
-                            </button>
-                            <button
-                              onClick={() => {
-                                setFilterKelas("unassigned");
-                                setShowFilter(false);
-                                resetPagination();
-                              }}
-                              className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors flex justify-between items-center ${filterKelas === "unassigned" ? "bg-blue-50 text-blue-700" : ""}`}
-                            >
-                              <span className="text-amber-600">⚠️ Tanpa Kelas</span>
-                              <Badge className="bg-amber-100 text-amber-600">-</Badge>
-                            </button>
-                            <div className="border-t my-1"></div>
-                            {kelasList.map(kelas => (
+                  <div className="flex flex-col sm:flex-row gap-3 items-end justify-between">
+                    <div className="flex-1 flex flex-col sm:flex-row gap-3">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Input
+                          type="text"
+                          placeholder={`Cari ${userType === "guru" ? "guru" : "siswa"} (nama, NIP/NIS, email, ID)...`}
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="pl-10 pr-10 rounded-xl border-slate-200 h-9 text-sm"
+                        />
+                        {searchQuery && (
+                          <button
+                            onClick={() => setSearchQuery("")}
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                          >
+                            <X className="h-4 w-4 text-slate-400 hover:text-slate-600" />
+                          </button>
+                        )}
+                      </div>
+                      
+                      {userType === "siswa" && (
+                        <div className="relative">
+                          <Button
+                            variant="outline"
+                            onClick={() => setShowFilter(!showFilter)}
+                            className={`rounded-xl h-9 text-sm gap-2 ${filterKelas !== "all" ? "bg-blue-50 border-blue-300 text-blue-700" : ""}`}
+                          >
+                            <Filter className="h-3.5 w-3.5" />
+                            Filter Kelas
+                            {filterKelas !== "all" && (
+                              <Badge className="bg-blue-500 text-white text-xs ml-1">
+                                {filterKelas === "unassigned" ? "Tanpa Kelas" : kelasList.find(k => k.id_kelas.toString() === filterKelas)?.nama || "1"}
+                              </Badge>
+                            )}
+                          </Button>
+                          
+                          {showFilter && (
+                            <div className="absolute top-full mt-2 right-0 z-20 bg-white rounded-xl shadow-xl border p-2 min-w-[220px]">
+                              <div className="text-xs font-medium text-slate-500 px-2 py-1 border-b mb-1">Filter berdasarkan kelas</div>
                               <button
-                                key={kelas.id_kelas}
                                 onClick={() => {
-                                  setFilterKelas(kelas.id_kelas.toString());
+                                  setFilterKelas("all");
                                   setShowFilter(false);
                                   resetPagination();
                                 }}
-                                className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors flex justify-between items-center ${filterKelas === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700" : ""}`}
+                                className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors flex justify-between items-center ${filterKelas === "all" ? "bg-blue-50 text-blue-700" : ""}`}
                               >
-                                <span>{kelas.nama}</span>
-                                <Badge className="bg-slate-100 text-slate-600">-</Badge>
+                                <span>Semua Kelas</span>
+                                <Badge className="bg-slate-100 text-slate-600">{totalData}</Badge>
                               </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                              <button
+                                onClick={() => {
+                                  setFilterKelas("unassigned");
+                                  setShowFilter(false);
+                                  resetPagination();
+                                }}
+                                className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors flex justify-between items-center ${filterKelas === "unassigned" ? "bg-blue-50 text-blue-700" : ""}`}
+                              >
+                                <span className="text-amber-600">⚠️ Tanpa Kelas</span>
+                                <Badge className="bg-amber-100 text-amber-600">-</Badge>
+                              </button>
+                              <div className="border-t my-1"></div>
+                              {kelasList.map(kelas => (
+                                <button
+                                  key={kelas.id_kelas}
+                                  onClick={() => {
+                                    setFilterKelas(kelas.id_kelas.toString());
+                                    setShowFilter(false);
+                                    resetPagination();
+                                  }}
+                                  className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors flex justify-between items-center ${filterKelas === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700" : ""}`}
+                                >
+                                  <span>{kelas.nama}</span>
+                                  <Badge className="bg-slate-100 text-slate-600">-</Badge>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex gap-2 items-center">
+                      <Button
+                        variant={selectMode ? "default" : "outline"}
+                        onClick={toggleSelectMode}
+                        className="rounded-xl h-9 text-sm"
+                      >
+                        {selectMode ? "Deselect Mode" : "Select Mode"}
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={handleDeleteSelected}
+                        disabled={!selectMode || selectedIds.length === 0 || isDeletingSelected}
+                        className="rounded-xl h-9 text-sm"
+                      >
+                        {isDeletingSelected && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                        Hapus ({selectedIds.length})
+                      </Button>
+                    </div>
                   </div>
                 </div>
                 
@@ -1246,6 +1598,14 @@ export default function UserManagement() {
                         <Table>
                           <TableHeader>
                             <TableRow className="bg-slate-50">
+                              {selectMode && (
+                                <TableHead className="w-10">
+                                  <Checkbox
+                                    checked={selectedIds.length > 0 && selectedIds.length === (userType === "guru" ? displayedGuruList.length : displayedSiswaList.length)}
+                                    onCheckedChange={handleSelectAll}
+                                  />
+                                </TableHead>
+                              )}
                               <TableHead className="font-semibold">ID</TableHead>
                               <TableHead className="font-semibold">Nama</TableHead>
                               <TableHead className="font-semibold">{userType === "guru" ? "NIP" : "NIS"}</TableHead>
@@ -1260,6 +1620,14 @@ export default function UserManagement() {
                             {userType === "guru" ? (
                               displayedGuruList.map(guru => (
                                 <TableRow key={guru.id_guru} className="hover:bg-slate-50 transition-colors">
+                                  {selectMode && (
+                                    <TableCell className="w-10">
+                                      <Checkbox
+                                        checked={selectedIds.includes(guru.id_guru)}
+                                        onCheckedChange={() => handleSelectItem(guru.id_guru)}
+                                      />
+                                    </TableCell>
+                                  )}
                                   <TableCell className="font-mono text-sm">{guru.id_guru}</TableCell>
                                   <TableCell className="font-medium">{guru.nama}</TableCell>
                                   <TableCell className="font-mono text-sm">{guru.nip}</TableCell>
@@ -1289,6 +1657,14 @@ export default function UserManagement() {
                             ) : (
                               displayedSiswaList.map(siswa => (
                                 <TableRow key={siswa.id_siswa} className="hover:bg-slate-50 transition-colors">
+                                  {selectMode && (
+                                    <TableCell className="w-10">
+                                      <Checkbox
+                                        checked={selectedIds.includes(siswa.id_siswa)}
+                                        onCheckedChange={() => handleSelectItem(siswa.id_siswa)}
+                                      />
+                                    </TableCell>
+                                  )}
                                   <TableCell className="font-mono text-sm">{siswa.id_siswa}</TableCell>
                                   <TableCell className="font-medium">{siswa.nama}</TableCell>
                                   <TableCell className="font-mono text-sm">{siswa.nis}</TableCell>
@@ -1329,7 +1705,7 @@ export default function UserManagement() {
                             )}
                             {((userType === "guru" && !displayedGuruList.length) || (userType === "siswa" && !displayedSiswaList.length)) && (
                               <TableRow>
-                                <TableCell colSpan={userType === "guru" ? 7 : 8} className="text-center py-8 text-slate-500">
+                                <TableCell colSpan={userType === "guru" ? (selectMode ? 8 : 7) : (selectMode ? 9 : 8)} className="text-center py-8 text-slate-500">
                                   {searchQuery || filterKelas !== "all" ? (
                                     <>
                                       <Search className="h-8 w-8 mx-auto mb-2 text-slate-300" />
@@ -1349,7 +1725,6 @@ export default function UserManagement() {
                       </div>
                     </div>
                     
-                    {/* PAGINATION CONTROLS */}
                     {totalData > 0 && (
                       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
                         <div className="flex items-center gap-2">
@@ -1548,9 +1923,9 @@ export default function UserManagement() {
                 <h3 className="font-semibold text-slate-800 mb-1">Tips Mengelola Data</h3>
                 <p className="text-sm text-slate-600">
                   Gunakan fitur import Excel untuk menambahkan banyak data sekaligus. Pastikan format file sesuai 
-                  dengan template yang disediakan. Data duplikat akan otomatis dilewati saat import. Gunakan fitur 
-                  pencarian dan filter kelas untuk menemukan data siswa dengan cepat. Data ditampilkan dengan sistem 
-                  pagination untuk performa yang lebih baik.
+                  dengan template yang disediakan. Data duplikat (email, NIP, NIS) akan otomatis dilewati saat import. 
+                  Gunakan pencarian dan filter kelas untuk menemukan data siswa dengan cepat. Data ditampilkan dengan sistem 
+                  pagination untuk performa yang lebih baik. Gunakan mode Select untuk menghapus banyak user sekaligus.
                 </p>
               </div>
             </div>
@@ -1599,6 +1974,26 @@ export default function UserManagement() {
                 className="rounded-xl mt-1"
               />
             </div>
+            {userType === "guru" && (
+              <div>
+                <Label className="text-slate-700">NIP</Label>
+                <Input 
+                  value={editForm.nip} 
+                  onChange={e => setEditForm({...editForm, nip: e.target.value})} 
+                  className="rounded-xl mt-1"
+                />
+              </div>
+            )}
+            {userType === "siswa" && (
+              <div>
+                <Label className="text-slate-700">NIS</Label>
+                <Input 
+                  value={editForm.nis} 
+                  onChange={e => setEditForm({...editForm, nis: e.target.value})} 
+                  className="rounded-xl mt-1"
+                />
+              </div>
+            )}
             <div>
               <Label className="text-slate-700">Gender</Label>
               <Select 
@@ -1656,23 +2051,96 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Delete User */}
+      {/* Dialog Delete User - Single with constraints warning */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="rounded-2xl">
+        <DialogContent className="rounded-2xl max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2 text-red-600">
               <Trash2 className="h-5 w-5" />
               Hapus User
             </DialogTitle>
             <DialogDescription>
-              Yakin ingin menghapus <strong>{deletingUser?.nama}</strong>? Tindakan tidak dapat dibatalkan.
+              Yakin ingin menghapus <strong>{deletingUser?.nama}</strong>?
             </DialogDescription>
           </DialogHeader>
+          {deleteConstraints.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 max-h-64 overflow-y-auto">
+              <p className="font-medium text-amber-800 text-sm flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" />
+                Peringatan - Data Terkait
+              </p>
+              <ul className="list-disc list-inside text-xs text-amber-700 mt-2 space-y-1">
+                {deleteConstraints.map((c, idx) => (
+                  <li key={idx} className="break-words">{c}</li>
+                ))}
+              </ul>
+              <p className="text-xs text-amber-600 mt-2">
+                Referensi tersebut akan dihapus (diset NULL) secara otomatis.
+              </p>
+            </div>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} className="rounded-xl">Batal</Button>
-            <Button variant="destructive" onClick={handleDeleteUser} disabled={isLoading} className="rounded-xl">
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Batal</Button>
+            <Button variant="destructive" onClick={executeDeleteUser} disabled={isLoading}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Hapus
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Konfirmasi Hapus Massal */}
+      <Dialog open={deleteConfirmDialogOpen} onOpenChange={setDeleteConfirmDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              Konfirmasi Hapus Massal
+            </DialogTitle>
+            <DialogDescription>
+              Anda akan menghapus {deleteConfirmData?.users.length} user. Tindakan ini tidak dapat dibatalkan.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+            <div className="bg-slate-50 rounded-lg p-3">
+              <p className="font-medium text-sm mb-2">Daftar user yang akan dihapus:</p>
+              <ul className="text-sm space-y-1 max-h-32 overflow-y-auto">
+                {deleteConfirmData?.users.map(u => (
+                  <li key={u.id} className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">{u.id}</Badge>
+                    <span>{u.nama}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            
+            {deleteConfirmData?.cannotDelete && deleteConfirmData.cannotDelete.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="font-medium text-amber-800 text-sm flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4" />
+                  Peringatan Data Terkait
+                </p>
+                <p className="text-xs text-amber-700 mt-1">
+                  Beberapa user memiliki data di tabel lain. Referensi tersebut akan dihapus (diset NULL) secara otomatis.
+                </p>
+                <div className="mt-2 space-y-2">
+                  {deleteConfirmData.cannotDelete.map(c => (
+                    <div key={c.id} className="text-xs bg-white rounded p-2">
+                      <p className="font-semibold">{c.nama}</p>
+                      <ul className="list-disc list-inside text-amber-600">
+                        {c.reasons.map((r, idx) => <li key={idx}>{r}</li>)}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmDialogOpen(false)}>Batal</Button>
+            <Button variant="destructive" onClick={executeDeleteSelected} disabled={isDeletingSelected}>
+              {isDeletingSelected && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Ya, Hapus {deleteConfirmData?.users.length} User
             </Button>
           </DialogFooter>
         </DialogContent>
