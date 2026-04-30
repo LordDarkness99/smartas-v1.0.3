@@ -237,7 +237,7 @@ export default function UserManagement() {
         guru.id_guru.toString().includes(q)
       );
     })
-    .sort((a, b) => a.nama.localeCompare(b.nama));
+    .sort((a, b) => a.nama.localeCompare(b.nama, 'id-ID', { numeric: true, sensitivity: 'base' }));
 
   const filteredSiswaList = [...siswaList]
     .filter(siswa => {
@@ -251,14 +251,14 @@ export default function UserManagement() {
         (siswa.nama_kelas && siswa.nama_kelas.toLowerCase().includes(q))
       );
     })
-    .sort((a, b) => a.nama.localeCompare(b.nama));
+    .sort((a, b) => a.nama.localeCompare(b.nama, 'id-ID', { numeric: true, sensitivity: 'base' }));
 
   const displayedGuruList = [...filteredGuruList].sort((a, b) => {
-    if (a.aktif === b.aktif) return a.nama.localeCompare(b.nama);
+    if (a.aktif === b.aktif) return a.nama.localeCompare(b.nama, 'id-ID', { numeric: true, sensitivity: 'base' });
     return a.aktif ? -1 : 1;
   });
   const displayedSiswaList = [...filteredSiswaList].sort((a, b) => {
-    if (a.aktif === b.aktif) return a.nama.localeCompare(b.nama);
+    if (a.aktif === b.aktif) return a.nama.localeCompare(b.nama, 'id-ID', { numeric: true, sensitivity: 'base' });
     return a.aktif ? -1 : 1;
   });
 

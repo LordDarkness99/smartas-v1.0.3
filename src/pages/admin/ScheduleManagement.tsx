@@ -214,6 +214,10 @@ export default function ScheduleManagement() {
   const [bulkActionType, setBulkActionType] = useState<"aktifkan" | "nonaktifkan">("aktifkan");
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
 
+  // State untuk pagination mapel
+  const [mapelCurrentPage, setMapelCurrentPage] = useState(1);
+  const mapelItemsPerPage = 10;
+
   // ==================== GREETING ====================
   useEffect(() => {
     const hour = new Date().getHours();
@@ -641,6 +645,22 @@ export default function ScheduleManagement() {
     return filtered;
   }, [mapelData, mapelSearchTerm, statusFilter]);
 
+  // ========== PAGINATION MAPEL ==========
+  const mapelTotalPages = useMemo(() => {
+    return Math.ceil(filteredMapel.length / mapelItemsPerPage);
+  }, [filteredMapel.length]);
+
+  const paginatedMapel = useMemo(() => {
+    const startIndex = (mapelCurrentPage - 1) * mapelItemsPerPage;
+    const endIndex = startIndex + mapelItemsPerPage;
+    return filteredMapel.slice(startIndex, endIndex);
+  }, [filteredMapel, mapelCurrentPage]);
+
+  // Reset halaman ke 1 saat filter berubah
+  useEffect(() => {
+    setMapelCurrentPage(1);
+  }, [statusFilter, mapelSearchTerm]);
+
   // ========== HANDLE REFRESH ==========
   const handleRefresh = () => {
     setRefreshing(true);
@@ -800,11 +820,26 @@ export default function ScheduleManagement() {
                 </div>
 
                 <div className="border rounded-xl overflow-hidden shadow-sm">
-                  <div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-slate-50">{selectMode && <TableHead className="w-10"><Checkbox checked={selectedMapelIds.length === filteredMapel.length && filteredMapel.length > 0} onCheckedChange={handleSelectAll} /></TableHead>}<TableHead className="font-semibold">Nama Mata Pelajaran</TableHead><TableHead className="text-center w-24">Status</TableHead><TableHead className="text-center w-28">Aksi</TableHead></TableRow></TableHeader>
-                  <TableBody>{isFetchingMapel ? <TableRow><TableCell colSpan={selectMode ? 4 : 3} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow> : filteredMapel.length === 0 ? <TableRow><TableCell colSpan={selectMode ? 4 : 3} className="text-center py-8 text-slate-500"><BookOpen className="h-8 w-8 mx-auto mb-2" />{mapelSearchTerm ? "Tidak ada mata pelajaran yang cocok" : "Belum ada mata pelajaran"}</TableCell></TableRow> : filteredMapel.map(m => (
+                  <div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-slate-50">{selectMode && <TableHead className="w-10"><Checkbox checked={selectedMapelIds.length === paginatedMapel.length && paginatedMapel.length > 0} onCheckedChange={handleSelectAll} /></TableHead>}<TableHead className="font-semibold">Nama Mata Pelajaran</TableHead><TableHead className="text-center w-24">Status</TableHead><TableHead className="text-center w-28">Aksi</TableHead></TableRow></TableHeader>
+                  <TableBody>{isFetchingMapel ? <TableRow><TableCell colSpan={selectMode ? 4 : 3} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow> : filteredMapel.length === 0 ? <TableRow><TableCell colSpan={selectMode ? 4 : 3} className="text-center py-8 text-slate-500"><BookOpen className="h-8 w-8 mx-auto mb-2" />{mapelSearchTerm ? "Tidak ada mata pelajaran yang cocok" : "Belum ada mata pelajaran"}</TableCell></TableRow> : paginatedMapel.map(m => (
                     <TableRow key={m.id_mapel} className="hover:bg-slate-50">{selectMode && <TableCell><Checkbox checked={selectedMapelIds.includes(m.id_mapel)} onCheckedChange={() => handleSelectItem(m.id_mapel)} /></TableCell>}<TableCell className="font-medium">{m.nama}</TableCell><TableCell className="text-center"><Badge className={`${getStatusColor(m.aktif)} border-0 rounded-full px-3 py-1`}>{m.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell><TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditMapel(m)}><Edit className="h-4 w-4 text-blue-500" /></Button>{m.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleMapel(m, false)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleMapel(m, true)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell></TableRow>
                   ))}</TableBody></Table></div>
                 </div>
+
+                {filteredMapel.length > 0 && (
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-slate-600">Menampilkan {((mapelCurrentPage - 1) * mapelItemsPerPage) + 1}-{Math.min(mapelCurrentPage * mapelItemsPerPage, filteredMapel.length)} dari {filteredMapel.length} mata pelajaran</p>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setMapelCurrentPage(p => Math.max(1, p - 1))} disabled={mapelCurrentPage === 1} className="rounded-lg h-8">Sebelumnya</Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: mapelTotalPages }, (_, i) => i + 1).map((page) => (
+                          <Button key={page} variant={mapelCurrentPage === page ? "default" : "outline"} size="sm" onClick={() => setMapelCurrentPage(page)} className="rounded-lg h-8 w-8 p-0">{page}</Button>
+                        ))}
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => setMapelCurrentPage(p => Math.min(mapelTotalPages, p + 1))} disabled={mapelCurrentPage === mapelTotalPages} className="rounded-lg h-8">Berikutnya</Button>
+                    </div>
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           </CardContent>
