@@ -39,7 +39,11 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Plus,
   Edit,
@@ -61,10 +65,9 @@ import {
   Users,
   Briefcase,
   Home,
-  Info,
-  FileText,
-  XCircle,
-  CheckCheck
+  Search,
+  X,
+  ChevronDown,
 } from "lucide-react";
 
 // Tipe data
@@ -129,6 +132,26 @@ export default function PklManagement() {
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
+  // State untuk search
+  const [searchLokasi, setSearchLokasi] = useState("");
+  const [searchSiswa, setSearchSiswa] = useState("");
+
+  // State untuk popover filter kelas
+  const [popoverKelasOpen, setPopoverKelasOpen] = useState(false);
+  const [kelasSearchQuery, setKelasSearchQuery] = useState("");
+  const [kelasJenjangFilter, setKelasJenjangFilter] = useState<string>("all");
+
+  const filteredKelasOptions = kelasList.filter((kelas) => {
+    if (kelasJenjangFilter !== "all") {
+      const pattern = new RegExp(`^${kelasJenjangFilter}(\\s|$)`);
+      if (!pattern.test(kelas.nama)) return false;
+    }
+    if (kelasSearchQuery) {
+      return kelas.nama.toLowerCase().includes(kelasSearchQuery.toLowerCase());
+    }
+    return true;
+  });
+
   // ==================== GREETING EFFECT ====================
   useEffect(() => {
     const hour = new Date().getHours();
@@ -159,10 +182,7 @@ export default function PklManagement() {
         .eq("aktif", true)
         .order("nama");
       if (error) throw error;
-      const formatted: Guru[] = data.map((g: any) => ({
-        ...g,
-        nip: g.nip?.toString() || "",
-      }));
+      const formatted: Guru[] = data.map((g: any) => ({ ...g, nip: g.nip?.toString() || "" }));
       setGuruList(formatted);
     } catch (error: any) {
       console.error("Fetch guru error:", error);
@@ -229,12 +249,10 @@ export default function PklManagement() {
         id_guru: pklForm.id_guru ? parseInt(pklForm.id_guru) : null,
       };
       if (editingPKL) {
-        const { error } = await supabase.from("pkl").update(data).eq("id_pkl", editingPKL.id_pkl);
-        if (error) throw error;
+        await supabase.from("pkl").update(data).eq("id_pkl", editingPKL.id_pkl);
         toast({ title: "Berhasil", description: "Lokasi PKL berhasil diupdate" });
       } else {
-        const { error } = await supabase.from("pkl").insert(data);
-        if (error) throw error;
+        await supabase.from("pkl").insert(data);
         toast({ title: "Berhasil", description: "Lokasi PKL berhasil ditambahkan" });
       }
       setPklDialogOpen(false);
@@ -255,22 +273,21 @@ export default function PklManagement() {
     if (!deletingPKL) return;
     setIsSavingPKL(true);
     try {
-      const { data: siswaCount, error: countError } = await supabase
+      const { count, error: countError } = await supabase
         .from("siswa")
         .select("id_siswa", { count: "exact", head: true })
         .eq("id_pkl", deletingPKL.id_pkl);
       if (countError) throw countError;
-      if (siswaCount && siswaCount.length > 0) {
+      if (count && count > 0) {
         toast({
           title: "Tidak bisa menghapus",
-          description: `Masih ada ${siswaCount.length} siswa yang terdaftar di lokasi PKL ini.`,
+          description: `Masih ada ${count} siswa yang terdaftar di lokasi PKL ini.`,
           variant: "destructive",
         });
         setDeletePKLDialogOpen(false);
         return;
       }
-      const { error } = await supabase.from("pkl").delete().eq("id_pkl", deletingPKL.id_pkl);
-      if (error) throw error;
+      await supabase.from("pkl").delete().eq("id_pkl", deletingPKL.id_pkl);
       toast({ title: "Berhasil", description: "Lokasi PKL dihapus" });
       setDeletePKLDialogOpen(false);
       fetchPKL();
@@ -354,8 +371,7 @@ export default function PklManagement() {
   const updateSiswaPKL = async (siswaId: number, id_pkl: number | null) => {
     setUpdatingSiswa(siswaId);
     try {
-      const { error } = await supabase.from("siswa").update({ id_pkl }).eq("id_siswa", siswaId);
-      if (error) throw error;
+      await supabase.from("siswa").update({ id_pkl }).eq("id_siswa", siswaId);
       toast({ title: "Berhasil", description: "Status PKL siswa diperbarui" });
       fetchSiswa();
     } catch (error: any) {
@@ -459,8 +475,7 @@ export default function PklManagement() {
           koordinat_pkl: row.koordinat_pkl || null,
           id_guru: row.guru_pendamping ? guruMap.get(row.guru_pendamping) : null,
         }));
-        const { error } = await supabase.from("pkl").insert(dataToInsert);
-        if (error) throw error;
+        await supabase.from("pkl").insert(dataToInsert);
         toast({ title: "Berhasil", description: `${dataToInsert.length} lokasi PKL diimport` });
         fetchPKL();
       } else {
@@ -493,11 +508,7 @@ export default function PklManagement() {
           id_pkl: tempatToId.get(row.tempat_pkl),
         }));
         for (const update of updates) {
-          const { error } = await supabase
-            .from("siswa")
-            .update({ id_pkl: update.id_pkl })
-            .eq("id_siswa", update.id_siswa);
-          if (error) throw error;
+          await supabase.from("siswa").update({ id_pkl: update.id_pkl }).eq("id_siswa", update.id_siswa);
         }
         toast({ title: "Berhasil", description: `${updates.length} siswa diperbarui status PKL` });
         fetchSiswa();
@@ -515,6 +526,25 @@ export default function PklManagement() {
     fetchPKL();
     fetchSiswa();
   };
+
+  // ========== FILTER DATA ==========
+  const filteredPklList = pklList.filter((pkl) => {
+    const query = searchLokasi.toLowerCase();
+    return (
+      pkl.tempat_pkl.toLowerCase().includes(query) ||
+      pkl.guru_nama.toLowerCase().includes(query) ||
+      pkl.koordinat_pkl?.toLowerCase().includes(query)
+    );
+  });
+
+  const filteredSiswaList = siswaList.filter((siswa) => {
+    const query = searchSiswa.toLowerCase();
+    return (
+      siswa.nis.toLowerCase().includes(query) ||
+      siswa.nama.toLowerCase().includes(query) ||
+      siswa.kelas_nama.toLowerCase().includes(query)
+    );
+  });
 
   // ==================== LOADING STATE ====================
   if (loading) {
@@ -541,7 +571,6 @@ export default function PklManagement() {
   // ==================== MAIN RENDER ====================
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      
       {/* HEADER SECTION */}
       <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
         <div className="container mx-auto px-6 py-6">
@@ -558,9 +587,7 @@ export default function PklManagement() {
                   <p className="text-sm text-blue-100">{greeting}</p>
                 </div>
                 <h1 className="text-2xl lg:text-3xl font-bold">Manajemen PKL</h1>
-                <p className="text-blue-100 text-sm">
-                  Kelola lokasi PKL dan atur siswa yang sedang PKL
-                </p>
+                <p className="text-blue-100 text-sm">Kelola lokasi PKL dan atur siswa yang sedang PKL</p>
               </div>
             </div>
             
@@ -654,7 +681,7 @@ export default function PklManagement() {
           
           <CardContent className="p-6">
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "lokasi" | "siswa")} className="space-y-6">
-              {/* TABS LIST - DIPERKECIL DAN DITENGAH */}
+              {/* TABS LIST */}
               <div className="flex justify-center">
                 <TabsList className="bg-slate-100 p-1 rounded-xl w-auto inline-flex">
                   <TabsTrigger value="lokasi" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2 px-4 py-1.5 text-sm">
@@ -670,7 +697,7 @@ export default function PklManagement() {
 
               {/* TAB LOKASI PKL */}
               <TabsContent value="lokasi" className="space-y-6">
-                <div className="flex justify-between items-center flex-wrap gap-3">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                   <div className="flex gap-2">
                     <Button onClick={openAddPKL} className="rounded-xl h-9 text-sm bg-gradient-to-r from-blue-600 to-indigo-600">
                       <Plus className="mr-1.5 h-3.5 w-3.5" /> Tambah Lokasi
@@ -679,10 +706,29 @@ export default function PklManagement() {
                       <Upload className="mr-1.5 h-3.5 w-3.5" /> Import Excel
                     </Button>
                   </div>
-                  <Button variant="outline" onClick={fetchPKL} disabled={isFetchingPKL} className="rounded-xl h-9 text-sm">
-                    <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingPKL ? "animate-spin" : ""}`} />
-                    Refresh
-                  </Button>
+                  <div className="flex gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        placeholder="Cari lokasi PKL..."
+                        value={searchLokasi}
+                        onChange={(e) => setSearchLokasi(e.target.value)}
+                        className="pl-9 pr-10 rounded-xl h-9 text-sm w-64"
+                      />
+                      {searchLokasi && (
+                        <button
+                          onClick={() => setSearchLokasi("")}
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                        >
+                          <X className="h-4 w-4 text-slate-400" />
+                        </button>
+                      )}
+                    </div>
+                    <Button variant="outline" onClick={fetchPKL} disabled={isFetchingPKL} className="rounded-xl h-9 text-sm">
+                      <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingPKL ? "animate-spin" : ""}`} />
+                      Refresh
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="border rounded-xl overflow-hidden shadow-sm">
@@ -698,7 +744,7 @@ export default function PklManagement() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {pklList.map((pkl) => (
+                        {filteredPklList.map((pkl) => (
                           <TableRow key={pkl.id_pkl} className="hover:bg-slate-50 transition-colors">
                             <TableCell className="text-center font-mono text-sm">{pkl.id_pkl}</TableCell>
                             <TableCell className="font-medium">{pkl.tempat_pkl}</TableCell>
@@ -725,11 +771,10 @@ export default function PklManagement() {
                             </TableCell>
                           </TableRow>
                         ))}
-                        {pklList.length === 0 && (
+                        {filteredPklList.length === 0 && (
                           <TableRow>
                             <TableCell colSpan={5} className="text-center py-8 text-slate-500">
-                              <Building2 className="h-8 w-8 mx-auto mb-2 text-slate-300" />
-                              Belum ada lokasi PKL
+                              {searchLokasi ? "Tidak ada lokasi PKL yang cocok" : "Belum ada lokasi PKL"}
                             </TableCell>
                           </TableRow>
                         )}
@@ -739,27 +784,99 @@ export default function PklManagement() {
                 </div>
               </TabsContent>
 
-              {/* TAB ATUR SISWA PKL */}
+              {/* TAB ATUR SISWA PKL - DENGAN LAYOUT RATA (semua kontrol satu baris) */}
               <TabsContent value="siswa" className="space-y-6">
-                <div className="flex justify-between items-center flex-wrap gap-3">
-                  <div className="flex gap-3">
-                    <div className="w-64">
-                      <Select value={selectedKelas === "" ? "all" : selectedKelas} onValueChange={(v) => setSelectedKelas(v === "all" ? "" : v)}>
-                        <SelectTrigger className="rounded-xl border-slate-200 h-9 text-sm">
-                          <SelectValue placeholder="Filter Kelas" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl">
-                          <SelectItem value="all">Semua Kelas</SelectItem>
-                          {kelasList.map((kelas) => (
-                            <SelectItem key={kelas.id_kelas} value={kelas.id_kelas.toString()}>{kelas.nama}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button variant="outline" onClick={() => { setImportType("assignment"); setImportDialogOpen(true); }} className="rounded-xl h-9 text-sm">
-                      <Upload className="mr-1.5 h-3.5 w-3.5" /> Import Assignment
-                    </Button>
+                <div className="flex flex-wrap items-end gap-3">
+                  {/* Filter Kelas */}
+                  <div className="flex flex-col">
+                    <Label className="text-slate-700 text-sm font-medium mb-1">Filter Kelas</Label>
+                    <Popover open={popoverKelasOpen} onOpenChange={setPopoverKelasOpen}>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-64 justify-between rounded-xl border-slate-200 h-9 text-sm font-normal">
+                          {selectedKelas ? kelasList.find(k => k.id_kelas.toString() === selectedKelas)?.nama || "Pilih Kelas" : "Semua Kelas"}
+                          <ChevronDown className="h-4 w-4 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-64 p-0" align="start" sideOffset={5}>
+                        <div className="p-2 border-b bg-slate-50">
+                          <div className="flex gap-1 mb-2">
+                            {["all", "X", "XI", "XII"].map(jenjang => (
+                              <Button
+                                key={jenjang}
+                                variant={kelasJenjangFilter === jenjang ? "default" : "ghost"}
+                                size="sm"
+                                className={`h-7 px-2 text-xs rounded-md ${kelasJenjangFilter === jenjang ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+                                onClick={() => setKelasJenjangFilter(jenjang)}
+                              >
+                                {jenjang === "all" ? "Semua" : jenjang}
+                              </Button>
+                            ))}
+                          </div>
+                          <div className="relative">
+                            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                            <Input
+                              placeholder="Cari kelas..."
+                              value={kelasSearchQuery}
+                              onChange={(e) => setKelasSearchQuery(e.target.value)}
+                              className="pl-7 h-8 text-sm rounded-lg"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            {kelasSearchQuery && (
+                              <button
+                                onClick={() => setKelasSearchQuery("")}
+                                className="absolute right-2 top-1/2 transform -translate-y-1/2"
+                              >
+                                <X className="h-3.5 w-3.5 text-slate-400" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="max-h-60 overflow-y-auto">
+                          {filteredKelasOptions.length === 0 ? (
+                            <div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada kelas yang cocok</div>
+                          ) : (
+                            filteredKelasOptions.map(kelas => (
+                              <button
+                                key={kelas.id_kelas}
+                                className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${selectedKelas === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-700"}`}
+                                onClick={() => {
+                                  setSelectedKelas(kelas.id_kelas.toString());
+                                  setPopoverKelasOpen(false);
+                                  setKelasSearchQuery("");
+                                  setKelasJenjangFilter("all");
+                                }}
+                              >
+                                {kelas.nama}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </div>
+
+                  {/* Tombol Import Assignment */}
+                  <Button variant="outline" onClick={() => { setImportType("assignment"); setImportDialogOpen(true); }} className="rounded-xl h-9 text-sm">
+                    <Upload className="mr-1.5 h-3.5 w-3.5" /> Import Assignment
+                  </Button>
+
+                  {/* Search Siswa */}
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                      placeholder="Cari siswa (NIS/Nama)..."
+                      value={searchSiswa}
+                      onChange={(e) => setSearchSiswa(e.target.value)}
+                      className="pl-9 pr-10 rounded-xl h-9 text-sm w-full"
+                    />
+                    {searchSiswa && (
+                      <button onClick={() => setSearchSiswa("")} className="absolute right-3 top-1/2">
+                        <X className="h-4 w-4 text-slate-400" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Tombol Refresh */}
                   <Button variant="outline" onClick={fetchSiswa} disabled={isFetchingSiswa} className="rounded-xl h-9 text-sm">
                     <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingSiswa ? "animate-spin" : ""}`} />
                     Refresh
@@ -786,15 +903,14 @@ export default function PklManagement() {
                               <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-500" />
                             </TableCell>
                           </TableRow>
-                        ) : siswaList.length === 0 ? (
+                        ) : filteredSiswaList.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={6} className="text-center py-8 text-slate-500">
-                              <Users className="h-8 w-8 mx-auto mb-2 text-slate-300" />
-                              Tidak ada data siswa
+                              {searchSiswa ? "Tidak ada siswa yang cocok" : "Tidak ada data siswa"}
                             </TableCell>
                           </TableRow>
                         ) : (
-                          siswaList.map((siswa) => (
+                          filteredSiswaList.map((siswa) => (
                             <TableRow key={siswa.id_siswa} className="hover:bg-slate-50 transition-colors">
                               <TableCell className="font-mono text-sm">{siswa.nis}</TableCell>
                               <TableCell className="font-medium">{siswa.nama}</TableCell>
@@ -987,9 +1103,8 @@ export default function PklManagement() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="tempat_pkl" className="text-slate-700">Tempat / Nama Perusahaan</Label>
+              <Label>Tempat / Nama Perusahaan</Label>
               <Input 
-                id="tempat_pkl" 
                 value={pklForm.tempat_pkl} 
                 onChange={(e) => setPklForm({ ...pklForm, tempat_pkl: e.target.value })}
                 className="rounded-xl mt-1"
@@ -997,9 +1112,8 @@ export default function PklManagement() {
               />
             </div>
             <div>
-              <Label htmlFor="koordinat" className="text-slate-700">Koordinat (Opsional)</Label>
+              <Label>Koordinat (Opsional)</Label>
               <Input 
-                id="koordinat" 
                 value={pklForm.koordinat_pkl} 
                 onChange={(e) => setPklForm({ ...pklForm, koordinat_pkl: e.target.value })} 
                 placeholder="-6.200000,106.816666"
@@ -1008,7 +1122,7 @@ export default function PklManagement() {
               <p className="text-xs text-slate-400 mt-1">Format: latitude,longitude</p>
             </div>
             <div>
-              <Label htmlFor="guru" className="text-slate-700">Guru Pendamping</Label>
+              <Label>Guru Pendamping</Label>
               <Select value={pklForm.id_guru} onValueChange={(v) => setPklForm({ ...pklForm, id_guru: v })}>
                 <SelectTrigger className="rounded-xl mt-1">
                   <SelectValue placeholder="Pilih guru pendamping" />
@@ -1025,7 +1139,7 @@ export default function PklManagement() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPklDialogOpen(false)} className="rounded-xl">Batal</Button>
+            <Button variant="outline" onClick={() => setPklDialogOpen(false)}>Batal</Button>
             <Button onClick={handleSavePKL} disabled={isSavingPKL} className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600">
               {isSavingPKL && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan
             </Button>
@@ -1043,12 +1157,12 @@ export default function PklManagement() {
             </DialogTitle>
           </DialogHeader>
           <DialogDescription>
-            Yakin ingin menghapus lokasi PKL <strong className="text-slate-800">{deletingPKL?.tempat_pkl}</strong>?
+            Yakin ingin menghapus lokasi PKL <strong>{deletingPKL?.tempat_pkl}</strong>?
             <p className="text-sm text-red-500 mt-2">⚠️ Tindakan ini tidak dapat dibatalkan.</p>
           </DialogDescription>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletePKLDialogOpen(false)} className="rounded-xl">Batal</Button>
-            <Button variant="destructive" onClick={handleDeletePKL} disabled={isSavingPKL} className="rounded-xl">
+            <Button variant="outline" onClick={() => setDeletePKLDialogOpen(false)}>Batal</Button>
+            <Button variant="destructive" onClick={handleDeletePKL} disabled={isSavingPKL}>
               {isSavingPKL && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Hapus
             </Button>
           </DialogFooter>
