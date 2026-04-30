@@ -728,7 +728,7 @@ export default function AttendanceManagement() {
                     <Label className="text-slate-700 text-sm font-medium">Tanggal</Label>
                     <Input type="date" value={selectedTanggal} onChange={(e) => setSelectedTanggal(e.target.value)} className="rounded-lg border-slate-200 h-9 text-sm" />
                   </div>
-                  <Button variant="outline" onClick={fetchPresensiHarian} disabled={!selectedKelas || isFetchingHarian} className="rounded-lg h-9 px-3 text-sm">
+                  <Button variant="outline" onClick={() => fetchPresensiHarian()} disabled={!selectedKelas || isFetchingHarian} className="rounded-lg h-9 px-3 text-sm">
                     <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingHarian ? "animate-spin" : ""}`} /> Refresh
                   </Button>
                 </div>
@@ -898,7 +898,7 @@ export default function AttendanceManagement() {
                   <div className="mt-6 border-t pt-4">
                     <div className="flex justify-between items-center mb-4">
                       <div><h3 className="text-md font-semibold text-slate-800">Presensi {selectedJadwal.mata_pelajaran}</h3><p className="text-xs text-slate-500">{selectedJadwal.hari}, {selectedJadwal.jam} - {selectedJadwal.guru}</p></div>
-                      <Button variant="outline" onClick={fetchPresensiMapel} disabled={isFetchingMapel} className="rounded-lg h-9 px-3 text-sm"><RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingMapel ? "animate-spin" : ""}`} /> Refresh</Button>
+                      <Button variant="outline" onClick={() => fetchPresensiMapel()} disabled={isFetchingMapel} className="rounded-lg h-9 px-3 text-sm"><RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingMapel ? "animate-spin" : ""}`} /> Refresh</Button>
                     </div>
                     <div className="border rounded-lg overflow-hidden shadow-sm">
                       <div className="overflow-x-auto">
