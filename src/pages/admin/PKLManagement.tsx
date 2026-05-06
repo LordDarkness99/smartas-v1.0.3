@@ -47,7 +47,6 @@ import {
 import {
   Plus,
   Edit,
-  Trash2,
   RefreshCw,
   Loader2,
   AlertCircle,
@@ -68,6 +67,10 @@ import {
   Search,
   X,
   ChevronDown,
+  Power,
+  PowerOff,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 // Tipe data
@@ -83,6 +86,7 @@ interface PKL {
   koordinat_pkl: string;
   id_guru: number | null;
   guru_nama?: string;
+  aktif: boolean;
 }
 
 interface Siswa {
@@ -115,8 +119,12 @@ export default function PklManagement() {
   const [editingPKL, setEditingPKL] = useState<PKL | null>(null);
   const [pklForm, setPklForm] = useState({ tempat_pkl: "", koordinat_pkl: "", id_guru: "" });
   const [isSavingPKL, setIsSavingPKL] = useState(false);
-  const [deletePKLDialogOpen, setDeletePKLDialogOpen] = useState(false);
-  const [deletingPKL, setDeletingPKL] = useState<PKL | null>(null);
+  const [toggleActiveDialogOpen, setToggleActiveDialogOpen] = useState(false);
+  const [togglingPKL, setTogglingPKL] = useState<PKL | null>(null);
+
+  // Pagination untuk lokasi PKL
+  const [pklCurrentPage, setPklCurrentPage] = useState(1);
+  const [pklItemsPerPage] = useState(10);
 
   // State untuk siswa PKL
   const [siswaList, setSiswaList] = useState<Siswa[]>([]);
@@ -124,6 +132,10 @@ export default function PklManagement() {
   const [selectedKelas, setSelectedKelas] = useState<string>("");
   const [isFetchingSiswa, setIsFetchingSiswa] = useState(false);
   const [updatingSiswa, setUpdatingSiswa] = useState<number | null>(null);
+
+  // Pagination untuk siswa
+  const [siswaCurrentPage, setSiswaCurrentPage] = useState(1);
+  const [siswaItemsPerPage] = useState(10);
 
   // State untuk import
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -140,6 +152,10 @@ export default function PklManagement() {
   const [popoverKelasOpen, setPopoverKelasOpen] = useState(false);
   const [kelasSearchQuery, setKelasSearchQuery] = useState("");
   const [kelasJenjangFilter, setKelasJenjangFilter] = useState<string>("all");
+
+  // State untuk popover filter PKL di atur status
+  const [pklSearchPopoverOpen, setPklSearchPopoverOpen] = useState<number | null>(null);
+  const [pklSearchQuery, setPklSearchQuery] = useState("");
 
   const filteredKelasOptions = kelasList.filter((kelas) => {
     if (kelasJenjangFilter !== "all") {
@@ -189,7 +205,7 @@ export default function PklManagement() {
     }
   };
 
-  // ========== FETCH LOKASI PKL ==========
+  // ========== FETCH LOKASI PKL (urut: aktif abjad dulu, nonaktif abjad di belakang) ==========
   const fetchPKL = async () => {
     setIsFetchingPKL(true);
     try {
@@ -200,18 +216,29 @@ export default function PklManagement() {
           tempat_pkl,
           koordinat_pkl,
           id_guru,
+          aktif,
           guru:guru (nama)
         `)
-        .order("id_pkl");
+        .order("tempat_pkl", { ascending: true });
       if (error) throw error;
-      const formatted: PKL[] = data.map((item: any) => ({
+      let formatted: PKL[] = data.map((item: any) => ({
         id_pkl: item.id_pkl,
         tempat_pkl: item.tempat_pkl,
         koordinat_pkl: item.koordinat_pkl,
         id_guru: item.id_guru,
         guru_nama: item.guru?.nama || "-",
+        aktif: item.aktif ?? true,
       }));
+      // Urutkan: aktif true dulu (A-Z), lalu aktif false (A-Z)
+      formatted.sort((a, b) => {
+        if (a.aktif === b.aktif) {
+          return a.tempat_pkl.localeCompare(b.tempat_pkl);
+        }
+        return a.aktif ? -1 : 1;
+      });
       setPklList(formatted);
+      // Reset halaman ke 1 setiap kali data berubah
+      setPklCurrentPage(1);
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
@@ -222,7 +249,7 @@ export default function PklManagement() {
   // ========== CRUD LOKASI PKL ==========
   const openAddPKL = () => {
     setEditingPKL(null);
-    setPklForm({ tempat_pkl: "", koordinat_pkl: "", id_guru: "" });
+    setPklForm({ tempat_pkl: "", koordinat_pkl: "", id_guru: "0" });
     setPklDialogOpen(true);
   };
 
@@ -231,7 +258,7 @@ export default function PklManagement() {
     setPklForm({
       tempat_pkl: pkl.tempat_pkl,
       koordinat_pkl: pkl.koordinat_pkl || "",
-      id_guru: pkl.id_guru?.toString() || "",
+      id_guru: pkl.id_guru?.toString() || "0",
     });
     setPklDialogOpen(true);
   };
@@ -246,7 +273,8 @@ export default function PklManagement() {
       const data = {
         tempat_pkl: pklForm.tempat_pkl.trim(),
         koordinat_pkl: pklForm.koordinat_pkl.trim() || null,
-        id_guru: pklForm.id_guru ? parseInt(pklForm.id_guru) : null,
+        id_guru: pklForm.id_guru && pklForm.id_guru !== "0" ? parseInt(pklForm.id_guru) : null,
+        aktif: true,
       };
       if (editingPKL) {
         await supabase.from("pkl").update(data).eq("id_pkl", editingPKL.id_pkl);
@@ -264,33 +292,28 @@ export default function PklManagement() {
     }
   };
 
-  const confirmDeletePKL = (pkl: PKL) => {
-    setDeletingPKL(pkl);
-    setDeletePKLDialogOpen(true);
+  const confirmToggleActive = (pkl: PKL) => {
+    setTogglingPKL(pkl);
+    setToggleActiveDialogOpen(true);
   };
 
-  const handleDeletePKL = async () => {
-    if (!deletingPKL) return;
+  const handleToggleActive = async () => {
+    if (!togglingPKL) return;
     setIsSavingPKL(true);
     try {
-      const { count, error: countError } = await supabase
-        .from("siswa")
-        .select("id_siswa", { count: "exact", head: true })
-        .eq("id_pkl", deletingPKL.id_pkl);
-      if (countError) throw countError;
-      if (count && count > 0) {
-        toast({
-          title: "Tidak bisa menghapus",
-          description: `Masih ada ${count} siswa yang terdaftar di lokasi PKL ini.`,
-          variant: "destructive",
-        });
-        setDeletePKLDialogOpen(false);
-        return;
-      }
-      await supabase.from("pkl").delete().eq("id_pkl", deletingPKL.id_pkl);
-      toast({ title: "Berhasil", description: "Lokasi PKL dihapus" });
-      setDeletePKLDialogOpen(false);
+      const newStatus = !togglingPKL.aktif;
+      await supabase
+        .from("pkl")
+        .update({ aktif: newStatus })
+        .eq("id_pkl", togglingPKL.id_pkl);
+      
+      toast({
+        title: "Berhasil",
+        description: `Lokasi PKL ${newStatus ? "diaktifkan" : "dinonaktifkan"}`,
+      });
+      setToggleActiveDialogOpen(false);
       fetchPKL();
+      if (activeTab === "siswa") fetchSiswa();
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
@@ -345,6 +368,7 @@ export default function PklManagement() {
         tempat_pkl: siswa.pkl?.tempat_pkl || "-",
       }));
       setSiswaList(formatted);
+      setSiswaCurrentPage(1);
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
@@ -386,10 +410,10 @@ export default function PklManagement() {
     let headers: string[];
     let data: any[][];
     if (type === "lokasi") {
-      headers = ["tempat_pkl", "koordinat_pkl", "guru_pendamping"];
+      headers = ["tempat_pkl", "koordinat_pkl", "guru_nip"];
       data = [
-        ["PT. Maju Jaya", "-6.200000,106.816666", "Ahmad Santoso"],
-        ["CV. Karya Mandiri", "-6.208333,106.845555", "Siti Aminah"],
+        ["PT. Maju Jaya", "-6.200000,106.816666", "123456789"],
+        ["CV. Karya Mandiri", "-6.208333,106.845555", "123456790"],
       ];
     } else {
       headers = ["nis", "tempat_pkl"];
@@ -456,41 +480,48 @@ export default function PklManagement() {
           const duplicates = existing.map((e) => e.tempat_pkl);
           throw new Error(`Tempat PKL sudah ada: ${duplicates.join(", ")}`);
         }
-        const guruNames = [...new Set(importPreview.map((row: any) => row.guru_pendamping).filter(Boolean))];
+        const guruNips = [...new Set(importPreview.map((row: any) => row.guru_nip).filter(Boolean))];
         let guruMap = new Map<string, number>();
-        if (guruNames.length) {
+        if (guruNips.length) {
           const { data: guruData, error: guruError } = await supabase
             .from("guru")
-            .select("id_guru, nama")
-            .in("nama", guruNames);
+            .select("id_guru, nip")
+            .in("nip", guruNips);
           if (guruError) throw guruError;
-          guruData?.forEach((g) => guruMap.set(g.nama, g.id_guru));
-          const missingGuru = guruNames.filter((name) => !guruMap.has(name));
+          guruData?.forEach((g) => guruMap.set(g.nip?.toString() || "", g.id_guru));
+          const missingGuru = guruNips.filter((nip) => !guruMap.has(nip.toString()));
           if (missingGuru.length) {
-            throw new Error(`Guru pendamping tidak ditemukan: ${missingGuru.join(", ")}`);
+            throw new Error(`Guru dengan NIP tidak ditemukan: ${missingGuru.join(", ")}`);
           }
         }
         const dataToInsert = importPreview.map((row: any) => ({
           tempat_pkl: row.tempat_pkl,
           koordinat_pkl: row.koordinat_pkl || null,
-          id_guru: row.guru_pendamping ? guruMap.get(row.guru_pendamping) : null,
+          id_guru: row.guru_nip ? guruMap.get(row.guru_nip.toString()) : null,
+          aktif: true,
         }));
         await supabase.from("pkl").insert(dataToInsert);
         toast({ title: "Berhasil", description: `${dataToInsert.length} lokasi PKL diimport` });
         fetchPKL();
       } else {
+        // IMPORT ASSIGNMENT: hanya memproses tempat_pkl yang aktif
         const tempatNames = [...new Set(importPreview.map((row: any) => row.tempat_pkl))];
         const { data: pklData, error: pklError } = await supabase
           .from("pkl")
-          .select("id_pkl, tempat_pkl")
+          .select("id_pkl, tempat_pkl, aktif")
           .in("tempat_pkl", tempatNames);
         if (pklError) throw pklError;
+        
+        // Filter hanya tempat yang aktif
+        const activePkl = pklData?.filter(p => p.aktif === true) || [];
         const tempatToId = new Map();
-        pklData?.forEach((p) => tempatToId.set(p.tempat_pkl, p.id_pkl));
-        const missingTempat = tempatNames.filter((t) => !tempatToId.has(t));
-        if (missingTempat.length) {
-          throw new Error(`Tempat PKL tidak ditemukan: ${missingTempat.join(", ")}. Silakan import lokasi PKL terlebih dahulu.`);
+        activePkl.forEach((p) => tempatToId.set(p.tempat_pkl, p.id_pkl));
+        
+        const missingActive = tempatNames.filter(t => !tempatToId.has(t));
+        if (missingActive.length) {
+          throw new Error(`Tempat PKL tidak ditemukan atau tidak aktif: ${missingActive.join(", ")}. Harap pastikan lokasi PKL sudah terdaftar dan aktif.`);
         }
+        
         const nisList = importPreview.map((row: any) => row.nis.toString());
         const { data: siswaData, error: siswaError } = await supabase
           .from("siswa")
@@ -527,7 +558,7 @@ export default function PklManagement() {
     fetchSiswa();
   };
 
-  // ========== FILTER DATA ==========
+  // ========== FILTER DATA & PAGINATION ==========
   const filteredPklList = pklList.filter((pkl) => {
     const query = searchLokasi.toLowerCase();
     return (
@@ -537,6 +568,12 @@ export default function PklManagement() {
     );
   });
 
+  const totalPklPages = Math.ceil(filteredPklList.length / pklItemsPerPage);
+  const paginatedPklList = filteredPklList.slice(
+    (pklCurrentPage - 1) * pklItemsPerPage,
+    pklCurrentPage * pklItemsPerPage
+  );
+
   const filteredSiswaList = siswaList.filter((siswa) => {
     const query = searchSiswa.toLowerCase();
     return (
@@ -545,6 +582,12 @@ export default function PklManagement() {
       siswa.kelas_nama.toLowerCase().includes(query)
     );
   });
+
+  const totalSiswaPages = Math.ceil(filteredSiswaList.length / siswaItemsPerPage);
+  const paginatedSiswaList = filteredSiswaList.slice(
+    (siswaCurrentPage - 1) * siswaItemsPerPage,
+    siswaCurrentPage * siswaItemsPerPage
+  );
 
   // ==================== LOADING STATE ====================
   if (loading) {
@@ -736,17 +779,16 @@ export default function PklManagement() {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-slate-50">
-                          <TableHead className="font-semibold text-center w-16">ID</TableHead>
                           <TableHead className="font-semibold">Tempat PKL</TableHead>
                           <TableHead className="font-semibold">Koordinat</TableHead>
                           <TableHead className="font-semibold">Guru Pendamping</TableHead>
-                          <TableHead className="font-semibold text-center w-24">Aksi</TableHead>
+                          <TableHead className="font-semibold">Status</TableHead>
+                          <TableHead className="font-semibold text-center">Aksi</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredPklList.map((pkl) => (
+                        {paginatedPklList.map((pkl) => (
                           <TableRow key={pkl.id_pkl} className="hover:bg-slate-50 transition-colors">
-                            <TableCell className="text-center font-mono text-sm">{pkl.id_pkl}</TableCell>
                             <TableCell className="font-medium">{pkl.tempat_pkl}</TableCell>
                             <TableCell>
                               <code className="text-xs bg-slate-100 px-2 py-1 rounded-lg">{pkl.koordinat_pkl || "-"}</code>
@@ -759,19 +801,34 @@ export default function PklManagement() {
                                 {pkl.guru_nama}
                               </div>
                             </TableCell>
+                            <TableCell>
+                              {pkl.aktif ? (
+                                <Badge className="bg-green-100 text-green-700 rounded-full gap-1">
+                                  <CheckCircle className="h-3 w-3" /> Aktif
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 rounded-full gap-1">
+                                  <PowerOff className="h-3 w-3" /> Nonaktif
+                                </Badge>
+                              )}
+                            </TableCell>
                             <TableCell className="text-center">
                               <div className="flex gap-1 justify-center">
                                 <Button variant="ghost" size="sm" onClick={() => openEditPKL(pkl)} className="h-8 w-8 p-0 rounded-lg">
                                   <Edit className="h-4 w-4 text-blue-500" />
                                 </Button>
-                                <Button variant="ghost" size="sm" onClick={() => confirmDeletePKL(pkl)} className="h-8 w-8 p-0 rounded-lg">
-                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                <Button variant="ghost" size="sm" onClick={() => confirmToggleActive(pkl)} className="h-8 w-8 p-0 rounded-lg">
+                                  {pkl.aktif ? (
+                                    <PowerOff className="h-4 w-4 text-red-500" />
+                                  ) : (
+                                    <Power className="h-4 w-4 text-green-500" />
+                                  )}
                                 </Button>
                               </div>
                             </TableCell>
                           </TableRow>
                         ))}
-                        {filteredPklList.length === 0 && (
+                        {paginatedPklList.length === 0 && (
                           <TableRow>
                             <TableCell colSpan={5} className="text-center py-8 text-slate-500">
                               {searchLokasi ? "Tidak ada lokasi PKL yang cocok" : "Belum ada lokasi PKL"}
@@ -782,9 +839,46 @@ export default function PklManagement() {
                     </Table>
                   </div>
                 </div>
+
+                {/* Pagination Lokasi PKL */}
+                {totalPklPages > 1 && (
+                  <div className="flex justify-center items-center gap-2 pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPklCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={pklCurrentPage === 1}
+                      className="rounded-xl h-8 w-8 p-0"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <div className="flex gap-1">
+                      {Array.from({ length: totalPklPages }, (_, i) => i + 1).map(page => (
+                        <Button
+                          key={page}
+                          variant={pklCurrentPage === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setPklCurrentPage(page)}
+                          className={`rounded-xl h-8 w-8 p-0 ${pklCurrentPage === page ? "bg-gradient-to-r from-blue-600 to-indigo-600" : ""}`}
+                        >
+                          {page}
+                        </Button>
+                      ))}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPklCurrentPage(prev => Math.min(prev + 1, totalPklPages))}
+                      disabled={pklCurrentPage === totalPklPages}
+                      className="rounded-xl h-8 w-8 p-0"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </TabsContent>
 
-              {/* TAB ATUR SISWA PKL - DENGAN LAYOUT RATA (semua kontrol satu baris) */}
+              {/* TAB ATUR SISWA PKL */}
               <TabsContent value="siswa" className="space-y-6">
                 <div className="flex flex-wrap items-end gap-3">
                   {/* Filter Kelas */}
@@ -903,14 +997,14 @@ export default function PklManagement() {
                               <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-500" />
                             </TableCell>
                           </TableRow>
-                        ) : filteredSiswaList.length === 0 ? (
+                        ) : paginatedSiswaList.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={6} className="text-center py-8 text-slate-500">
                               {searchSiswa ? "Tidak ada siswa yang cocok" : "Tidak ada data siswa"}
                             </TableCell>
                           </TableRow>
                         ) : (
-                          filteredSiswaList.map((siswa) => (
+                          paginatedSiswaList.map((siswa) => (
                             <TableRow key={siswa.id_siswa} className="hover:bg-slate-50 transition-colors">
                               <TableCell className="font-mono text-sm">{siswa.nis}</TableCell>
                               <TableCell className="font-medium">{siswa.nama}</TableCell>
@@ -929,26 +1023,72 @@ export default function PklManagement() {
                               <TableCell>{siswa.tempat_pkl || "-"}</TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
-                                  <Select
-                                    value={siswa.id_pkl ? siswa.id_pkl.toString() : "none"}
-                                    onValueChange={(value) => {
-                                      const pklId = value === "none" ? null : parseInt(value);
-                                      updateSiswaPKL(siswa.id_siswa, pklId);
-                                    }}
-                                    disabled={updatingSiswa === siswa.id_siswa}
-                                  >
-                                    <SelectTrigger className="w-[240px] rounded-xl h-9 text-sm">
-                                      <SelectValue placeholder="Pilih status" />
-                                    </SelectTrigger>
-                                    <SelectContent className="rounded-xl">
-                                      <SelectItem value="none">🏫 Sekolah (tidak PKL)</SelectItem>
-                                      {pklList.map((pkl) => (
-                                        <SelectItem key={pkl.id_pkl} value={pkl.id_pkl.toString()}>
-                                          🏭 PKL - {pkl.tempat_pkl}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                  <Popover open={pklSearchPopoverOpen === siswa.id_siswa} onOpenChange={(open) => {
+                                    setPklSearchPopoverOpen(open ? siswa.id_siswa : null);
+                                    setPklSearchQuery("");
+                                  }}>
+                                    <PopoverTrigger asChild>
+                                      <Button variant="outline" className="w-[240px] justify-between rounded-xl h-9 text-sm font-normal" disabled={updatingSiswa === siswa.id_siswa}>
+                                        {siswa.id_pkl ? `🏭 ${siswa.tempat_pkl}` : "🏫 Sekolah"}
+                                        <ChevronDown className="h-4 w-4 opacity-50" />
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[300px] p-0" align="start" sideOffset={5}>
+                                      <div className="p-2 border-b bg-slate-50">
+                                        <div className="relative">
+                                          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                          <Input
+                                            placeholder="Cari lokasi PKL..."
+                                            value={pklSearchQuery}
+                                            onChange={(e) => setPklSearchQuery(e.target.value)}
+                                            className="pl-7 h-8 text-sm rounded-lg"
+                                            onClick={(e) => e.stopPropagation()}
+                                          />
+                                          {pklSearchQuery && (
+                                            <button
+                                              onClick={() => setPklSearchQuery("")}
+                                              className="absolute right-2 top-1/2 transform -translate-y-1/2"
+                                            >
+                                              <X className="h-3.5 w-3.5 text-slate-400" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="max-h-60 overflow-y-auto">
+                                        {/* Opsi Sekolah */}
+                                        <button
+                                          className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors flex items-center gap-2 ${!siswa.id_pkl ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-700"}`}
+                                          onClick={() => {
+                                            updateSiswaPKL(siswa.id_siswa, null);
+                                            setPklSearchPopoverOpen(null);
+                                            setPklSearchQuery("");
+                                          }}
+                                        >
+                                          <Home className="h-4 w-4" />
+                                          Sekolah (tidak PKL)
+                                        </button>
+                                        {/* Filter dan tampilkan PKL */}
+                                        {pklList.filter(p => p.aktif && p.tempat_pkl.toLowerCase().includes(pklSearchQuery.toLowerCase())).length === 0 && pklSearchQuery ? (
+                                          <div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada lokasi PKL yang cocok</div>
+                                        ) : (
+                                          pklList.filter(p => p.aktif && p.tempat_pkl.toLowerCase().includes(pklSearchQuery.toLowerCase())).map(pkl => (
+                                            <button
+                                              key={pkl.id_pkl}
+                                              className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors flex items-center gap-2 ${siswa.id_pkl === pkl.id_pkl ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-700"}`}
+                                              onClick={() => {
+                                                updateSiswaPKL(siswa.id_siswa, pkl.id_pkl);
+                                                setPklSearchPopoverOpen(null);
+                                                setPklSearchQuery("");
+                                              }}
+                                            >
+                                              <Briefcase className="h-4 w-4" />
+                                              {pkl.tempat_pkl}
+                                            </button>
+                                          ))
+                                        )}
+                                      </div>
+                                    </PopoverContent>
+                                  </Popover>
                                   {updatingSiswa === siswa.id_siswa && <Loader2 className="h-4 w-4 animate-spin text-blue-500" />}
                                 </div>
                               </TableCell>
@@ -959,6 +1099,43 @@ export default function PklManagement() {
                     </Table>
                   </div>
                 </div>
+
+                {/* Pagination Siswa */}
+                {totalSiswaPages > 1 && (
+                  <div className="flex justify-center items-center gap-2 pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSiswaCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={siswaCurrentPage === 1}
+                      className="rounded-xl h-8 w-8 p-0"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <div className="flex gap-1">
+                      {Array.from({ length: totalSiswaPages }, (_, i) => i + 1).map(page => (
+                        <Button
+                          key={page}
+                          variant={siswaCurrentPage === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setSiswaCurrentPage(page)}
+                          className={`rounded-xl h-8 w-8 p-0 ${siswaCurrentPage === page ? "bg-gradient-to-r from-blue-600 to-indigo-600" : ""}`}
+                        >
+                          {page}
+                        </Button>
+                      ))}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSiswaCurrentPage(prev => Math.min(prev + 1, totalSiswaPages))}
+                      disabled={siswaCurrentPage === totalSiswaPages}
+                      className="rounded-xl h-8 w-8 p-0"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
 
                 {/* INFO ALERT */}
                 <Alert className="rounded-xl bg-blue-50 border-blue-200 max-w-3xl mx-auto">
@@ -1018,8 +1195,8 @@ export default function PklManagement() {
             <DialogDescription>
               Upload file Excel (.xlsx, .xls, .csv) dengan format yang sesuai.
               {importType === "lokasi"
-                ? " Kolom: tempat_pkl (wajib), koordinat_pkl (opsional), guru_pendamping (nama guru, opsional)."
-                : " Kolom: nis (wajib), tempat_pkl (wajib, nama tempat PKL harus sudah ada di database)."}
+                ? " Kolom: tempat_pkl (wajib), koordinat_pkl (opsional), guru_nip (NIP guru pendamping, opsional)."
+                : " Kolom: nis (wajib), tempat_pkl (wajib, nama tempat PKL harus sudah ada dan aktif di database)."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1122,16 +1299,16 @@ export default function PklManagement() {
               <p className="text-xs text-slate-400 mt-1">Format: latitude,longitude</p>
             </div>
             <div>
-              <Label>Guru Pendamping</Label>
-              <Select value={pklForm.id_guru} onValueChange={(v) => setPklForm({ ...pklForm, id_guru: v })}>
+              <Label>Guru Pendamping (NIP)</Label>
+              <Select value={pklForm.id_guru || "0"} onValueChange={(v) => setPklForm({ ...pklForm, id_guru: v })}>
                 <SelectTrigger className="rounded-xl mt-1">
                   <SelectValue placeholder="Pilih guru pendamping" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
-                  <SelectItem value="none">- Tidak ada -</SelectItem>
+                  <SelectItem value="0">- Tidak ada -</SelectItem>
                   {guruList.map((guru) => (
                     <SelectItem key={guru.id_guru} value={guru.id_guru.toString()}>
-                      {guru.nama} (NIP: {guru.nip})
+                      {guru.nip} - {guru.nama}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1147,23 +1324,33 @@ export default function PklManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Delete Lokasi PKL */}
-      <Dialog open={deletePKLDialogOpen} onOpenChange={setDeletePKLDialogOpen}>
+      {/* Dialog Konfirmasi Aktif/Nonaktif */}
+      <Dialog open={toggleActiveDialogOpen} onOpenChange={setToggleActiveDialogOpen}>
         <DialogContent className="rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-xl flex items-center gap-2 text-red-600">
-              <Trash2 className="h-5 w-5" />
-              Hapus Lokasi PKL
+            <DialogTitle className="text-xl flex items-center gap-2 text-orange-600">
+              {togglingPKL?.aktif ? <PowerOff className="h-5 w-5" /> : <Power className="h-5 w-5" />}
+              {togglingPKL?.aktif ? "Nonaktifkan Lokasi PKL" : "Aktifkan Lokasi PKL"}
             </DialogTitle>
           </DialogHeader>
           <DialogDescription>
-            Yakin ingin menghapus lokasi PKL <strong>{deletingPKL?.tempat_pkl}</strong>?
-            <p className="text-sm text-red-500 mt-2">⚠️ Tindakan ini tidak dapat dibatalkan.</p>
+            {togglingPKL?.aktif ? (
+              <>Yakin ingin <strong>menonaktifkan</strong> lokasi PKL <strong>{togglingPKL?.tempat_pkl}</strong>?<br />
+              Lokasi yang nonaktif tidak akan muncul di pilihan assignment siswa.</>
+            ) : (
+              <>Yakin ingin <strong>mengaktifkan</strong> kembali lokasi PKL <strong>{togglingPKL?.tempat_pkl}</strong>?</>
+            )}
           </DialogDescription>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletePKLDialogOpen(false)}>Batal</Button>
-            <Button variant="destructive" onClick={handleDeletePKL} disabled={isSavingPKL}>
-              {isSavingPKL && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Hapus
+            <Button variant="outline" onClick={() => setToggleActiveDialogOpen(false)}>Batal</Button>
+            <Button 
+              variant={togglingPKL?.aktif ? "destructive" : "default"}
+              onClick={handleToggleActive} 
+              disabled={isSavingPKL}
+              className={!togglingPKL?.aktif ? "bg-green-600 hover:bg-green-700" : ""}
+            >
+              {isSavingPKL && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {togglingPKL?.aktif ? "Nonaktifkan" : "Aktifkan"}
             </Button>
           </DialogFooter>
         </DialogContent>
