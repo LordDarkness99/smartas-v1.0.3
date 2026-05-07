@@ -921,9 +921,205 @@ export default function ScheduleManagement() {
         <div className="text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Manajemen Jadwal - SmartAS</p><p className="text-[10px] text-slate-300 mt-1">Sistem Informasi Akademik</p></div>
       </div>
 
-      {/* DIALOGS (semua dialog tetap sama seperti asli) */}
-      {/* Dialog Jadwal, Toggle Jadwal, Mapel, Import, Bulk, dll. (tidak diubah) */}
-      {/* ... (salin dari kode asli, tidak saya tulis ulang agar tidak terlalu panjang) */}
+      {/* DIALOG JADWAL */}
+      <Dialog open={jadwalDialogOpen} onOpenChange={setJadwalDialogOpen}>
+        <DialogContent className="rounded-xl max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingJadwal ? "Edit Jadwal" : "Tambah Jadwal Baru"}</DialogTitle>
+            <DialogDescription>{editingJadwal ? "Perbarui informasi jadwal pelajaran" : "Tambahkan jadwal pelajaran baru untuk kelas yang dipilih"}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-slate-700 font-medium">Kelas</Label>
+                <Select value={jadwalForm.id_kelas} onValueChange={(v) => setJadwalForm({ ...jadwalForm, id_kelas: v })}>
+                  <SelectTrigger className="rounded-lg mt-1">{jadwalForm.id_kelas ? kelasList.find(k => k.id_kelas.toString() === jadwalForm.id_kelas)?.nama : "Pilih Kelas"}</SelectTrigger>
+                  <SelectContent>
+                    {kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {formErrors.id_kelas && <p className="text-red-500 text-xs mt-1">{formErrors.id_kelas}</p>}
+              </div>
+              <div>
+                <Label className="text-slate-700 font-medium">Mata Pelajaran</Label>
+                <Select value={jadwalForm.id_mapel} onValueChange={(v) => setJadwalForm({ ...jadwalForm, id_mapel: v })}>
+                  <SelectTrigger className="rounded-lg mt-1">{jadwalForm.id_mapel ? mapelData.find(m => m.id_mapel.toString() === jadwalForm.id_mapel)?.nama : "Pilih Mapel"}</SelectTrigger>
+                  <SelectContent>
+                    {mapelData.filter(m => m.aktif).map(m => <SelectItem key={m.id_mapel} value={m.id_mapel.toString()}>{m.nama}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {formErrors.id_mapel && <p className="text-red-500 text-xs mt-1">{formErrors.id_mapel}</p>}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-slate-700 font-medium">Guru</Label>
+                <Select value={jadwalForm.id_guru} onValueChange={(v) => setJadwalForm({ ...jadwalForm, id_guru: v })}>
+                  <SelectTrigger className="rounded-lg mt-1">{jadwalForm.id_guru ? guruList.find(g => g.id_guru.toString() === jadwalForm.id_guru)?.nama : "Pilih Guru"}</SelectTrigger>
+                  <SelectContent>
+                    {guruList.map(g => <SelectItem key={g.id_guru} value={g.id_guru.toString()}>{g.nama}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {formErrors.id_guru && <p className="text-red-500 text-xs mt-1">{formErrors.id_guru}</p>}
+              </div>
+              <div>
+                <Label className="text-slate-700 font-medium">Hari</Label>
+                <Select value={jadwalForm.hari} onValueChange={(v) => setJadwalForm({ ...jadwalForm, hari: v })}>
+                  <SelectTrigger className="rounded-lg mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {HARI.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-slate-700 font-medium">Jam (Format: HH:MM - HH:MM)</Label>
+              <Input placeholder="07:00 - 08:30" value={jadwalForm.jam} onChange={(e) => setJadwalForm({ ...jadwalForm, jam: e.target.value })} className="rounded-lg mt-1" />
+              {formErrors.jam && <p className="text-red-500 text-xs mt-1">{formErrors.jam}</p>}
+              <p className="text-xs text-slate-500 mt-1">Contoh: 07:00 - 08:30, 08:30 - 10:00</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setJadwalDialogOpen(false)} className="rounded-lg">Batal</Button>
+            <Button onClick={handleSaveJadwal} disabled={isSavingJadwal} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600">
+              {isSavingJadwal ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Menyimpan...</> : "Simpan Jadwal"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG TOGGLE JADWAL */}
+      <Dialog open={toggleJadwalDialogOpen} onOpenChange={setToggleJadwalDialogOpen}>
+        <DialogContent className="rounded-xl max-w-md">
+          <DialogHeader>
+            <DialogTitle>{isActivatingJadwalMode ? "Aktifkan Jadwal" : "Nonaktifkan Jadwal"}</DialogTitle>
+            <DialogDescription>{isActivatingJadwalMode ? "Jadwal akan diaktifkan kembali" : "Jadwal akan dinonaktifkan tetapi data tetap tersimpan"}</DialogDescription>
+          </DialogHeader>
+          {togglingJadwal && (
+            <div className="space-y-3 py-4">
+              <div className="bg-slate-50 p-3 rounded-lg">
+                <p className="text-sm text-slate-600"><span className="font-medium">Mapel:</span> {togglingJadwal.mapel?.nama}</p>
+                <p className="text-sm text-slate-600"><span className="font-medium">Guru:</span> {togglingJadwal.guru?.nama}</p>
+                <p className="text-sm text-slate-600"><span className="font-medium">Jam:</span> {togglingJadwal.jam}</p>
+                <p className="text-sm text-slate-600"><span className="font-medium">Hari:</span> {togglingJadwal.hari}</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setToggleJadwalDialogOpen(false)} className="rounded-lg">Batal</Button>
+            <Button onClick={executeToggleJadwal} disabled={isSavingJadwal} className={`rounded-lg ${isActivatingJadwalMode ? "bg-green-600" : "bg-red-600"}`}>
+              {isSavingJadwal ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Memproses...</> : (isActivatingJadwalMode ? "Aktifkan" : "Nonaktifkan")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG MAPEL */}
+      <Dialog open={mapelDialogOpen} onOpenChange={setMapelDialogOpen}>
+        <DialogContent className="rounded-xl max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingMapel ? "Edit Mata Pelajaran" : "Tambah Mata Pelajaran"}</DialogTitle>
+            <DialogDescription>{editingMapel ? "Perbarui nama mata pelajaran" : "Tambahkan mata pelajaran baru ke dalam sistem"}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-slate-700 font-medium">Nama Mata Pelajaran</Label>
+              <Input placeholder="Contoh: Matematika, Fisika, dll" value={mapelForm.nama} onChange={(e) => setMapelForm({ nama: e.target.value })} className="rounded-lg mt-1" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMapelDialogOpen(false)} className="rounded-lg">Batal</Button>
+            <Button onClick={handleSaveMapel} disabled={isSavingMapel} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600">
+              {isSavingMapel ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Menyimpan...</> : "Simpan Mapel"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG TOGGLE MAPEL */}
+      <Dialog open={toggleMapelDialogOpen} onOpenChange={setToggleMapelDialogOpen}>
+        <DialogContent className="rounded-xl max-w-md">
+          <DialogHeader>
+            <DialogTitle>{isActivatingMapelMode ? "Aktifkan Mata Pelajaran" : "Nonaktifkan Mata Pelajaran"}</DialogTitle>
+            <DialogDescription>{isActivatingMapelMode ? "Mata pelajaran akan diaktifkan kembali" : "Mata pelajaran akan dinonaktifkan tetapi data tetap tersimpan"}</DialogDescription>
+          </DialogHeader>
+          {togglingMapel && (
+            <div className="py-4">
+              <div className="bg-slate-50 p-3 rounded-lg">
+                <p className="text-sm text-slate-600"><span className="font-medium">Nama:</span> {togglingMapel.nama}</p>
+                <p className="text-sm text-slate-600"><span className="font-medium">Status:</span> {togglingMapel.aktif ? "Aktif" : "Nonaktif"}</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setToggleMapelDialogOpen(false)} className="rounded-lg">Batal</Button>
+            <Button onClick={executeToggleMapel} disabled={isSavingMapel} className={`rounded-lg ${isActivatingMapelMode ? "bg-green-600" : "bg-red-600"}`}>
+              {isSavingMapel ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Memproses...</> : (isActivatingMapelMode ? "Aktifkan" : "Nonaktifkan")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG IMPORT EXCEL */}
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent className="rounded-xl max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Impor Mata Pelajaran dari Excel</DialogTitle>
+            <DialogDescription>Upload file Excel untuk menambah mata pelajaran secara massal</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50">
+              <div className="flex flex-col items-center gap-2">
+                <Upload className="h-8 w-8 text-slate-400" />
+                <label htmlFor="file-input" className="cursor-pointer">
+                  <span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk upload</span>
+                  <input id="file-input" type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="hidden" disabled={isImporting} />
+                </label>
+                <p className="text-xs text-slate-500">atau drag & drop file Excel di sini</p>
+              </div>
+            </div>
+            {uploadError && <Alert className="bg-red-50 border-red-200"><AlertCircle className="h-4 w-4 text-red-600" /><AlertDescription className="text-red-700">{uploadError}</AlertDescription></Alert>}
+            {previewData.length > 0 && (
+              <div>
+                <p className="text-sm font-medium mb-2">Preview Data ({previewData.length} item):</p>
+                <div className="border rounded-lg overflow-y-auto max-h-48">
+                  <Table>
+                    <TableHeader><TableRow className="bg-slate-50"><TableHead>Nama Mapel</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                      {previewData.slice(0, 5).map((item, idx) => <TableRow key={idx}><TableCell className="text-sm">{item.nama}</TableCell></TableRow>)}
+                      {previewData.length > 5 && <TableRow><TableCell className="text-sm text-slate-500 text-center py-2">... dan {previewData.length - 5} data lainnya</TableCell></TableRow>}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+            <Button variant="outline" onClick={downloadTemplateMapel} className="w-full rounded-lg"><Download className="h-4 w-4 mr-2" /> Download Template Excel</Button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setImportDialogOpen(false); setPreviewData([]); setUploadError(null); }} className="rounded-lg">Batal</Button>
+            <Button onClick={handleImportMapel} disabled={isImporting || previewData.length === 0} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600">
+              {isImporting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Mengimpor...</> : "Impor Data"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG BULK ACTION */}
+      <Dialog open={bulkActionDialogOpen} onOpenChange={setBulkActionDialogOpen}>
+        <DialogContent className="rounded-xl max-w-md">
+          <DialogHeader>
+            <DialogTitle>{bulkActionType === "aktifkan" ? "Aktifkan Mata Pelajaran" : "Nonaktifkan Mata Pelajaran"}</DialogTitle>
+            <DialogDescription>{bulkActionType === "aktifkan" ? `Aktifkan ${selectedMapelIds.length} mata pelajaran?` : `Nonaktifkan ${selectedMapelIds.length} mata pelajaran?`}</DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-slate-600 py-2">Tindakan ini tidak dapat dibatalkan setelah dikonfirmasi.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkActionDialogOpen(false)} className="rounded-lg">Batal</Button>
+            <Button onClick={executeBulkAction} disabled={isProcessingBulk} className={`rounded-lg ${bulkActionType === "aktifkan" ? "bg-green-600" : "bg-red-600"}`}>
+              {isProcessingBulk ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Memproses...</> : (bulkActionType === "aktifkan" ? "Aktifkan" : "Nonaktifkan")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
