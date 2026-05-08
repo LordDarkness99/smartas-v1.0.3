@@ -60,16 +60,11 @@ import {
   Cloud,
   Sparkles,
   Search,
-  Users,
-  GraduationCap,
-  Shield,
   UserMinus,
   UserPlus,
   Upload,
   Download,
-  CheckCircle,
   X,
-  Filter,
   ChevronDown,
 } from "lucide-react";
 
@@ -119,7 +114,6 @@ interface StatistikJadwal {
 
 const HARI = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
-// Helper: konversi waktu "HH:MM" ke menit
 const convertToMinutes = (timeStr: string): number => {
   const [hours, minutes] = timeStr.split(":").map(Number);
   return hours * 60 + minutes;
@@ -135,7 +129,6 @@ function isTimeOverlap(jam1: string, jam2: string): boolean {
   return t1.start < t2.end && t2.start < t1.end;
 }
 
-// Komponen ikon tampilan
 const LayoutGrid = (props: any) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
     <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
@@ -157,7 +150,6 @@ export default function ScheduleManagement() {
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<"table" | "card">("table");
 
-  // State untuk jadwal
   const [jadwalList, setJadwalList] = useState<Jadwal[]>([]);
   const [kelasList, setKelasList] = useState<Kelas[]>([]);
   const [guruList, setGuruList] = useState<Guru[]>([]);
@@ -174,7 +166,6 @@ export default function ScheduleManagement() {
     guruTersibuk: "-",
   });
 
-  // State untuk popover filter kelas
   const [popoverKelasOpen, setPopoverKelasOpen] = useState(false);
   const [kelasSearchQuery, setKelasSearchQuery] = useState("");
   const [kelasJenjangFilter, setKelasJenjangFilter] = useState<string>("all");
@@ -190,7 +181,6 @@ export default function ScheduleManagement() {
     return true;
   });
 
-  // Dialog jadwal
   const [jadwalDialogOpen, setJadwalDialogOpen] = useState(false);
   const [editingJadwal, setEditingJadwal] = useState<Jadwal | null>(null);
   const [jadwalForm, setJadwalForm] = useState({
@@ -203,12 +193,10 @@ export default function ScheduleManagement() {
   const [isSavingJadwal, setIsSavingJadwal] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // Toggle aktif/nonaktif jadwal
   const [toggleJadwalDialogOpen, setToggleJadwalDialogOpen] = useState(false);
   const [togglingJadwal, setTogglingJadwal] = useState<Jadwal | null>(null);
   const [isActivatingJadwalMode, setIsActivatingJadwalMode] = useState(false);
 
-  // State untuk mata pelajaran
   const [mapelData, setMapelData] = useState<MataPelajaran[]>([]);
   const [isFetchingMapel, setIsFetchingMapel] = useState(false);
   const [mapelDialogOpen, setMapelDialogOpen] = useState(false);
@@ -218,29 +206,34 @@ export default function ScheduleManagement() {
   const [mapelSearchTerm, setMapelSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"semua" | "aktif" | "nonaktif">("semua");
 
-  // State untuk toggle aktif/nonaktif mapel (single)
   const [toggleMapelDialogOpen, setToggleMapelDialogOpen] = useState(false);
   const [togglingMapel, setTogglingMapel] = useState<MataPelajaran | null>(null);
   const [isActivatingMapelMode, setIsActivatingMapelMode] = useState(false);
 
-  // State untuk import Excel mapel
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // State untuk bulk action mapel
+  const [importJadwalDialogOpen, setImportJadwalDialogOpen] = useState(false);
+  const [importJadwalRawData, setImportJadwalRawData] = useState<any[]>([]);
+  const [importJadwalPreviewRows, setImportJadwalPreviewRows] = useState<any[]>([]);
+  const [importJadwalMissingMapels, setImportJadwalMissingMapels] = useState<string[]>([]);
+  const [isImportingJadwal, setIsImportingJadwal] = useState(false);
+  const [importJadwalUploadError, setImportJadwalUploadError] = useState<string | null>(null);
+  const [missingMapelDialogOpen, setMissingMapelDialogOpen] = useState(false);
+  const [isAddingMissingMapels, setIsAddingMissingMapels] = useState(false);
+  const [importJadwalStep, setImportJadwalStep] = useState<"upload" | "preview">("upload");
+
   const [selectMode, setSelectMode] = useState(false);
   const [selectedMapelIds, setSelectedMapelIds] = useState<number[]>([]);
   const [bulkActionDialogOpen, setBulkActionDialogOpen] = useState(false);
   const [bulkActionType, setBulkActionType] = useState<"aktifkan" | "nonaktifkan">("aktifkan");
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
-
-  // State untuk pagination mapel
   const [mapelCurrentPage, setMapelCurrentPage] = useState(1);
   const mapelItemsPerPage = 10;
 
-  // ==================== GREETING ====================
+  // GREETING
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour < 4) setGreeting("Selamat Malam");
@@ -272,7 +265,7 @@ export default function ScheduleManagement() {
     return colors[hari] || "bg-slate-100 text-slate-700";
   };
 
-  // ========== FETCH DATA ==========
+  // FETCH DATA
   const fetchKelas = async () => {
     const { data, error } = await supabase.from("kelas").select("id_kelas, nama, aktif").eq("aktif", true).order("nama");
     if (!error) setKelasList(data || []);
@@ -336,7 +329,6 @@ export default function ScheduleManagement() {
     }
   };
 
-  // ========== INIT ==========
   useEffect(() => {
     const init = async () => {
       setLoading(true);
@@ -350,7 +342,7 @@ export default function ScheduleManagement() {
     if (activeTab === "jadwal" && selectedKelas) fetchJadwal();
   }, [selectedKelas, selectedHari, activeTab]);
 
-  // ========== VALIDASI OVERLAP ==========
+  // VALIDASI OVERLAP
   const checkOverlapJadwal = async (kelasId: number, mapelId: number, hari: string, jam: string, excludeId?: number): Promise<boolean> => {
     let query = supabase
       .from("jadwal")
@@ -376,7 +368,7 @@ export default function ScheduleManagement() {
     return data?.some(j => isTimeOverlap(j.jam, jam)) || false;
   };
 
-  // ========== CRUD JADWAL ==========
+  // CRUD JADWAL
   const openAddJadwal = () => {
     setEditingJadwal(null);
     setFormErrors({});
@@ -439,7 +431,6 @@ export default function ScheduleManagement() {
     }
   };
 
-  // Toggle jadwal
   const confirmToggleJadwal = (jadwal: Jadwal, isActivating: boolean) => {
     setTogglingJadwal(jadwal);
     setIsActivatingJadwalMode(isActivating);
@@ -486,7 +477,7 @@ export default function ScheduleManagement() {
     }
   };
 
-  // ========== CRUD MAPEL ==========
+  // CRUD MAPEL
   const openAddMapel = () => { setEditingMapel(null); setMapelForm({ nama: "" }); setMapelDialogOpen(true); };
   const openEditMapel = (mapel: MataPelajaran) => { setEditingMapel(mapel); setMapelForm({ nama: mapel.nama }); setMapelDialogOpen(true); };
 
@@ -513,7 +504,6 @@ export default function ScheduleManagement() {
     }
   };
 
-  // Toggle mapel single
   const confirmToggleMapel = (mapel: MataPelajaran, isActivating: boolean) => {
     if (!isActivating) {
       const isUsed = jadwalList.some(j => j.id_mapel === mapel.id_mapel && j.aktif === true);
@@ -545,7 +535,7 @@ export default function ScheduleManagement() {
     }
   };
 
-  // ========== IMPORT EXCEL MAPEL ==========
+  // IMPORT EXCEL MAPEL
   const downloadTemplateMapel = () => {
     const headers = ["nama"];
     const data = [["Matematika"], ["Fisika"], ["Kimia"], ["Biologi"], ["Bahasa Indonesia"]];
@@ -609,7 +599,283 @@ export default function ScheduleManagement() {
     }
   };
 
-  // ========== BULK ACTION MAPEL ==========
+  // ========== IMPORT EXCEL JADWAL (MENGGUNAKAN NIP) ==========
+  const downloadJadwalTemplate = () => {
+    const headers = ["kelas", "mapel", "nip_guru", "hari", "jam"];
+    const data = [
+      ["X IPA 1", "Matematika", "1234567890", "Senin", "07:00 - 08:30"],
+      ["X IPA 1", "Fisika", "0987654321", "Senin", "08:30 - 10:00"],
+      ["XI IPS 2", "Bahasa Indonesia", "1122334455", "Selasa", "09:00 - 10:30"],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template_Jadwal");
+    XLSX.writeFile(wb, "template_impor_jadwal.xlsx");
+  };
+
+  // Helper untuk mengkonversi nilai menjadi string dan trim
+  const toStringTrim = (value: any): string => {
+    if (value === null || value === undefined) return "";
+    return String(value).trim();
+  };
+
+  const validateJadwalImportRow = (row: any, index: number) => {
+    const errors: string[] = [];
+    
+    const kelas = toStringTrim(row.kelas);
+    const mapel = toStringTrim(row.mapel);
+    const nipGuru = toStringTrim(row.nip_guru);
+    const hari = toStringTrim(row.hari);
+    const jam = toStringTrim(row.jam);
+    
+    if (!kelas) errors.push("Kelas tidak boleh kosong");
+    if (!mapel) errors.push("Mata pelajaran tidak boleh kosong");
+    if (!nipGuru) errors.push("NIP guru tidak boleh kosong");
+    if (!hari) errors.push("Hari tidak boleh kosong");
+    if (!jam) errors.push("Jam tidak boleh kosong");
+    
+    if (jam && !/^\d{2}:\d{2} - \d{2}:\d{2}$/.test(jam)) {
+      errors.push("Format jam harus HH:MM - HH:MM");
+    }
+    
+    if (hari && !HARI.includes(hari)) {
+      errors.push(`Hari harus salah satu dari: ${HARI.join(", ")}`);
+    }
+    
+    return errors;
+  };
+
+  const processJadwalPreview = async (rawData: any[]) => {
+    const missingMapelsSet = new Set<string>();
+    const previewWithValidation = [];
+    
+    for (let i = 0; i < rawData.length; i++) {
+      const row = rawData[i];
+      const validationErrors = validateJadwalImportRow(row, i);
+      
+      const kelasNama = toStringTrim(row.kelas);
+      const kelas = kelasList.find(k => k.nama.toLowerCase() === kelasNama.toLowerCase());
+      
+      const nipGuru = toStringTrim(row.nip_guru);
+      const guru = guruList.find(g => g.nip && g.nip.toString() === nipGuru);
+      
+      const mapelNama = toStringTrim(row.mapel);
+      const mapel = mapelData.find(m => m.nama.toLowerCase() === mapelNama.toLowerCase());
+      
+      if (!mapel && mapelNama) {
+        missingMapelsSet.add(mapelNama);
+      }
+      
+      previewWithValidation.push({
+        kelas: row.kelas,
+        mapel: row.mapel,
+        nip_guru: row.nip_guru,
+        hari: toStringTrim(row.hari),
+        jam: toStringTrim(row.jam),
+        rowIndex: i + 1,
+        kelasId: kelas?.id_kelas || null,
+        guruId: guru?.id_guru || null,
+        mapelId: mapel?.id_mapel || null,
+        kelasValid: !!kelas,
+        guruValid: !!guru,
+        mapelValid: !!mapel,
+        validationErrors,
+        isValid: validationErrors.length === 0 && !!kelas && !!guru && !!mapel,
+      });
+    }
+    
+    setImportJadwalMissingMapels(Array.from(missingMapelsSet));
+    return previewWithValidation;
+  };
+
+  const handleJadwalFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setImportJadwalUploadError(null);
+    setIsImportingJadwal(true);
+    setImportJadwalStep("upload");
+    
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+      
+      if (jsonData.length === 0) throw new Error("File kosong");
+      
+      const firstRow = jsonData[0] as any;
+      const requiredColumns = ["kelas", "mapel", "nip_guru", "hari", "jam"];
+      const missingColumns = requiredColumns.filter(col => !(col in firstRow));
+      
+      if (missingColumns.length > 0) {
+        throw new Error(`Kolom tidak ditemukan: ${missingColumns.join(", ")}. Pastikan file memiliki kolom: kelas, mapel, nip_guru, hari, jam`);
+      }
+      
+      setImportJadwalRawData(jsonData);
+      const preview = await processJadwalPreview(jsonData);
+      setImportJadwalPreviewRows(preview);
+      
+      if (preview.some(p => !p.mapelValid)) {
+        setMissingMapelDialogOpen(true);
+      } else {
+        setImportJadwalStep("preview");
+        setImportJadwalDialogOpen(true);
+      }
+    } catch (error: any) {
+      setImportJadwalUploadError(error.message);
+      toast({ title: "Upload Gagal", description: error.message, variant: "destructive" });
+    } finally {
+      setIsImportingJadwal(false);
+      event.target.value = "";
+    }
+  };
+  
+  const handleAddMissingMapelsAndContinue = async () => {
+    if (importJadwalMissingMapels.length === 0) {
+      setMissingMapelDialogOpen(false);
+      return;
+    }
+    
+    setIsAddingMissingMapels(true);
+    let addedCount = 0;
+    
+    try {
+      for (const mapelNama of importJadwalMissingMapels) {
+        const { data: existing } = await supabase
+          .from("mata_pelajaran")
+          .select("id_mapel")
+          .eq("nama", mapelNama)
+          .maybeSingle();
+        
+        if (!existing) {
+          const { error } = await supabase
+            .from("mata_pelajaran")
+            .insert({ nama: mapelNama, aktif: true, dibuat_pada: new Date().toISOString() });
+          
+          if (error) throw error;
+          addedCount++;
+        }
+      }
+      
+      await fetchMapel();
+      
+      toast({ 
+        title: "Berhasil", 
+        description: `${addedCount} mata pelajaran berhasil ditambahkan.` 
+      });
+      
+      const updatedPreview = await processJadwalPreview(importJadwalRawData);
+      setImportJadwalPreviewRows(updatedPreview);
+      setMissingMapelDialogOpen(false);
+      setImportJadwalStep("preview");
+      setImportJadwalDialogOpen(true);
+    } catch (error: any) {
+      toast({ 
+        title: "Gagal Menambahkan Mapel", 
+        description: error.message, 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsAddingMissingMapels(false);
+    }
+  };
+  
+  const confirmImportJadwal = async () => {
+    const validRows = importJadwalPreviewRows.filter(row => row.isValid);
+    
+    if (validRows.length === 0) {
+      toast({ 
+        title: "Tidak Ada Data Valid", 
+        description: "Tidak ada baris yang valid untuk diimpor. Perbaiki error terlebih dahulu.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    setIsImportingJadwal(true);
+    let successCount = 0;
+    let failCount = 0;
+    const failures: { row: number; error: string }[] = [];
+    
+    for (const row of validRows) {
+      try {
+        const isOverlapMapel = await checkOverlapJadwal(
+          row.kelasId,
+          row.mapelId,
+          row.hari,
+          row.jam
+        );
+        
+        if (isOverlapMapel) {
+          failures.push({ 
+            row: row.rowIndex, 
+            error: `Jadwal tumpang tindih dengan jadwal lain di kelas ${row.kelas} untuk mapel ${row.mapel} pada hari ${row.hari} jam ${row.jam}` 
+          });
+          failCount++;
+          continue;
+        }
+        
+        const isGuruOverlap = await checkGuruOverlap(
+          row.guruId,
+          row.hari,
+          row.jam
+        );
+        
+        if (isGuruOverlap) {
+          failures.push({ 
+            row: row.rowIndex, 
+            error: `Guru dengan NIP ${row.nip_guru} sudah memiliki jadwal lain di hari ${row.hari} pada jam yang tumpang tindih` 
+          });
+          failCount++;
+          continue;
+        }
+        
+        const { error } = await supabase.from("jadwal").insert({
+          id_kelas: row.kelasId,
+          id_mapel: row.mapelId,
+          id_guru: row.guruId,
+          hari: row.hari,
+          jam: row.jam,
+          aktif: true,
+          dibuat_pada: new Date().toISOString(),
+        });
+        
+        if (error) throw error;
+        successCount++;
+        
+      } catch (error: any) {
+        failures.push({ row: row.rowIndex, error: error.message });
+        failCount++;
+      }
+    }
+    
+    if (successCount > 0) {
+      toast({ 
+        title: "Import Selesai", 
+        description: `${successCount} jadwal berhasil diimpor${failCount > 0 ? `, ${failCount} gagal` : ""}.` 
+      });
+      if (selectedKelas) {
+        fetchJadwal();
+      }
+    }
+    
+    if (failures.length > 0) {
+      console.error("Import failures:", failures);
+      toast({ 
+        title: "Beberapa jadwal gagal diimpor", 
+        description: `Cek console untuk detail error. ${failCount} jadwal gagal.`, 
+        variant: "destructive" 
+      });
+    }
+    
+    setImportJadwalDialogOpen(false);
+    setImportJadwalRawData([]);
+    setImportJadwalPreviewRows([]);
+    setImportJadwalStep("upload");
+    setIsImportingJadwal(false);
+  };
+
+  // BULK ACTION MAPEL
   const handleSelectAll = () => {
     const filtered = filteredMapel;
     if (selectedMapelIds.length === filtered.length && filtered.length > 0) setSelectedMapelIds([]);
@@ -651,7 +917,7 @@ export default function ScheduleManagement() {
     setIsProcessingBulk(false);
   };
 
-  // ========== FILTER MAPEL ==========
+  // FILTER MAPEL
   const filteredMapel = useMemo(() => {
     let filtered = mapelData;
     if (statusFilter === "aktif") filtered = filtered.filter(m => m.aktif === true);
@@ -660,7 +926,6 @@ export default function ScheduleManagement() {
     return filtered;
   }, [mapelData, mapelSearchTerm, statusFilter]);
 
-  // ========== PAGINATION MAPEL ==========
   const mapelTotalPages = useMemo(() => Math.ceil(filteredMapel.length / mapelItemsPerPage), [filteredMapel.length]);
   const paginatedMapel = useMemo(() => {
     const start = (mapelCurrentPage - 1) * mapelItemsPerPage;
@@ -671,13 +936,11 @@ export default function ScheduleManagement() {
     setMapelCurrentPage(1);
   }, [statusFilter, mapelSearchTerm]);
 
-  // ========== HANDLE REFRESH ==========
   const handleRefresh = () => {
     setRefreshing(true);
     Promise.all([fetchJadwal(), fetchMapel()]).finally(() => setRefreshing(false));
   };
 
-  // ========== LOADING ==========
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
@@ -689,10 +952,9 @@ export default function ScheduleManagement() {
     );
   }
 
-  // ========== RENDER ==========
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* HEADER (sama) */}
+      {/* HEADER */}
       <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
         <div className="container mx-auto px-6 py-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -719,7 +981,7 @@ export default function ScheduleManagement() {
 
       {/* MAIN CONTENT */}
       <div className="container mx-auto px-4 py-8 space-y-8">
-        {/* STATS CARDS (sama) */}
+        {/* STATS CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
             <CardContent className="p-4"><div className="flex justify-between"><div><p className="text-xs text-blue-600 font-medium">Total Kelas</p><p className="text-2xl font-bold text-blue-900">{kelasList.length}</p></div><School className="h-8 w-8 text-blue-500" /></div></CardContent>
@@ -735,7 +997,7 @@ export default function ScheduleManagement() {
           </Card>
         </div>
 
-        {/* DETAIL STATISTIK JADWAL (sama) */}
+        {/* DETAIL STATISTIK JADWAL */}
         {activeTab === "jadwal" && selectedKelas && jadwalList.length > 0 && (
           <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-r from-slate-700 to-slate-800 text-white">
             <CardContent className="p-5"><div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center"><div><p className="text-xs text-slate-300">Total Jadwal Aktif</p><p className="text-2xl font-bold">{statistik.totalJadwal}</p></div><div><p className="text-xs text-slate-300">Hari Tersibuk</p><p className="text-lg font-semibold">{statistik.hariTersibuk}</p></div><div><p className="text-xs text-slate-300">Jam Tersibuk</p><p className="text-lg font-semibold">{statistik.jamTersibuk}</p></div><div><p className="text-xs text-slate-300">Guru Tersibuk</p><p className="text-lg font-semibold truncate">{statistik.guruTersibuk}</p></div></div></CardContent>
@@ -764,10 +1026,9 @@ export default function ScheduleManagement() {
                 </TabsList>
               </div>
 
-              {/* TAB JADWAL - DENGAN POPOVER PILIH KELAS */}
+              {/* TAB JADWAL */}
               <TabsContent value="jadwal" className="space-y-6">
                 <div className="flex flex-col sm:flex-row gap-4 items-end justify-center">
-                  {/* Pilih Kelas dengan Popover */}
                   <div className="w-64">
                     <Label className="text-slate-700 font-medium">Kelas</Label>
                     <Popover open={popoverKelasOpen} onOpenChange={setPopoverKelasOpen}>
@@ -807,7 +1068,6 @@ export default function ScheduleManagement() {
                     </Popover>
                   </div>
 
-                  {/* Hari */}
                   <div className="w-40">
                     <Label className="text-slate-700 font-medium">Hari</Label>
                     <Select value={selectedHari} onValueChange={setSelectedHari}>
@@ -820,12 +1080,16 @@ export default function ScheduleManagement() {
                     </Select>
                   </div>
 
-                  <Button variant="outline" onClick={fetchJadwal} disabled={!selectedKelas || isFetchingJadwal} className="rounded-xl h-9">
-                    <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingJadwal ? "animate-spin" : ""}`} /> Segarkan
-                  </Button>
-
                   <Button onClick={openAddJadwal} disabled={!selectedKelas} className="rounded-xl h-9 bg-gradient-to-r from-blue-600 to-indigo-600">
                     <Plus className="mr-1.5 h-3.5 w-3.5" /> Tambah Jadwal
+                  </Button>
+
+                  <Button variant="outline" onClick={() => setImportJadwalDialogOpen(true)} className="rounded-xl h-9">
+                    <Upload className="mr-1.5 h-3.5 w-3.5" /> Impor Jadwal
+                  </Button>
+
+                  <Button variant="outline" onClick={fetchJadwal} disabled={!selectedKelas || isFetchingJadwal} className="rounded-xl h-9">
+                    <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingJadwal ? "animate-spin" : ""}`} /> Segarkan
                   </Button>
                 </div>
 
@@ -899,9 +1163,8 @@ export default function ScheduleManagement() {
                 )}
               </TabsContent>
 
-              {/* TAB MATA PELAJARAN (tidak berubah) */}
+              {/* TAB MATA PELAJARAN */}
               <TabsContent value="mapel" className="space-y-6">
-                {/* ... (kode mapel tetap seperti asli, tidak diubah) ... */}
                 <div className="flex justify-between items-center flex-wrap gap-3">
                   <div className="flex gap-2"><Button onClick={openAddMapel} className="rounded-xl h-9 bg-gradient-to-r from-blue-600 to-indigo-600"><Plus className="mr-1.5 h-3.5 w-3.5" /> Tambah Mapel</Button><Button variant="outline" onClick={() => setImportDialogOpen(true)} className="rounded-xl h-9"><Upload className="mr-1.5 h-3.5 w-3.5" /> Impor Excel</Button></div>
                   <div className="flex gap-2"><div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" /><Input placeholder="Cari mapel..." value={mapelSearchTerm} onChange={(e) => setMapelSearchTerm(e.target.value)} className="pl-9 rounded-xl w-64 h-9 text-sm" /></div><Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}><SelectTrigger className="w-36 h-9 rounded-xl"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="semua">Semua</SelectItem><SelectItem value="aktif">Aktif</SelectItem><SelectItem value="nonaktif">Nonaktif</SelectItem></SelectContent></Select><Button variant="outline" onClick={fetchMapel} disabled={isFetchingMapel} className="rounded-xl h-9"><RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingMapel ? "animate-spin" : ""}`} /> Segarkan</Button></div>
@@ -914,7 +1177,7 @@ export default function ScheduleManagement() {
           </CardContent>
         </Card>
 
-        {/* TIPS & FOOTER (sama) */}
+        {/* TIPS & FOOTER */}
         <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50 max-w-3xl mx-auto">
           <CardContent className="p-5"><div className="flex gap-4"><div className="bg-indigo-100 p-3 rounded-xl"><Sparkles className="h-6 w-6 text-indigo-600" /></div><div><h3 className="font-semibold">Tips Mengelola Jadwal</h3><p className="text-sm text-slate-600">Pastikan tidak ada tumpang tindih jadwal untuk guru yang sama. Sistem akan otomatis memvalidasi overlap jadwal. Gunakan filter kelas dan hari untuk melihat jadwal spesifik. Anda dapat menonaktifkan jadwal atau mata pelajaran tanpa menghapus datanya.</p></div></div></CardContent>
         </Card>
@@ -1060,7 +1323,7 @@ export default function ScheduleManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG IMPORT EXCEL */}
+      {/* DIALOG IMPORT EXCEL MAPEL */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogContent className="rounded-xl max-w-2xl">
           <DialogHeader>
@@ -1099,6 +1362,172 @@ export default function ScheduleManagement() {
             <Button variant="outline" onClick={() => { setImportDialogOpen(false); setPreviewData([]); setUploadError(null); }} className="rounded-lg">Batal</Button>
             <Button onClick={handleImportMapel} disabled={isImporting || previewData.length === 0} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600">
               {isImporting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Mengimpor...</> : "Impor Data"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG IMPORT EXCEL JADWAL */}
+      <Dialog open={importJadwalDialogOpen} onOpenChange={setImportJadwalDialogOpen}>
+        <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Impor Jadwal Pelajaran dari Excel</DialogTitle>
+            <DialogDescription>Upload file Excel untuk menambah jadwal secara massal (gunakan NIP Guru)</DialogDescription>
+          </DialogHeader>
+          
+          {importJadwalStep === "upload" && (
+            <div className="space-y-4">
+              <div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50">
+                <div className="flex flex-col items-center gap-2">
+                  <Upload className="h-8 w-8 text-slate-400" />
+                  <label htmlFor="jadwal-file-input" className="cursor-pointer">
+                    <span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk upload</span>
+                    <input id="jadwal-file-input" type="file" accept=".xlsx,.xls" onChange={handleJadwalFileUpload} className="hidden" disabled={isImportingJadwal} />
+                  </label>
+                  <p className="text-xs text-slate-500">atau drag & drop file Excel di sini</p>
+                </div>
+              </div>
+              {importJadwalUploadError && (
+                <Alert className="bg-red-50 border-red-200">
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                  <AlertDescription className="text-red-700">{importJadwalUploadError}</AlertDescription>
+                </Alert>
+              )}
+              <Button variant="outline" onClick={downloadJadwalTemplate} className="w-full rounded-lg">
+                <Download className="h-4 w-4 mr-2" /> Download Template Excel Jadwal (NIP Guru)
+              </Button>
+              <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
+                <p className="font-semibold">Format File:</p>
+                <p>Kolom yang diperlukan: <strong>kelas, mapel, nip_guru, hari, jam</strong></p>
+                <p className="text-xs mt-1">Contoh: X IPA 1, Matematika, 1234567890, Senin, 07:00 - 08:30</p>
+              </div>
+            </div>
+          )}
+          
+          {importJadwalStep === "preview" && importJadwalPreviewRows.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <p className="text-sm font-medium">Preview Data ({importJadwalPreviewRows.length} baris)</p>
+                <Badge className={importJadwalPreviewRows.filter(r => r.isValid).length === importJadwalPreviewRows.length ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
+                  {importJadwalPreviewRows.filter(r => r.isValid).length} dari {importJadwalPreviewRows.length} valid
+                </Badge>
+              </div>
+              
+              <div className="border rounded-lg overflow-x-auto max-h-96">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-50">
+                      <TableHead className="w-12">#</TableHead>
+                      <TableHead>Kelas</TableHead>
+                      <TableHead>Mapel</TableHead>
+                      <TableHead>NIP Guru</TableHead>
+                      <TableHead>Hari</TableHead>
+                      <TableHead>Jam</TableHead>
+                      <TableHead className="text-center">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {importJadwalPreviewRows.map((row, idx) => (
+                      <TableRow key={idx} className={!row.isValid ? "bg-red-50" : ""}>
+                        <TableCell className="text-xs text-slate-500">{row.rowIndex}</TableCell>
+                        <TableCell>
+                          {row.kelas}
+                          {!row.kelasValid && <span className="text-red-500 text-xs ml-1">(tidak ditemukan)</span>}
+                        </TableCell>
+                        <TableCell>
+                          {row.mapel}
+                          {!row.mapelValid && <span className="text-red-500 text-xs ml-1">(tidak ditemukan)</span>}
+                        </TableCell>
+                        <TableCell>
+                          {row.nip_guru}
+                          {!row.guruValid && <span className="text-red-500 text-xs ml-1">(tidak ditemukan)</span>}
+                        </TableCell>
+                        <TableCell>{row.hari}</TableCell>
+                        <TableCell className="font-mono text-xs">{row.jam}</TableCell>
+                        <TableCell className="text-center">
+                          {row.isValid ? (
+                            <Badge className="bg-green-100 text-green-700">Valid</Badge>
+                          ) : (
+                            <div className="text-xs text-red-600">
+                              {row.validationErrors?.map((err: string, i: number) => (
+                                <div key={i}>{err}</div>
+                              ))}
+                              {!row.kelasValid && <div>Kelas tidak ditemukan</div>}
+                              {!row.guruValid && <div>Guru dengan NIP tersebut tidak ditemukan</div>}
+                              {!row.mapelValid && <div>Mapel tidak ditemukan</div>}
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              
+              <div className="flex gap-3 justify-end">
+                <Button variant="outline" onClick={() => {
+                  setImportJadwalDialogOpen(false);
+                  setImportJadwalRawData([]);
+                  setImportJadwalPreviewRows([]);
+                  setImportJadwalStep("upload");
+                }} className="rounded-lg">
+                  Batal
+                </Button>
+                <Button 
+                  onClick={confirmImportJadwal} 
+                  disabled={isImportingJadwal || importJadwalPreviewRows.filter(r => r.isValid).length === 0}
+                  className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600"
+                >
+                  {isImportingJadwal ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Mengimpor...</> : "Impor Data"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG MISSING MAPEL UNTUK JADWAL */}
+      <Dialog open={missingMapelDialogOpen} onOpenChange={setMissingMapelDialogOpen}>
+        <DialogContent className="rounded-xl max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mata Pelajaran Belum Tersedia</DialogTitle>
+            <DialogDescription>
+              Beberapa mata pelajaran dalam file Excel belum ada di database.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="bg-yellow-50 p-3 rounded-lg">
+              <p className="text-sm font-medium text-yellow-800">Mapel yang belum terdaftar:</p>
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                {importJadwalMissingMapels.map((mapel, idx) => (
+                  <li key={idx} className="text-sm text-yellow-700">{mapel}</li>
+                ))}
+              </ul>
+            </div>
+            <p className="text-sm text-slate-600">
+              Apakah Anda ingin menambahkan mata pelajaran di atas ke database dan melanjutkan import jadwal?
+            </p>
+          </div>
+          
+          <DialogFooter className="gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setMissingMapelDialogOpen(false);
+                setImportJadwalDialogOpen(false);
+                setImportJadwalRawData([]);
+              }}
+              className="rounded-lg"
+            >
+              Batalkan Import
+            </Button>
+            <Button 
+              onClick={handleAddMissingMapelsAndContinue} 
+              disabled={isAddingMissingMapels}
+              className="rounded-lg bg-green-600 hover:bg-green-700"
+            >
+              {isAddingMissingMapels ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Menambahkan...</> : "Tambahkan Mapel & Lanjutkan"}
             </Button>
           </DialogFooter>
         </DialogContent>
