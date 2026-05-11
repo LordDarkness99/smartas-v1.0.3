@@ -85,7 +85,7 @@ interface MataPelajaran {
 interface Guru {
   id_guru: number;
   nama: string;
-  nip?: string;
+  nip?: number | string;
   aktif: boolean;
 }
 

@@ -50,7 +50,6 @@ import {
   Upload,
   Download,
   AlertCircle,
-  CheckCircle,
   Loader2,
   Edit,
   RefreshCw,
@@ -72,7 +71,7 @@ import {
   UserPlus,
 } from "lucide-react";
 
-// TYPES (sama seperti sebelumnya)
+// ==================== TYPES ====================
 interface GuruImportData {
   nama: string;
   nip: string;
@@ -123,6 +122,13 @@ interface GuruSimple {
   id_guru: number;
   nama: string;
   nip: string;
+}
+
+// Type for bulk action data
+interface BulkActionData {
+  users: { id: number; nama: string; aktif: boolean }[];
+  cannotProcess: { id: number; nama: string; reasons: string[] }[];
+  canProcessIds: number[];
 }
 
 export default function UserManagement() {
@@ -212,11 +218,7 @@ export default function UserManagement() {
   const [isProcessingSelected, setIsProcessingSelected] = useState(false);
   const [bulkActionDialogOpen, setBulkActionDialogOpen] = useState(false);
   const [bulkActionType, setBulkActionType] = useState<"activate" | "deactivate">("deactivate");
-  const [bulkActionData, setBulkActionData] = useState<{
-    users: { id: number; nama: string; aktif: boolean }[];
-    cannotProcess: { id: number; nama: string; reasons: string[] }[];
-    canProcessIds: number[];
-  } | null>(null);
+  const [bulkActionData, setBulkActionData] = useState<BulkActionData | null>(null);
 
   // ==================== GREETING ====================
   useEffect(() => {
@@ -309,7 +311,11 @@ export default function UserManagement() {
         .eq("aktif", true)
         .order("nama", { ascending: true });
       if (error) throw error;
-      const formatted = data.map((g: any) => ({ ...g, nip: g.nip?.toString() || "" }));
+      const formatted: GuruSimple[] = (data || []).map((g: any) => ({ 
+        id_guru: g.id_guru, 
+        nama: g.nama, 
+        nip: g.nip?.toString() || "" 
+      }));
       setGuruOptions(formatted);
     } catch (error) { console.error(error); }
   };
@@ -322,7 +328,7 @@ export default function UserManagement() {
         .select(`*, guru:guru (nama)`)
         .order("nama", { ascending: true });
       if (error) throw error;
-      const formatted: Kelas[] = data.map((item: any) => ({
+      const formatted: Kelas[] = (data || []).map((item: any) => ({
         id_kelas: item.id_kelas,
         nama: item.nama,
         aktif: item.aktif,
@@ -367,11 +373,14 @@ export default function UserManagement() {
       const emailMap = new Map();
       akunData?.forEach(akun => emailMap.set(akun.id_guru, akun.email));
 
-      const combined: GuruData[] = guruData?.map(guru => ({
-        ...guru,
-        email: emailMap.get(guru.id_guru) || "",
+      const combined: GuruData[] = (guruData || []).map(guru => ({
+        id_guru: guru.id_guru,
+        nama: guru.nama,
         nip: guru.nip?.toString() || "",
-      })) || [];
+        email: emailMap.get(guru.id_guru) || "",
+        gender: guru.gender,
+        aktif: guru.aktif,
+      }));
       setGuruList(combined);
     } catch (error: any) {
       toast({ title: "Kesalahan", description: "Gagal mengambil data guru", variant: "destructive" });
@@ -427,7 +436,7 @@ export default function UserManagement() {
         }
       }
 
-      const combined: SiswaData[] = siswaData?.map(siswa => ({
+      const combined: SiswaData[] = (siswaData || []).map(siswa => ({
         id_siswa: siswa.id_siswa,
         nama: siswa.nama,
         nis: siswa.nis?.toString() || "",
@@ -436,7 +445,7 @@ export default function UserManagement() {
         aktif: siswa.aktif,
         id_kelas: siswa.id_kelas,
         nama_kelas: siswa.id_kelas ? kelasMap.get(siswa.id_kelas) || null : null,
-      })) || [];
+      }));
       setSiswaList(combined);
     } catch (error: any) {
       toast({ title: "Kesalahan", description: "Gagal mengambil data siswa", variant: "destructive" });
@@ -601,7 +610,8 @@ export default function UserManagement() {
       const { data: insertedGuru, error: guruError } = await supabase.from("guru").insert(guruRecords).select();
       if (guruError) throw new Error(`Gagal menyimpan data guru: ${guruError.message}`);
       const akunRecords = [];
-      for (const item of filteredData) {
+      for (let i = 0; i < filteredData.length; i++) {
+        const item = filteredData[i];
         const plainPassword = item.password || "password123";
         const hashedPassword = await bcrypt.hash(plainPassword, 10);
         akunRecords.push({
@@ -610,7 +620,7 @@ export default function UserManagement() {
           peran: "guru",
           aktif: true,
           dibuat_pada: new Date().toISOString(),
-          id_guru: nextId + akunRecords.length,
+          id_guru: nextId + i,
           id_siswa: null,
           kata_sandi: hashedPassword,
         });
@@ -655,7 +665,8 @@ export default function UserManagement() {
       const { data: insertedSiswa, error: siswaError } = await supabase.from("siswa").insert(siswaRecords).select();
       if (siswaError) throw new Error(`Gagal menyimpan data siswa: ${siswaError.message}`);
       const akunRecords = [];
-      for (const item of filteredData) {
+      for (let i = 0; i < filteredData.length; i++) {
+        const item = filteredData[i];
         const plainPassword = item.password || "password123";
         const hashedPassword = await bcrypt.hash(plainPassword, 10);
         akunRecords.push({
@@ -665,7 +676,7 @@ export default function UserManagement() {
           aktif: true,
           dibuat_pada: new Date().toISOString(),
           id_guru: null,
-          id_siswa: nextId + akunRecords.length,
+          id_siswa: nextId + i,
           kata_sandi: hashedPassword,
         });
       }
@@ -726,7 +737,6 @@ export default function UserManagement() {
   };
 
   const handleAddUser = async () => {
-    // Validasi
     if (!addForm.nama.trim()) {
       toast({ title: "Error", description: "Nama tidak boleh kosong", variant: "destructive" });
       return;
@@ -1010,7 +1020,7 @@ export default function UserManagement() {
 
     try {
       const { error: updateError } = await supabase
-        .from(tableName)
+        .from(tableName as any)
         .update({ aktif: true })
         .eq(idField, userId);
       if (updateError) throw updateError;
@@ -1060,7 +1070,7 @@ export default function UserManagement() {
       const idField = isGuru ? "id_guru" : "id_siswa";
       try {
         const { error: updateError } = await supabase
-          .from(tableName)
+          .from(tableName as any)
           .update({ aktif: false })
           .eq(idField, userId);
         if (updateError) throw updateError;
@@ -1167,7 +1177,7 @@ export default function UserManagement() {
     for (const id of canProcessIds) {
       try {
         const { error: updateError } = await supabase
-          .from(tableName)
+          .from(tableName as any)
           .update({ aktif: newActiveStatus })
           .eq(idField, id);
         if (updateError) throw updateError;
@@ -1508,7 +1518,6 @@ export default function UserManagement() {
               <TabsContent value="list" className="space-y-6">
                 <div className="flex flex-col gap-4">
                   <div className="flex justify-between items-center flex-wrap gap-3">
-                    {/* Baris atas: dropdown + tombol aksi */}
                     <div className="flex items-center gap-2">
                       <Select value={userType} onValueChange={(v) => { setUserType(v as any); resetFilters(); }}>
                         <SelectTrigger className="w-[180px] rounded-xl"><SelectValue /></SelectTrigger>
