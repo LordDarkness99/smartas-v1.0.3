@@ -58,7 +58,7 @@ import {
 } from "lucide-react";
 import QRCode from "qrcode";
 
-// Tipe data
+// Tipe data (sama seperti sebelumnya)
 interface Siswa {
   id_siswa: number;
   nama: string;
@@ -95,12 +95,10 @@ interface PresensiMapel {
   siswa?: Siswa;
 }
 
-// Konstanta status
 const STATUS_HARIAN_SEKOLAH = ["Hadir", "Terlambat", "Izin", "Sakit", "Alfa"];
 const STATUS_HARIAN_PKL = ["Hadir", "Izin", "Sakit", "Alfa"];
 const STATUS_MAPEL = ["Hadir", "Izin", "Sakit", "Alfa"];
 
-// Helper: konversi string jam "HH:MM - HH:MM" ke menit
 const parseTimeRange = (jamStr: string) => {
   const [start, end] = jamStr.split(" - ");
   const toMinutes = (t: string) => {
@@ -118,7 +116,7 @@ export default function AttendanceManagement() {
   const [greeting, setGreeting] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // ==================== STATE PRESENSI HARIAN ====================
+  // State Presensi Harian
   const [kelasList, setKelasList] = useState<{ id_kelas: number; nama: string }[]>([]);
   const [selectedKelas, setSelectedKelas] = useState<string>("");
   const [selectedTanggal, setSelectedTanggal] = useState<string>(
@@ -131,7 +129,6 @@ export default function AttendanceManagement() {
   const [selectedBulkStatus, setSelectedBulkStatus] = useState<string | null>(null);
   const [autoAlfaProcessedHarian, setAutoAlfaProcessedHarian] = useState(false);
 
-  // Popover filter untuk presensi harian
   const [popoverHarianOpen, setPopoverHarianOpen] = useState(false);
   const [kelasHarianSearchQuery, setKelasHarianSearchQuery] = useState("");
   const [kelasHarianJenjangFilter, setKelasHarianJenjangFilter] = useState<string>("all");
@@ -147,7 +144,7 @@ export default function AttendanceManagement() {
     return true;
   });
 
-  // ==================== STATE PRESENSI MAPEL ====================
+  // State Presensi Mapel
   const [jadwalList, setJadwalList] = useState<Jadwal[]>([]);
   const [selectedKelasMapel, setSelectedKelasMapel] = useState<string>("");
   const [filteredJadwalList, setFilteredJadwalList] = useState<Jadwal[]>([]);
@@ -163,7 +160,9 @@ export default function AttendanceManagement() {
   const [selectedDay, setSelectedDay] = useState<string>("");
   const [autoAlfaProcessedMapel, setAutoAlfaProcessedMapel] = useState(false);
 
-  // Popover filter untuk mapel
+  // Timer untuk refresh QR di dalam modal
+  const [qrRefreshInterval, setQrRefreshInterval] = useState<NodeJS.Timeout | null>(null);
+
   const [popoverMapelOpen, setPopoverMapelOpen] = useState(false);
   const [kelasMapelSearchQuery, setKelasMapelSearchQuery] = useState("");
   const [kelasMapelJenjangFilter, setKelasMapelJenjangFilter] = useState<string>("all");
@@ -179,7 +178,7 @@ export default function AttendanceManagement() {
     return true;
   });
 
-  // ==================== GREETING & DATE ====================
+  // Greeting & clock
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour < 12) setGreeting("Selamat Pagi");
@@ -198,7 +197,7 @@ export default function AttendanceManagement() {
     });
   };
 
-  // ==================== FETCH DATA ====================
+  // Fetch data awal
   const fetchKelas = async () => {
     const { data, error } = await supabase
       .from("kelas")
@@ -244,7 +243,6 @@ export default function AttendanceManagement() {
     }
   };
 
-  // Filter jadwal mapel
   useEffect(() => {
     if (selectedKelasMapel && selectedKelasMapel !== "all") {
       const filtered = jadwalList.filter((j) => j.id_kelas.toString() === selectedKelasMapel);
@@ -267,7 +265,7 @@ export default function AttendanceManagement() {
 
   const jadwalByDay = selectedDay ? filteredJadwalList.filter((j) => j.hari === selectedDay) : [];
 
-  // ==================== FUNGSI PRESENSI HARIAN ====================
+  // Presensi Harian
   const fetchPresensiHarian = async (skipAutoAlfa = false) => {
     if (!selectedKelas) return;
     setIsFetchingHarian(true);
@@ -310,7 +308,6 @@ export default function AttendanceManagement() {
       });
       setPresensiHarian(combined);
 
-      // Auto Alfa untuk harian
       if (!skipAutoAlfa && !autoAlfaProcessedHarian && combined.some(p => !p.status_presensi)) {
         setAutoAlfaProcessedHarian(true);
         const belumAbsen = combined.filter(p => !p.status_presensi);
@@ -404,7 +401,7 @@ export default function AttendanceManagement() {
     }
   };
 
-  // ==================== FUNGSI PRESENSI MAPEL ====================
+  // Presensi Mapel
   const fetchPresensiMapel = async (skipAutoAlfa = false) => {
     if (!selectedJadwal) return;
     setIsFetchingMapel(true);
@@ -445,7 +442,6 @@ export default function AttendanceManagement() {
       });
       setPresensiMapel(combined);
 
-      // Auto Alfa untuk mapel
       if (!skipAutoAlfa && !autoAlfaProcessedMapel && combined.some(p => !p.status)) {
         setAutoAlfaProcessedMapel(true);
         const belumAbsen = combined.filter(p => !p.status);
@@ -540,6 +536,7 @@ export default function AttendanceManagement() {
     }
   };
 
+  // ==================== QR DINAMIS SETIAP 30 DETIK ====================
   const generateQRCode = async (jadwal: Jadwal) => {
     const daysMap: Record<string, number> = {
       Senin: 1, Selasa: 2, Rabu: 3, Kamis: 4, Jumat: 5, Sabtu: 6, Minggu: 0,
@@ -574,21 +571,53 @@ export default function AttendanceManagement() {
       });
       return;
     }
+
     setIsGeneratingQR(true);
     setSelectedJadwalForQR(jadwal);
-    try {
-      const payload = { id_jadwal: jadwal.id_jadwal, timestamp: Date.now() };
-      const qrDataUrl = await QRCode.toDataURL(JSON.stringify(payload));
-      setQrCodeDataUrl(qrDataUrl);
-      setQrDialogOpen(true);
-    } catch (error) {
-      toast({ title: "Error", description: "Gagal generate QR Code", variant: "destructive" });
-    } finally {
-      setIsGeneratingQR(false);
-    }
+    setQrDialogOpen(true);
+
+    // Hentikan interval sebelumnya jika ada
+    if (qrRefreshInterval) clearInterval(qrRefreshInterval);
+
+    // Fungsi untuk memperbarui QR di dalam modal
+    const updateQR = async () => {
+      const nonce = crypto.randomUUID();
+      const exp = Date.now() + 30000; // 30 detik
+      const payload = { id_jadwal: jadwal.id_jadwal, nonce, exp };
+
+      try {
+        // Simpan nonce ke tabel active_qr_nonce (masa berlaku 30 detik)
+        await supabase.from("active_qr_nonce").insert({
+          nonce: nonce,
+          id_jadwal: jadwal.id_jadwal,
+          expires_at: new Date(exp).toISOString(),
+          used: false,
+        });
+        const qrDataUrl = await QRCode.toDataURL(JSON.stringify(payload));
+        setQrCodeDataUrl(qrDataUrl);
+      } catch (err) {
+        console.error(err);
+        toast({ title: "Error", description: "Gagal generate QR Code", variant: "destructive" });
+      }
+    };
+
+    // Generate pertama kali
+    await updateQR();
+
+    // Set interval 30 detik untuk regenerasi QR
+    const interval = setInterval(updateQR, 30000);
+    setQrRefreshInterval(interval);
+    setIsGeneratingQR(false);
   };
 
-  // ==================== INITIAL FETCH ====================
+  // Bersihkan interval saat modal ditutup
+  useEffect(() => {
+    return () => {
+      if (qrRefreshInterval) clearInterval(qrRefreshInterval);
+    };
+  }, [qrRefreshInterval]);
+
+  // Initial fetch
   useEffect(() => {
     const init = async () => {
       setLoading(true);
@@ -612,7 +641,6 @@ export default function AttendanceManagement() {
     }
   }, [selectedJadwal, activeTab]);
 
-  // ==================== LOADING ====================
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
@@ -624,10 +652,9 @@ export default function AttendanceManagement() {
     );
   }
 
-  // ==================== RENDER UTAMA ====================
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* HEADER SECTION */}
+      {/* HEADER (sama seperti sebelumnya) */}
       <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
         <div className="container mx-auto px-6 py-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -653,7 +680,7 @@ export default function AttendanceManagement() {
       </div>
 
       <div className="container mx-auto px-4 py-8 space-y-8">
-        {/* STATS CARDS */}
+        {/* STATS CARDS (sama) */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
             <CardContent className="p-4"><div className="flex items-center justify-between"><div><p className="text-xs text-blue-600 font-medium">Total Kelas</p><p className="text-2xl font-bold text-blue-900">{kelasList.length}</p></div><School className="h-8 w-8 text-blue-500" /></div></CardContent>
@@ -669,7 +696,7 @@ export default function AttendanceManagement() {
           </Card>
         </div>
 
-        {/* MAIN TABS CARD */}
+        {/* MAIN CARD */}
         <Card className="rounded-2xl border-0 shadow-xl overflow-hidden">
           <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-5">
             <div className="flex items-center gap-3"><div className="bg-white/10 p-2 rounded-xl"><Users className="h-5 w-5" /></div><div><CardTitle className="text-lg">Manajemen Presensi</CardTitle><CardDescription className="text-slate-300 text-xs">Kelola presensi harian dan presensi mata pelajaran siswa</CardDescription></div></div>
@@ -683,8 +710,9 @@ export default function AttendanceManagement() {
                 </TabsList>
               </div>
 
-              {/* ==================== TAB PRESENSI HARIAN ==================== */}
+              {/* TAB PRESENSI HARIAN (sama seperti semula) */}
               <TabsContent value="harian" className="space-y-5">
+                {/* ... (konten harian tidak berubah) ... */}
                 <div className="flex flex-col sm:flex-row gap-3 items-end">
                   <div className="w-56">
                     <Label className="text-slate-700 text-sm font-medium">Kelas</Label>
@@ -732,14 +760,12 @@ export default function AttendanceManagement() {
                     <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingHarian ? "animate-spin" : ""}`} /> Refresh
                   </Button>
                 </div>
-
                 {!selectedKelas && (
                   <Alert className="rounded-lg bg-amber-50 border-amber-200">
                     <AlertCircle className="h-4 w-4 text-amber-600" />
                     <AlertDescription className="text-amber-700 text-sm">Silakan pilih kelas terlebih dahulu</AlertDescription>
                   </Alert>
                 )}
-
                 {selectedKelas && (
                   <div className="border rounded-lg overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
@@ -798,7 +824,7 @@ export default function AttendanceManagement() {
                 )}
               </TabsContent>
 
-              {/* ==================== TAB PRESENSI MAPEL ==================== */}
+              {/* TAB PRESENSI MAPEL (dengan QR dinamis) */}
               <TabsContent value="mapel" className="space-y-5">
                 <div className="flex flex-col sm:flex-row gap-4 items-start">
                   <div className="w-full sm:w-64 flex-shrink-0">
@@ -950,34 +976,32 @@ export default function AttendanceManagement() {
           </CardContent>
         </Card>
 
-        {/* TIPS & FOOTER */}
-        <Card className="rounded-xl border-0 shadow-md bg-gradient-to-br from-indigo-50 to-purple-50 max-w-2xl mx-auto">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="bg-indigo-100 p-2 rounded-lg"><Sparkles className="h-5 w-5 text-indigo-600" /></div>
-              <div><h3 className="font-semibold text-slate-800 text-sm mb-0.5">Tips Mengelola Presensi</h3><p className="text-xs text-slate-600">Centang checkbox di bawah setiap status untuk mengabsen semua siswa sekaligus (hanya satu status yang bisa dipilih). Radio button di samping nama siswa untuk mengubah status satu per satu.</p></div>
+        {/* DIALOG QR CODE dengan regenerasi otomatis */}
+        <Dialog open={qrDialogOpen} onOpenChange={(open) => {
+          if (!open && qrRefreshInterval) {
+            clearInterval(qrRefreshInterval);
+            setQrRefreshInterval(null);
+          }
+          setQrDialogOpen(open);
+        }}>
+          <DialogContent className="sm:max-w-md rounded-xl">
+            <DialogHeader><DialogTitle className="text-lg flex items-center gap-2"><QrCode className="h-5 w-5 text-blue-600" /> QR Code Presensi (Dinamis 30 detik)</DialogTitle></DialogHeader>
+            <div className="flex flex-col items-center space-y-3 py-3">
+              {qrCodeDataUrl && <div className="bg-white p-3 rounded-xl shadow-md"><img src={qrCodeDataUrl} alt="QR Code" className="w-56 h-56" /></div>}
+              <div className="text-center space-y-0.5">
+                <p className="font-semibold text-slate-800 text-sm">{selectedJadwalForQR?.kelas_nama} - {selectedJadwalForQR?.mata_pelajaran}</p>
+                <p className="text-xs text-slate-500">Hari: {selectedJadwalForQR?.hari}, Jam: {selectedJadwalForQR?.jam}</p>
+                <p className="text-[11px] text-amber-600 mt-1">⚠️ QR Code berubah setiap 30 detik dan hanya berlaku 30 detik. Tidak bisa dipakai ulang.</p>
+              </div>
+              <Button variant="outline" onClick={() => { const link = document.createElement("a"); link.download = `qr_${selectedJadwalForQR?.id_jadwal}.png`; link.href = qrCodeDataUrl; link.click(); }} className="rounded-lg h-9 text-sm"><Download className="mr-1.5 h-3.5 w-3.5" /> Download QR Saat Ini</Button>
             </div>
-          </CardContent>
-        </Card>
+            <DialogFooter><Button variant="outline" onClick={() => setQrDialogOpen(false)} className="rounded-lg h-9 text-sm">Tutup</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* FOOTER (sama) */}
         <div className="text-center pt-3"><hr className="mb-3 border-slate-200" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Manajemen Presensi - SmartAS</p><p className="text-[10px] text-slate-300 mt-0.5">Sistem Informasi Akademik</p></div>
       </div>
-
-      {/* DIALOG QR CODE */}
-      <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
-        <DialogContent className="sm:max-w-md rounded-xl">
-          <DialogHeader><DialogTitle className="text-lg flex items-center gap-2"><QrCode className="h-5 w-5 text-blue-600" /> QR Code Presensi</DialogTitle></DialogHeader>
-          <div className="flex flex-col items-center space-y-3 py-3">
-            {qrCodeDataUrl && <div className="bg-white p-3 rounded-xl shadow-md"><img src={qrCodeDataUrl} alt="QR Code" className="w-56 h-56" /></div>}
-            <div className="text-center space-y-0.5">
-              <p className="font-semibold text-slate-800 text-sm">{selectedJadwalForQR?.kelas_nama} - {selectedJadwalForQR?.mata_pelajaran}</p>
-              <p className="text-xs text-slate-500">Hari: {selectedJadwalForQR?.hari}, Jam: {selectedJadwalForQR?.jam}</p>
-              <p className="text-[11px] text-amber-600 mt-1">⚠️ QR Code hanya valid 15 menit sebelum hingga 45 menit setelah jadwal dimulai</p>
-            </div>
-            <Button variant="outline" onClick={() => { const link = document.createElement("a"); link.download = `qr_${selectedJadwalForQR?.id_jadwal}.png`; link.href = qrCodeDataUrl; link.click(); }} className="rounded-lg h-9 text-sm"><Download className="mr-1.5 h-3.5 w-3.5" /> Download QR Code</Button>
-          </div>
-          <DialogFooter><Button variant="outline" onClick={() => setQrDialogOpen(false)} className="rounded-lg h-9 text-sm">Tutup</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

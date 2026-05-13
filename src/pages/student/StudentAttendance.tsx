@@ -84,8 +84,8 @@ export default function StudentAttendance() {
   const scannerContainerId = "qr-reader";
 
   // Koordinat sekolah
-  //const SCHOOL_COORD = { lat: -7.25826733665077, lng: 112.72468705518851 };
-  const SCHOOL_COORD = { lat: -7.310498935234229, lng: 112.7243203565491 };
+  const SCHOOL_COORD = { lat: -7.25826733665077, lng: 112.72468705518851 };
+  //const SCHOOL_COORD = { lat: -7.310498935234229, lng: 112.7243203565491 };
 
   // ==================== GREETING EFFECT ====================
   useEffect(() => {
@@ -417,18 +417,49 @@ export default function StudentAttendance() {
     console.error(error);
   };
 
+  // ==================== PROSES QR DENGAN VALIDASI DINAMIS (30 DETIK, SEKALI PAKAI) ====================
   const processQRCode = async (qrData: string) => {
     try {
       const payload = JSON.parse(qrData);
-      const { id_jadwal, timestamp } = payload;
-      if (!id_jadwal) {
-        toast({ title: "QR tidak valid", description: "QR Code tidak dikenali", variant: "destructive" });
+      const { id_jadwal, nonce, exp } = payload;
+
+      // 1. Pastikan payload memiliki id_jadwal, nonce, dan exp
+      if (!id_jadwal || !nonce || !exp) {
+        toast({ title: "QR tidak valid", description: "QR Code tidak dikenali (format tidak lengkap)", variant: "destructive" });
         return;
       }
-      if (timestamp && Date.now() - timestamp > 60 * 60 * 1000) {
-        toast({ title: "QR kadaluarsa", description: "QR Code sudah kadaluarsa", variant: "destructive" });
+
+      // 2. Cek masa berlaku (expiry) - hanya 30 detik sejak generate
+      const now = Date.now();
+      if (now > exp) {
+        toast({ title: "QR kadaluarsa", description: "QR Code sudah tidak berlaku (hanya 30 detik)", variant: "destructive" });
         return;
       }
+
+      // 3. Cek apakah nonce ada di tabel active_qr_nonce dan belum digunakan
+      const { data: existingNonce, error: nonceError } = await supabase
+        .from("active_qr_nonce")
+        .select("nonce, used")
+        .eq("nonce", nonce)
+        .single();
+
+      if (nonceError || !existingNonce) {
+        toast({ title: "QR tidak valid", description: "QR Code tidak dikenali oleh sistem", variant: "destructive" });
+        return;
+      }
+
+      if (existingNonce.used) {
+        toast({ title: "QR sudah digunakan", description: "QR Code ini sudah dipakai sebelumnya", variant: "destructive" });
+        return;
+      }
+
+      // 4. Tandai nonce sebagai sudah terpakai (sekali pakai)
+      await supabase
+        .from("active_qr_nonce")
+        .update({ used: true })
+        .eq("nonce", nonce);
+
+      // 5. Validasi jadwal (sama seperti kode asli)
       const { data: jadwal, error: jadwalError } = await supabase
         .from("jadwal")
         .select(`
@@ -441,14 +472,17 @@ export default function StudentAttendance() {
         `)
         .eq("id_jadwal", id_jadwal)
         .single();
+
       if (jadwalError || !jadwal) {
         toast({ title: "Jadwal tidak ditemukan", variant: "destructive" });
         return;
       }
+
       if (jadwal.id_kelas !== siswa?.id_kelas) {
         toast({ title: "Tidak berhak", description: "Anda tidak terdaftar di kelas ini", variant: "destructive" });
         return;
       }
+
       const today = new Date();
       const daysMap = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
       const hariIni = daysMap[today.getDay()];
@@ -456,6 +490,7 @@ export default function StudentAttendance() {
         toast({ title: "Bukan hari ini", description: `Jadwal ini untuk hari ${jadwal.hari}`, variant: "destructive" });
         return;
       }
+
       const [startHour, startMin] = jadwal.jam.split(" - ")[0].split(":").map(Number);
       const startMinutes = startHour * 60 + startMin;
       const currentMinutes = today.getHours() * 60 + today.getMinutes();
@@ -463,17 +498,22 @@ export default function StudentAttendance() {
         toast({ title: "Di luar waktu", description: "Presensi hanya dapat dilakukan 15 menit sebelum hingga 45 menit setelah jadwal dimulai", variant: "destructive" });
         return;
       }
+
+      // 6. Validasi lokasi
       const { valid, message } = await validateLocation();
       if (!valid) {
         toast({ title: "Lokasi tidak valid", description: message, variant: "destructive" });
         return;
       }
+
+      // 7. Simpan presensi
       const { error: insertError } = await supabase.from("presensi_siswa_mapel").insert({
         id_siswa: siswa!.id_siswa,
         id_jadwal: id_jadwal,
         status: "Hadir",
         waktu_presensi: new Date().toISOString(),
       });
+
       if (insertError) {
         if (insertError.code === "23505") {
           toast({ title: "Sudah presensi", description: "Anda sudah melakukan presensi untuk jadwal ini", variant: "destructive" });
@@ -482,6 +522,7 @@ export default function StudentAttendance() {
         }
       } else {
         toast({ title: "Berhasil", description: `✅ Presensi ${jadwal.mapel?.nama} tercatat` });
+        // Refresh tampilan jadwal
         const todayStr = today.toISOString().split("T")[0];
         const start = `${todayStr}T00:00:00`;
         const end = `${todayStr}T23:59:59`;
@@ -892,17 +933,17 @@ export default function StudentAttendance() {
                       </div>
                     </div>
 
-                    {/* QR Info */}
+                    {/* QR Info - diupdate sesuai sistem dinamis */}
                     <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-4">
                       <div className="flex items-start gap-3">
                         <div className="bg-indigo-100 p-2 rounded-xl">
                           <Shield className="h-5 w-5 text-indigo-600" />
                         </div>
                         <div>
-                          <p className="font-medium text-slate-800">Informasi QR Code</p>
+                          <p className="font-medium text-slate-800">Informasi QR Code Dinamis</p>
                           <p className="text-sm text-slate-600">
-                            Scan QR Code yang ditampilkan oleh guru. QR Code hanya valid 1 jam dan dapat digunakan 
-                            15 menit sebelum hingga 45 menit setelah jadwal dimulai.
+                            QR Code yang ditampilkan guru berubah setiap <strong>30 detik</strong> dan hanya berlaku <strong>30 detik</strong>. 
+                            QR hanya dapat dipakai <strong>sekali</strong> untuk presensi. Pastikan Anda scan sebelum QR habis masa berlaku.
                           </p>
                         </div>
                       </div>
