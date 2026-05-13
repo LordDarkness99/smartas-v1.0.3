@@ -1,4 +1,4 @@
-// src/pages/guru/Dashboard.tsx (VERSI FULL SIAP SALIN - REDESAIN MODERN)
+// src/pages/guru/Dashboard.tsx (REDESAIN MODERN + RESPONSIF MOBILE)
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -345,34 +345,34 @@ export default function GuruDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
       
-      {/* HEADER SECTION */}
+      {/* HEADER SECTION - Responsif Mobile */}
       <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
-        <div className="container mx-auto px-6 py-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <Avatar className="h-14 w-14 border-2 border-white/30 rounded-2xl">
-                <AvatarFallback className="bg-white/20 text-white text-xl font-bold rounded-2xl">
+        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <Avatar className="h-12 w-12 sm:h-14 sm:w-14 border-2 border-white/30 rounded-2xl">
+                <AvatarFallback className="bg-white/20 text-white text-lg sm:text-xl font-bold rounded-2xl">
                   {user?.nama?.charAt(0) || "G"}
                 </AvatarFallback>
               </Avatar>
               <div>
                 <div className="flex items-center gap-2">
-                  {greeting === "Selamat Pagi" ? <Sun className="h-4 w-4" /> : 
-                   greeting === "Selamat Malam" ? <Moon className="h-4 w-4" /> : 
-                   <Cloud className="h-4 w-4" />}
-                  <p className="text-sm text-blue-100">{greeting}</p>
+                  {greeting === "Selamat Pagi" ? <Sun className="h-3 w-3 sm:h-4 sm:w-4" /> : 
+                   greeting === "Selamat Malam" ? <Moon className="h-3 w-3 sm:h-4 sm:w-4" /> : 
+                   <Cloud className="h-3 w-3 sm:h-4 sm:w-4" />}
+                  <p className="text-xs sm:text-sm text-blue-100">{greeting}</p>
                 </div>
-                <h1 className="text-2xl lg:text-3xl font-bold">Dashboard Guru</h1>
-                <p className="text-blue-100 text-sm">
+                <h1 className="text-base sm:text-2xl lg:text-3xl font-bold">Dashboard Guru</h1>
+                <p className="text-blue-100 text-xs sm:text-sm">
                   Selamat datang kembali, <span className="font-semibold">{user?.nama}</span>
                 </p>
               </div>
             </div>
             
             <div className="flex items-center gap-3">
-              <div className="bg-white/10 rounded-xl px-4 py-2 backdrop-blur-sm text-center">
-                <p className="text-xs text-blue-100">{formatDate(currentTime)}</p>
-                <p className="text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
+              <div className="bg-white/10 rounded-xl px-3 py-1 sm:px-4 sm:py-2 backdrop-blur-sm text-center">
+                <p className="text-[10px] sm:text-xs text-blue-100">{formatDate(currentTime)}</p>
+                <p className="text-base sm:text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
               </div>
               <Button 
                 variant="ghost" 
@@ -389,7 +389,7 @@ export default function GuruDashboard() {
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="container mx-auto px-4 py-8 space-y-8">
+      <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8">
         
         {kelasList.length === 0 ? (
           <Card className="rounded-2xl border-0 shadow-xl">
@@ -403,16 +403,16 @@ export default function GuruDashboard() {
           </Card>
         ) : (
           <>
-            {/* CLASS SELECTOR */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 bg-white rounded-2xl shadow-lg border border-slate-100">
+            {/* CLASS SELECTOR - Responsif Mobile */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-white rounded-2xl shadow-lg border border-slate-100">
               <div className="flex items-center gap-2">
                 <div className="bg-blue-100 p-2 rounded-xl">
                   <School className="h-5 w-5 text-blue-600" />
                 </div>
-                <label className="text-sm font-semibold text-slate-700">Pilih Kelas:</label>
+                <label className="text-xs sm:text-sm font-semibold text-slate-700">Pilih Kelas:</label>
               </div>
               <Select value={selectedKelas} onValueChange={setSelectedKelas}>
-                <SelectTrigger className="w-56 rounded-xl border-slate-200">
+                <SelectTrigger className="w-full sm:w-56 rounded-xl border-slate-200 h-8 sm:h-9 text-xs sm:text-sm">
                   <SelectValue placeholder="Pilih Kelas" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
@@ -425,207 +425,207 @@ export default function GuruDashboard() {
               </Select>
             </div>
 
-            {/* STATS CARDS */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-                <CardContent className="p-4">
+            {/* STATS CARDS - grid 2 kolom di HP */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+              <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-blue-600 font-medium">Total Siswa</p>
-                      <p className="text-2xl font-bold text-blue-900">{siswaList.length}</p>
+                      <p className="text-[10px] sm:text-xs text-blue-600 font-medium">Total Siswa</p>
+                      <p className="text-lg sm:text-2xl font-bold text-blue-900">{siswaList.length}</p>
                     </div>
-                    <Users className="h-8 w-8 text-blue-500" />
+                    <Users className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" />
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
-                <CardContent className="p-4">
+              <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-emerald-600 font-medium">Hadir Hari Ini</p>
-                      <p className="text-2xl font-bold text-emerald-900">{presentToday}</p>
+                      <p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Hadir Hari Ini</p>
+                      <p className="text-lg sm:text-2xl font-bold text-emerald-900">{presentToday}</p>
                     </div>
-                    <CheckCircle className="h-8 w-8 text-emerald-500" />
+                    <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-                <CardContent className="p-4">
+              <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-purple-600 font-medium">Kehadiran 30 Hari</p>
-                      <p className="text-2xl font-bold text-purple-900">{attendancePercentage}%</p>
+                      <p className="text-[10px] sm:text-xs text-purple-600 font-medium">Kehadiran 30 Hari</p>
+                      <p className="text-lg sm:text-2xl font-bold text-purple-900">{attendancePercentage}%</p>
                     </div>
-                    <TrendingUp className="h-8 w-8 text-purple-500" />
+                    <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" />
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
-                <CardContent className="p-4">
+              <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-amber-600 font-medium">Mapel Hari Ini</p>
-                      <p className="text-2xl font-bold text-amber-900">{jadwalHariIni.length}</p>
+                      <p className="text-[10px] sm:text-xs text-amber-600 font-medium">Mapel Hari Ini</p>
+                      <p className="text-lg sm:text-2xl font-bold text-amber-900">{jadwalHariIni.length}</p>
                     </div>
-                    <BookOpen className="h-8 w-8 text-amber-500" />
+                    <BookOpen className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" />
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* STATISTICS GRID */}
+            {/* STATISTICS GRID - 1 kolom di HP, 2 di lg */}
             <div className="grid gap-6 lg:grid-cols-2">
               
               {/* Statistik Presensi Harian Card */}
-              <Card className="rounded-2xl border-0 shadow-xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white p-5">
+              <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white p-4 sm:p-5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Calendar className="h-5 w-5" />
-                      <CardTitle className="text-lg">Statistik Presensi Harian (30 hari)</CardTitle>
+                      <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
+                      <CardTitle className="text-sm sm:text-lg">Statistik Presensi Harian (30 hari)</CardTitle>
                     </div>
-                    <div className="bg-white/20 px-3 py-1 rounded-xl text-center">
-                      <p className="text-lg font-bold">{attendancePercentage}%</p>
-                      <p className="text-[10px]">Kehadiran</p>
+                    <div className="bg-white/20 px-2 sm:px-3 py-0.5 sm:py-1 rounded-xl text-center">
+                      <p className="text-base sm:text-lg font-bold">{attendancePercentage}%</p>
+                      <p className="text-[8px] sm:text-[10px]">Kehadiran</p>
                     </div>
                   </div>
-                  <CardDescription className="text-emerald-100 text-xs">
+                  <CardDescription className="text-emerald-100 text-[10px] sm:text-xs">
                     Ringkasan kehadiran siswa dalam 30 hari terakhir
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="p-5">
-                  <div className="grid grid-cols-5 gap-3">
+                <CardContent className="p-4 sm:p-5">
+                  <div className="grid grid-cols-5 gap-2 sm:gap-3">
                     <div className="text-center space-y-1">
-                      <div className="bg-emerald-100 p-2 rounded-xl">
-                        <CheckCircle className="h-5 w-5 text-emerald-600 mx-auto" />
-                        <div className="text-xl font-bold text-emerald-700">{statsHarian.hadir}</div>
+                      <div className="bg-emerald-100 p-1.5 sm:p-2 rounded-xl">
+                        <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 mx-auto" />
+                        <div className="text-sm sm:text-xl font-bold text-emerald-700">{statsHarian.hadir}</div>
                       </div>
-                      <p className="text-[10px] font-medium text-emerald-600">Hadir</p>
+                      <p className="text-[8px] sm:text-[10px] font-medium text-emerald-600">Hadir</p>
                     </div>
                     <div className="text-center space-y-1">
-                      <div className="bg-amber-100 p-2 rounded-xl">
-                        <Clock className="h-5 w-5 text-amber-600 mx-auto" />
-                        <div className="text-xl font-bold text-amber-700">{statsHarian.terlambat}</div>
+                      <div className="bg-amber-100 p-1.5 sm:p-2 rounded-xl">
+                        <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 mx-auto" />
+                        <div className="text-sm sm:text-xl font-bold text-amber-700">{statsHarian.terlambat}</div>
                       </div>
-                      <p className="text-[10px] font-medium text-amber-600">Terlambat</p>
+                      <p className="text-[8px] sm:text-[10px] font-medium text-amber-600">Terlambat</p>
                     </div>
                     <div className="text-center space-y-1">
-                      <div className="bg-sky-100 p-2 rounded-xl">
-                        <FileText className="h-5 w-5 text-sky-600 mx-auto" />
-                        <div className="text-xl font-bold text-sky-700">{statsHarian.izin}</div>
+                      <div className="bg-sky-100 p-1.5 sm:p-2 rounded-xl">
+                        <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-sky-600 mx-auto" />
+                        <div className="text-sm sm:text-xl font-bold text-sky-700">{statsHarian.izin}</div>
                       </div>
-                      <p className="text-[10px] font-medium text-sky-600">Izin</p>
+                      <p className="text-[8px] sm:text-[10px] font-medium text-sky-600">Izin</p>
                     </div>
                     <div className="text-center space-y-1">
-                      <div className="bg-violet-100 p-2 rounded-xl">
-                        <Activity className="h-5 w-5 text-violet-600 mx-auto" />
-                        <div className="text-xl font-bold text-violet-700">{statsHarian.sakit}</div>
+                      <div className="bg-violet-100 p-1.5 sm:p-2 rounded-xl">
+                        <Activity className="h-4 w-4 sm:h-5 sm:w-5 text-violet-600 mx-auto" />
+                        <div className="text-sm sm:text-xl font-bold text-violet-700">{statsHarian.sakit}</div>
                       </div>
-                      <p className="text-[10px] font-medium text-violet-600">Sakit</p>
+                      <p className="text-[8px] sm:text-[10px] font-medium text-violet-600">Sakit</p>
                     </div>
                     <div className="text-center space-y-1">
-                      <div className="bg-rose-100 p-2 rounded-xl">
-                        <XCircle className="h-5 w-5 text-rose-600 mx-auto" />
-                        <div className="text-xl font-bold text-rose-700">{statsHarian.alfa}</div>
+                      <div className="bg-rose-100 p-1.5 sm:p-2 rounded-xl">
+                        <XCircle className="h-4 w-4 sm:h-5 sm:w-5 text-rose-600 mx-auto" />
+                        <div className="text-sm sm:text-xl font-bold text-rose-700">{statsHarian.alfa}</div>
                       </div>
-                      <p className="text-[10px] font-medium text-rose-600">Alfa</p>
+                      <p className="text-[8px] sm:text-[10px] font-medium text-rose-600">Alfa</p>
                     </div>
                   </div>
                   
-                  <Separator className="my-4" />
+                  <Separator className="my-3 sm:my-4" />
                   
                   <div className="space-y-1">
-                    <div className="flex justify-between text-xs">
+                    <div className="flex justify-between text-[10px] sm:text-xs">
                       <span className="text-slate-500">Total Kehadiran</span>
                       <span className="font-semibold text-emerald-600">{attendancePercentage}%</span>
                     </div>
-                    <Progress value={parseFloat(attendancePercentage as string)} className="h-2" />
+                    <Progress value={parseFloat(attendancePercentage as string)} className="h-1.5 sm:h-2" />
                   </div>
-                  <p className="text-xs text-slate-400 text-center mt-3">
+                  <p className="text-[10px] sm:text-xs text-slate-400 text-center mt-3">
                     Total presensi: {statsHarian.total}
                   </p>
                 </CardContent>
               </Card>
 
               {/* Statistik Presensi Mapel Card */}
-              <Card className="rounded-2xl border-0 shadow-xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white p-5">
+              <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white p-4 sm:p-5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <BookOpen className="h-5 w-5" />
-                      <CardTitle className="text-lg">Statistik Presensi Mapel (30 hari)</CardTitle>
+                      <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
+                      <CardTitle className="text-sm sm:text-lg">Statistik Presensi Mapel (30 hari)</CardTitle>
                     </div>
-                    <div className="bg-white/20 px-3 py-1 rounded-xl text-center">
-                      <p className="text-lg font-bold">{mapelPercentage}%</p>
-                      <p className="text-[10px]">Kehadiran</p>
+                    <div className="bg-white/20 px-2 sm:px-3 py-0.5 sm:py-1 rounded-xl text-center">
+                      <p className="text-base sm:text-lg font-bold">{mapelPercentage}%</p>
+                      <p className="text-[8px] sm:text-[10px]">Kehadiran</p>
                     </div>
                   </div>
-                  <CardDescription className="text-blue-100 text-xs">
+                  <CardDescription className="text-blue-100 text-[10px] sm:text-xs">
                     Ringkasan kehadiran siswa per mata pelajaran
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="p-5">
-                  <div className="grid grid-cols-4 gap-3">
+                <CardContent className="p-4 sm:p-5">
+                  <div className="grid grid-cols-4 gap-2 sm:gap-3">
                     <div className="text-center space-y-1">
-                      <div className="bg-emerald-100 p-2 rounded-xl">
-                        <CheckCircle className="h-5 w-5 text-emerald-600 mx-auto" />
-                        <div className="text-xl font-bold text-emerald-700">{statsMapel.hadir}</div>
+                      <div className="bg-emerald-100 p-1.5 sm:p-2 rounded-xl">
+                        <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 mx-auto" />
+                        <div className="text-sm sm:text-xl font-bold text-emerald-700">{statsMapel.hadir}</div>
                       </div>
-                      <p className="text-[10px] font-medium text-emerald-600">Hadir</p>
+                      <p className="text-[8px] sm:text-[10px] font-medium text-emerald-600">Hadir</p>
                     </div>
                     <div className="text-center space-y-1">
-                      <div className="bg-sky-100 p-2 rounded-xl">
-                        <FileText className="h-5 w-5 text-sky-600 mx-auto" />
-                        <div className="text-xl font-bold text-sky-700">{statsMapel.izin}</div>
+                      <div className="bg-sky-100 p-1.5 sm:p-2 rounded-xl">
+                        <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-sky-600 mx-auto" />
+                        <div className="text-sm sm:text-xl font-bold text-sky-700">{statsMapel.izin}</div>
                       </div>
-                      <p className="text-[10px] font-medium text-sky-600">Izin</p>
+                      <p className="text-[8px] sm:text-[10px] font-medium text-sky-600">Izin</p>
                     </div>
                     <div className="text-center space-y-1">
-                      <div className="bg-violet-100 p-2 rounded-xl">
-                        <Activity className="h-5 w-5 text-violet-600 mx-auto" />
-                        <div className="text-xl font-bold text-violet-700">{statsMapel.sakit}</div>
+                      <div className="bg-violet-100 p-1.5 sm:p-2 rounded-xl">
+                        <Activity className="h-4 w-4 sm:h-5 sm:w-5 text-violet-600 mx-auto" />
+                        <div className="text-sm sm:text-xl font-bold text-violet-700">{statsMapel.sakit}</div>
                       </div>
-                      <p className="text-[10px] font-medium text-violet-600">Sakit</p>
+                      <p className="text-[8px] sm:text-[10px] font-medium text-violet-600">Sakit</p>
                     </div>
                     <div className="text-center space-y-1">
-                      <div className="bg-rose-100 p-2 rounded-xl">
-                        <XCircle className="h-5 w-5 text-rose-600 mx-auto" />
-                        <div className="text-xl font-bold text-rose-700">{statsMapel.alfa}</div>
+                      <div className="bg-rose-100 p-1.5 sm:p-2 rounded-xl">
+                        <XCircle className="h-4 w-4 sm:h-5 sm:w-5 text-rose-600 mx-auto" />
+                        <div className="text-sm sm:text-xl font-bold text-rose-700">{statsMapel.alfa}</div>
                       </div>
-                      <p className="text-[10px] font-medium text-rose-600">Alfa</p>
+                      <p className="text-[8px] sm:text-[10px] font-medium text-rose-600">Alfa</p>
                     </div>
                   </div>
                   
-                  <Separator className="my-4" />
+                  <Separator className="my-3 sm:my-4" />
                   
                   <div className="space-y-1">
-                    <div className="flex justify-between text-xs">
+                    <div className="flex justify-between text-[10px] sm:text-xs">
                       <span className="text-slate-500">Total Kehadiran Mapel</span>
                       <span className="font-semibold text-blue-600">{mapelPercentage}%</span>
                     </div>
-                    <Progress value={parseFloat(mapelPercentage as string)} className="h-2" />
+                    <Progress value={parseFloat(mapelPercentage as string)} className="h-1.5 sm:h-2" />
                   </div>
-                  <p className="text-xs text-slate-400 text-center mt-3">
+                  <p className="text-[10px] sm:text-xs text-slate-400 text-center mt-3">
                     Total presensi: {statsMapel.total}
                   </p>
                 </CardContent>
               </Card>
             </div>
 
-            {/* JADWAL & RECENT PRESENSI GRID */}
+            {/* JADWAL & RECENT PRESENSI GRID - 1 kolom di HP */}
             <div className="grid gap-6 lg:grid-cols-2">
               
               {/* Jadwal Hari Ini Card */}
-              <Card className="rounded-2xl border-0 shadow-xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-5">
+              <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-5">
                   <div className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    <CardTitle className="text-lg">Jadwal Mengajar Hari Ini</CardTitle>
+                    <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
+                    <CardTitle className="text-sm sm:text-lg">Jadwal Mengajar Hari Ini</CardTitle>
                   </div>
-                  <CardDescription className="text-slate-300 text-xs">
+                  <CardDescription className="text-slate-300 text-[10px] sm:text-xs">
                     {formatDate(currentTime)}
                   </CardDescription>
                 </CardHeader>
@@ -635,26 +635,26 @@ export default function GuruDashboard() {
                       <div className="bg-slate-100 rounded-full w-16 h-16 mx-auto flex items-center justify-center mb-3">
                         <Calendar className="h-8 w-8 text-slate-400" />
                       </div>
-                      <p className="text-slate-500">Tidak ada jadwal hari ini</p>
+                      <p className="text-slate-500 text-xs sm:text-sm">Tidak ada jadwal hari ini</p>
                     </div>
                   ) : (
                     <div className="divide-y divide-slate-100">
                       {jadwalHariIni.map((j, idx) => (
-                        <div key={idx} className="p-4 hover:bg-slate-50 transition-colors">
-                          <div className="flex items-center justify-between">
+                        <div key={idx} className="p-3 sm:p-4 hover:bg-slate-50 transition-colors">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                             <div className="flex items-center gap-3">
-                              <div className="bg-blue-100 p-2 rounded-xl">
-                                <Clock className="h-4 w-4 text-blue-600" />
+                              <div className="bg-blue-100 p-1.5 sm:p-2 rounded-xl">
+                                <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" />
                               </div>
-                              <span className="font-mono text-sm font-semibold text-slate-700">{j.jam}</span>
+                              <span className="font-mono text-xs sm:text-sm font-semibold text-slate-700">{j.jam}</span>
                             </div>
-                            <div className="flex-1 mx-4">
+                            <div className="flex-1 sm:mx-4">
                               <div className="flex items-center gap-2">
-                                <BookOpen className="h-4 w-4 text-purple-500" />
-                                <span className="font-medium text-slate-800">{j.mapel}</span>
+                                <BookOpen className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-500" />
+                                <span className="font-medium text-slate-800 text-xs sm:text-sm">{j.mapel}</span>
                               </div>
                             </div>
-                            <Badge className="bg-emerald-100 text-emerald-700 rounded-full">
+                            <Badge className="bg-emerald-100 text-emerald-700 rounded-full text-[10px] sm:text-xs w-fit">
                               <Users className="h-3 w-3 mr-1" />
                               {j.kelas}
                             </Badge>
@@ -667,13 +667,13 @@ export default function GuruDashboard() {
               </Card>
 
               {/* Presensi Harian Terbaru Card */}
-              <Card className="rounded-2xl border-0 shadow-xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-5">
+              <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-5">
                   <div className="flex items-center gap-2">
-                    <Clock className="h-5 w-5" />
-                    <CardTitle className="text-lg">Presensi Harian Terbaru</CardTitle>
+                    <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
+                    <CardTitle className="text-sm sm:text-lg">Presensi Harian Terbaru</CardTitle>
                   </div>
-                  <CardDescription className="text-slate-300 text-xs">
+                  <CardDescription className="text-slate-300 text-[10px] sm:text-xs">
                     5 data presensi terakhir
                   </CardDescription>
                 </CardHeader>
@@ -682,28 +682,28 @@ export default function GuruDashboard() {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-slate-50">
-                          <TableHead className="font-semibold">NIS</TableHead>
-                          <TableHead className="font-semibold">Nama</TableHead>
-                          <TableHead className="font-semibold">Status</TableHead>
-                          <TableHead className="font-semibold">Waktu</TableHead>
+                          <TableHead className="text-xs sm:text-sm font-semibold">NIS</TableHead>
+                          <TableHead className="text-xs sm:text-sm font-semibold">Nama</TableHead>
+                          <TableHead className="text-xs sm:text-sm font-semibold">Status</TableHead>
+                          <TableHead className="text-xs sm:text-sm font-semibold">Waktu</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {recentHarian.map((p, idx) => (
                           <TableRow key={idx} className="hover:bg-slate-50 transition-colors">
-                            <TableCell className="font-mono text-sm">{p.nis}</TableCell>
-                            <TableCell className="font-medium">{p.nama}</TableCell>
+                            <TableCell className="font-mono text-xs sm:text-sm">{p.nis}</TableCell>
+                            <TableCell className="font-medium text-xs sm:text-sm">{p.nama}</TableCell>
                             <TableCell>
-                              <Badge className={`${getStatusColor(p.status)} border-0 rounded-full px-2 py-0.5 text-xs`}>
+                              <Badge className={`${getStatusColor(p.status)} border-0 rounded-full px-2 py-0.5 text-[10px] sm:text-xs`}>
                                 {p.status}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-slate-500 text-sm">{p.waktu}</TableCell>
+                            <TableCell className="text-slate-500 text-[10px] sm:text-sm">{p.waktu}</TableCell>
                           </TableRow>
                         ))}
                         {recentHarian.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={4} className="text-center py-8 text-slate-500">
+                            <TableCell colSpan={4} className="text-center py-8 text-slate-500 text-xs sm:text-sm">
                               Belum ada data presensi
                             </TableCell>
                           </TableRow>
@@ -715,14 +715,14 @@ export default function GuruDashboard() {
               </Card>
             </div>
 
-            {/* MAIN PRESENSI SISWA TABLE */}
-            <Card className="rounded-2xl border-0 shadow-xl overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-5">
+            {/* MAIN PRESENSI SISWA TABLE - overflow-x-auto */}
+            <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-5">
                 <div className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  <CardTitle className="text-lg">Presensi Siswa Hari Ini</CardTitle>
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <CardTitle className="text-sm sm:text-lg">Presensi Siswa Hari Ini</CardTitle>
                 </div>
-                <CardDescription className="text-slate-300 text-xs">
+                <CardDescription className="text-slate-300 text-[10px] sm:text-xs">
                   Daftar presensi harian dan mapel terakhir siswa
                 </CardDescription>
               </CardHeader>
@@ -731,36 +731,36 @@ export default function GuruDashboard() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-slate-50">
-                        <TableHead className="font-semibold">NIS</TableHead>
-                        <TableHead className="font-semibold">Nama</TableHead>
-                        <TableHead className="font-semibold">Presensi Harian</TableHead>
-                        <TableHead className="font-semibold">Waktu</TableHead>
-                        <TableHead className="font-semibold">Presensi Mapel Terakhir</TableHead>
-                        <TableHead className="font-semibold">Mapel</TableHead>
+                        <TableHead className="text-xs sm:text-sm font-semibold">NIS</TableHead>
+                        <TableHead className="text-xs sm:text-sm font-semibold">Nama</TableHead>
+                        <TableHead className="text-xs sm:text-sm font-semibold">Presensi Harian</TableHead>
+                        <TableHead className="text-xs sm:text-sm font-semibold">Waktu</TableHead>
+                        <TableHead className="text-xs sm:text-sm font-semibold">Presensi Mapel Terakhir</TableHead>
+                        <TableHead className="text-xs sm:text-sm font-semibold">Mapel</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {siswaList.map(s => (
                         <TableRow key={s.id_siswa} className="hover:bg-slate-50 transition-colors">
-                          <TableCell className="font-mono text-sm">{s.nis}</TableCell>
-                          <TableCell className="font-medium">{s.nama}</TableCell>
+                          <TableCell className="font-mono text-xs sm:text-sm">{s.nis}</TableCell>
+                          <TableCell className="font-medium text-xs sm:text-sm">{s.nama}</TableCell>
                           <TableCell>
-                            <Badge className={`${getStatusColor(s.status_harian)} border-0 rounded-full px-2 py-0.5 text-xs`}>
+                            <Badge className={`${getStatusColor(s.status_harian)} border-0 rounded-full px-2 py-0.5 text-[10px] sm:text-xs`}>
                               {s.status_harian}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-slate-500 text-sm">{s.waktu_harian}</TableCell>
+                          <TableCell className="text-slate-500 text-[10px] sm:text-sm">{s.waktu_harian}</TableCell>
                           <TableCell>
-                            <Badge className={`${getStatusColor(s.status_mapel_terakhir)} border-0 rounded-full px-2 py-0.5 text-xs`}>
+                            <Badge className={`${getStatusColor(s.status_mapel_terakhir)} border-0 rounded-full px-2 py-0.5 text-[10px] sm:text-xs`}>
                               {s.status_mapel_terakhir}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-slate-600 text-sm">{s.mapel_terakhir}</TableCell>
+                          <TableCell className="text-slate-600 text-xs sm:text-sm">{s.mapel_terakhir}</TableCell>
                         </TableRow>
                       ))}
                       {siswaList.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-slate-500">
+                          <TableCell colSpan={6} className="text-center py-8 text-slate-500 text-xs sm:text-sm">
                             Belum ada data siswa
                           </TableCell>
                         </TableRow>
@@ -771,16 +771,16 @@ export default function GuruDashboard() {
               </CardContent>
             </Card>
 
-            {/* TIPS SECTION */}
-            <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50">
-              <CardContent className="p-5">
-                <div className="flex items-start gap-4">
-                  <div className="bg-indigo-100 p-3 rounded-xl">
-                    <Sparkles className="h-6 w-6 text-indigo-600" />
+            {/* TIPS SECTION - Responsif */}
+            <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div className="bg-indigo-100 p-2 sm:p-3 rounded-xl">
+                    <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-slate-800 mb-1">Tips untuk Guru</h3>
-                    <p className="text-sm text-slate-600">
+                    <h3 className="font-semibold text-slate-800 text-sm sm:text-base mb-1">Tips untuk Guru</h3>
+                    <p className="text-xs sm:text-sm text-slate-600">
                       Pantau kehadiran siswa secara berkala. Gunakan fitur filter kelas untuk melihat data 
                       per kelas. Pastikan untuk selalu mengaktifkan QR Code presensi 15 menit sebelum jadwal dimulai.
                     </p>

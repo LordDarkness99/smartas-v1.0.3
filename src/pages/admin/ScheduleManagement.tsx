@@ -954,22 +954,22 @@ export default function ScheduleManagement() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* HEADER */}
+      {/* HEADER - Responsive */}
       <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
-        <div className="container mx-auto px-6 py-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-sm"><Calendar className="h-8 w-8" /></div>
+        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="bg-white/20 p-2 sm:p-3 rounded-2xl backdrop-blur-sm"><Calendar className="h-6 w-6 sm:h-8 sm:w-8" /></div>
               <div>
-                <div className="flex items-center gap-2">{getGreetingIcon()}<p className="text-sm text-blue-100">{greeting}</p></div>
-                <h1 className="text-2xl lg:text-3xl font-bold">Manajemen Jadwal & Mata Pelajaran</h1>
-                <p className="text-blue-100 text-sm">Atur jadwal pelajaran per kelas dan kelola daftar mata pelajaran</p>
+                <div className="flex items-center gap-2">{getGreetingIcon()}<p className="text-xs sm:text-sm text-blue-100">{greeting}</p></div>
+                <h1 className="text-base sm:text-2xl lg:text-3xl font-bold leading-tight">Manajemen Jadwal &amp; Mata Pelajaran</h1>
+                <p className="text-blue-100 text-xs sm:text-sm">Atur jadwal pelajaran per kelas dan kelola daftar mata pelajaran</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="bg-white/10 rounded-xl px-4 py-2 backdrop-blur-sm text-center">
-                <p className="text-xs text-blue-100">{formatDate(currentTime)}</p>
-                <p className="text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
+              <div className="bg-white/10 rounded-xl px-3 py-1 sm:px-4 sm:py-2 backdrop-blur-sm text-center">
+                <p className="text-[10px] sm:text-xs text-blue-100">{formatDate(currentTime)}</p>
+                <p className="text-base sm:text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
               </div>
               <Button variant="ghost" size="icon" className="bg-white/10 hover:bg-white/20 text-white rounded-xl" onClick={handleRefresh} disabled={refreshing}>
                 <RefreshCw className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
@@ -980,67 +980,67 @@ export default function ScheduleManagement() {
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="container mx-auto px-4 py-8 space-y-8">
-        {/* STATS CARDS */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-            <CardContent className="p-4"><div className="flex justify-between"><div><p className="text-xs text-blue-600 font-medium">Total Kelas</p><p className="text-2xl font-bold text-blue-900">{kelasList.length}</p></div><School className="h-8 w-8 text-blue-500" /></div></CardContent>
+      <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8">
+        {/* STATS CARDS - responsive grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+            <CardContent className="p-3 sm:p-4"><div className="flex justify-between"><div><p className="text-[10px] sm:text-xs text-blue-600 font-medium">Total Kelas</p><p className="text-lg sm:text-2xl font-bold text-blue-900">{kelasList.length}</p></div><School className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" /></div></CardContent>
           </Card>
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
-            <CardContent className="p-4"><div className="flex justify-between"><div><p className="text-xs text-emerald-600 font-medium">Total Mapel</p><p className="text-2xl font-bold text-emerald-900">{mapelData.length}</p></div><BookOpen className="h-8 w-8 text-emerald-500" /></div></CardContent>
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
+            <CardContent className="p-3 sm:p-4"><div className="flex justify-between"><div><p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Total Mapel</p><p className="text-lg sm:text-2xl font-bold text-emerald-900">{mapelData.length}</p></div><BookOpen className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" /></div></CardContent>
           </Card>
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-            <CardContent className="p-4"><div className="flex justify-between"><div><p className="text-xs text-purple-600 font-medium">Total Guru</p><p className="text-2xl font-bold text-purple-900">{guruList.length}</p></div><User className="h-8 w-8 text-purple-500" /></div></CardContent>
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+            <CardContent className="p-3 sm:p-4"><div className="flex justify-between"><div><p className="text-[10px] sm:text-xs text-purple-600 font-medium">Total Guru</p><p className="text-lg sm:text-2xl font-bold text-purple-900">{guruList.length}</p></div><User className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" /></div></CardContent>
           </Card>
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
-            <CardContent className="p-4"><div className="flex justify-between"><div><p className="text-xs text-amber-600 font-medium">Total Jadwal Aktif</p><p className="text-2xl font-bold text-amber-900">{statistik.totalJadwal}</p></div><Calendar className="h-8 w-8 text-amber-500" /></div></CardContent>
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
+            <CardContent className="p-3 sm:p-4"><div className="flex justify-between"><div><p className="text-[10px] sm:text-xs text-amber-600 font-medium">Total Jadwal Aktif</p><p className="text-lg sm:text-2xl font-bold text-amber-900">{statistik.totalJadwal}</p></div><Calendar className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" /></div></CardContent>
           </Card>
         </div>
 
         {/* DETAIL STATISTIK JADWAL */}
         {activeTab === "jadwal" && selectedKelas && jadwalList.length > 0 && (
           <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-r from-slate-700 to-slate-800 text-white">
-            <CardContent className="p-5"><div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center"><div><p className="text-xs text-slate-300">Total Jadwal Aktif</p><p className="text-2xl font-bold">{statistik.totalJadwal}</p></div><div><p className="text-xs text-slate-300">Hari Tersibuk</p><p className="text-lg font-semibold">{statistik.hariTersibuk}</p></div><div><p className="text-xs text-slate-300">Jam Tersibuk</p><p className="text-lg font-semibold">{statistik.jamTersibuk}</p></div><div><p className="text-xs text-slate-300">Guru Tersibuk</p><p className="text-lg font-semibold truncate">{statistik.guruTersibuk}</p></div></div></CardContent>
+            <CardContent className="p-4 sm:p-5"><div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 text-center"><div><p className="text-[10px] sm:text-xs text-slate-300">Total Jadwal Aktif</p><p className="text-xl sm:text-2xl font-bold">{statistik.totalJadwal}</p></div><div><p className="text-[10px] sm:text-xs text-slate-300">Hari Tersibuk</p><p className="text-base sm:text-lg font-semibold">{statistik.hariTersibuk}</p></div><div><p className="text-[10px] sm:text-xs text-slate-300">Jam Tersibuk</p><p className="text-base sm:text-lg font-semibold">{statistik.jamTersibuk}</p></div><div><p className="text-[10px] sm:text-xs text-slate-300">Guru Tersibuk</p><p className="text-base sm:text-lg font-semibold truncate">{statistik.guruTersibuk}</p></div></div></CardContent>
           </Card>
         )}
 
         {/* MAIN TABS CARD */}
-        <Card className="rounded-2xl border-0 shadow-xl overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-6">
+        <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex items-center gap-3"><div className="bg-white/10 p-2 rounded-xl"><Calendar className="h-6 w-6" /></div><div><CardTitle className="text-xl">Manajemen Jadwal & Mata Pelajaran</CardTitle><CardDescription className="text-slate-300 text-sm">Atur jadwal pelajaran per kelas dan kelola daftar mata pelajaran</CardDescription></div></div>
+              <div className="flex items-center gap-2 sm:gap-3"><div className="bg-white/10 p-1.5 sm:p-2 rounded-xl"><Calendar className="h-5 w-5 sm:h-6 sm:w-6" /></div><div><CardTitle className="text-base sm:text-xl">Manajemen Jadwal &amp; Mata Pelajaran</CardTitle><CardDescription className="text-slate-300 text-xs sm:text-sm">Atur jadwal pelajaran per kelas dan kelola daftar mata pelajaran</CardDescription></div></div>
               {activeTab === "jadwal" && (
-                <div className="flex gap-1 bg-white/10 p-1 rounded-xl">
-                  <Button variant="ghost" size="sm" className={`rounded-lg text-white ${viewMode === "table" ? "bg-white/20" : ""}`} onClick={() => setViewMode("table")}><LayoutGrid className="h-4 w-4 mr-1" />Tabel</Button>
-                  <Button variant="ghost" size="sm" className={`rounded-lg text-white ${viewMode === "card" ? "bg-white/20" : ""}`} onClick={() => setViewMode("card")}><ListIcon className="h-4 w-4 mr-1" />Kartu</Button>
+                <div className="flex gap-1 bg-white/10 p-1 rounded-xl self-start md:self-auto">
+                  <Button variant="ghost" size="sm" className={`rounded-lg text-white text-xs sm:text-sm ${viewMode === "table" ? "bg-white/20" : ""}`} onClick={() => setViewMode("table")}><LayoutGrid className="h-3.5 w-3.5 mr-1" />Tabel</Button>
+                  <Button variant="ghost" size="sm" className={`rounded-lg text-white text-xs sm:text-sm ${viewMode === "card" ? "bg-white/20" : ""}`} onClick={() => setViewMode("card")}><ListIcon className="h-3.5 w-3.5 mr-1" />Kartu</Button>
                 </div>
               )}
             </div>
           </CardHeader>
-          <CardContent className="p-6">
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-6">
+          <CardContent className="p-4 sm:p-6">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-4 sm:space-y-6">
               <div className="flex justify-center">
                 <TabsList className="bg-slate-100 p-1 rounded-xl w-auto inline-flex">
-                  <TabsTrigger value="jadwal" className="rounded-lg data-[state=active]:bg-white"><Calendar className="h-3.5 w-3.5 mr-1" /> Jadwal Pelajaran</TabsTrigger>
-                  <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white"><BookOpen className="h-3.5 w-3.5 mr-1" /> Mata Pelajaran</TabsTrigger>
+                  <TabsTrigger value="jadwal" className="rounded-lg data-[state=active]:bg-white text-xs sm:text-sm px-3 sm:px-4"><Calendar className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Jadwal Pelajaran</TabsTrigger>
+                  <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white text-xs sm:text-sm px-3 sm:px-4"><BookOpen className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Mata Pelajaran</TabsTrigger>
                 </TabsList>
               </div>
 
-              {/* TAB JADWAL */}
-              <TabsContent value="jadwal" className="space-y-6">
-                <div className="flex flex-col sm:flex-row gap-4 items-end justify-center">
-                  <div className="w-64">
-                    <Label className="text-slate-700 font-medium">Kelas</Label>
+              {/* TAB JADWAL - fully responsive */}
+              <TabsContent value="jadwal" className="space-y-4 sm:space-y-6">
+                <div className="flex flex-col sm:flex-row gap-3 items-end justify-center">
+                  <div className="w-full sm:w-64">
+                    <Label className="text-slate-700 font-medium text-xs sm:text-sm">Kelas</Label>
                     <Popover open={popoverKelasOpen} onOpenChange={setPopoverKelasOpen}>
                       <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full justify-between rounded-xl border-slate-200 h-9 text-sm font-normal mt-1">
+                        <Button variant="outline" className="w-full justify-between rounded-xl border-slate-200 h-8 sm:h-9 text-xs sm:text-sm font-normal mt-1">
                           {selectedKelas ? kelasList.find(k => k.id_kelas.toString() === selectedKelas)?.nama || "Pilih Kelas" : "Pilih Kelas"}
-                          <ChevronDown className="h-4 w-4 opacity-50" />
+                          <ChevronDown className="h-3.5 w-3.5 opacity-50" />
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-64 p-0" align="start" sideOffset={5}>
                         <div className="p-2 border-b bg-slate-50">
-                          <div className="flex gap-1 mb-2">
+                          <div className="flex gap-1 mb-2 flex-wrap">
                             {["all", "X", "XI", "XII"].map(jenjang => (
                               <Button key={jenjang} variant={kelasJenjangFilter === jenjang ? "default" : "ghost"} size="sm" className={`h-7 px-2 text-xs rounded-md ${kelasJenjangFilter === jenjang ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"}`} onClick={() => setKelasJenjangFilter(jenjang)}>
                                 {jenjang === "all" ? "Semua" : jenjang}
@@ -1068,10 +1068,10 @@ export default function ScheduleManagement() {
                     </Popover>
                   </div>
 
-                  <div className="w-40">
-                    <Label className="text-slate-700 font-medium">Hari</Label>
+                  <div className="w-full sm:w-40">
+                    <Label className="text-slate-700 font-medium text-xs sm:text-sm">Hari</Label>
                     <Select value={selectedHari} onValueChange={setSelectedHari}>
-                      <SelectTrigger className="rounded-xl h-9">
+                      <SelectTrigger className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1080,23 +1080,23 @@ export default function ScheduleManagement() {
                     </Select>
                   </div>
 
-                  <Button onClick={openAddJadwal} disabled={!selectedKelas} className="rounded-xl h-9 bg-gradient-to-r from-blue-600 to-indigo-600">
-                    <Plus className="mr-1.5 h-3.5 w-3.5" /> Tambah Jadwal
-                  </Button>
-
-                  <Button variant="outline" onClick={() => setImportJadwalDialogOpen(true)} className="rounded-xl h-9">
-                    <Upload className="mr-1.5 h-3.5 w-3.5" /> Impor Jadwal
-                  </Button>
-
-                  <Button variant="outline" onClick={fetchJadwal} disabled={!selectedKelas || isFetchingJadwal} className="rounded-xl h-9">
-                    <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingJadwal ? "animate-spin" : ""}`} /> Segarkan
-                  </Button>
+                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start w-full sm:w-auto">
+                    <Button onClick={openAddJadwal} disabled={!selectedKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600">
+                      <Plus className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" /> Tambah Jadwal
+                    </Button>
+                    <Button variant="outline" onClick={() => setImportJadwalDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">
+                      <Upload className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" /> Impor Jadwal
+                    </Button>
+                    <Button variant="outline" onClick={fetchJadwal} disabled={!selectedKelas || isFetchingJadwal} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">
+                      <RefreshCw className={`mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5 ${isFetchingJadwal ? "animate-spin" : ""}`} /> Segarkan
+                    </Button>
+                  </div>
                 </div>
 
                 {!selectedKelas && (
                   <Alert className="rounded-xl bg-amber-50 max-w-md mx-auto">
                     <AlertCircle className="h-4 w-4 text-amber-600" />
-                    <AlertDescription className="text-amber-700">Silakan pilih kelas terlebih dahulu</AlertDescription>
+                    <AlertDescription className="text-amber-700 text-xs sm:text-sm">Silakan pilih kelas terlebih dahulu</AlertDescription>
                   </Alert>
                 )}
 
@@ -1106,12 +1106,12 @@ export default function ScheduleManagement() {
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-slate-50">
-                            <TableHead>Jam</TableHead>
-                            <TableHead>Mata Pelajaran</TableHead>
-                            <TableHead>Guru</TableHead>
-                            <TableHead className="text-center">Hari</TableHead>
-                            <TableHead className="text-center">Status</TableHead>
-                            <TableHead className="text-center w-28">Aksi</TableHead>
+                            <TableHead className="text-xs sm:text-sm">Jam</TableHead>
+                            <TableHead className="text-xs sm:text-sm">Mata Pelajaran</TableHead>
+                            <TableHead className="text-xs sm:text-sm">Guru</TableHead>
+                            <TableHead className="text-center text-xs sm:text-sm">Hari</TableHead>
+                            <TableHead className="text-center text-xs sm:text-sm">Status</TableHead>
+                            <TableHead className="text-center w-28 text-xs sm:text-sm">Aksi</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1122,12 +1122,12 @@ export default function ScheduleManagement() {
                           ) : (
                             jadwalList.map(j => (
                               <TableRow key={j.id_jadwal}>
-                                <TableCell className="font-mono text-sm font-medium">{j.jam}</TableCell>
-                                <TableCell><div className="flex items-center gap-2"><div className="bg-blue-100 p-1.5 rounded-lg"><BookOpen className="h-4 w-4 text-blue-600" /></div><span className="font-medium">{j.mapel?.nama || "-"}{j.mapel?.aktif === false && <span className="ml-1 text-xs text-red-500">(nonaktif)</span>}</span></div></TableCell>
-                                <TableCell><div className="flex items-center gap-2"><div className="bg-purple-100 p-1.5 rounded-lg"><User className="h-4 w-4 text-purple-600" /></div><span>{j.guru?.nama || "-"}{j.guru?.aktif === false && <span className="ml-1 text-xs text-red-500">(nonaktif)</span>}</span></div></TableCell>
-                                <TableCell className="text-center"><Badge className={`${getHariColor(j.hari)} border-0 rounded-full px-3 py-1`}>{j.hari}</Badge></TableCell>
-                                <TableCell className="text-center"><Badge className={`${getStatusColor(j.aktif)} border-0 rounded-full px-3 py-1`}>{j.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell>
-                                <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditJadwal(j)}><Edit className="h-4 w-4 text-blue-500" /></Button>{j.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell>
+                                <TableCell className="font-mono text-xs sm:text-sm font-medium whitespace-nowrap">{j.jam}</TableCell>
+                                <TableCell><div className="flex items-center gap-2"><div className="bg-blue-100 p-1.5 rounded-lg"><BookOpen className="h-4 w-4 text-blue-600" /></div><span className="font-medium text-xs sm:text-sm">{j.mapel?.nama || "-"}{j.mapel?.aktif === false && <span className="ml-1 text-xs text-red-500">(nonaktif)</span>}</span></div></TableCell>
+                                <TableCell><div className="flex items-center gap-2"><div className="bg-purple-100 p-1.5 rounded-lg"><User className="h-4 w-4 text-purple-600" /></div><span className="text-xs sm:text-sm">{j.guru?.nama || "-"}{j.guru?.aktif === false && <span className="ml-1 text-xs text-red-500">(nonaktif)</span>}</span></div></TableCell>
+                                <TableCell className="text-center"><Badge className={`${getHariColor(j.hari)} border-0 rounded-full px-2 sm:px-3 py-0.5 sm:py-1 text-xs`}>{j.hari}</Badge></TableCell>
+                                <TableCell className="text-center"><Badge className={`${getStatusColor(j.aktif)} border-0 rounded-full px-2 sm:px-3 py-0.5 sm:py-1 text-xs`}>{j.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell>
+                                <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditJadwal(j)}><Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" /></Button>{j.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)}><UserMinus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)}><UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500" /></Button>}</div></TableCell>
                               </TableRow>
                             ))
                           )}
@@ -1138,23 +1138,23 @@ export default function ScheduleManagement() {
                 )}
 
                 {selectedKelas && viewMode === "card" && (
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {jadwalList.map(j => (
                       <Card key={j.id_jadwal} className="rounded-xl border-0 shadow-md overflow-hidden group">
                         <div className={`absolute top-0 right-0 w-20 h-20 -mr-10 -mt-10 rounded-full ${getHariColor(j.hari)} opacity-20 group-hover:scale-150 transition-transform`} />
-                        <CardContent className="p-4 relative">
-                          <div className="flex justify-between mb-3">
+                        <CardContent className="p-3 sm:p-4 relative">
+                          <div className="flex justify-between mb-3 flex-wrap gap-1">
                             <Badge className={getHariColor(j.hari)}>{j.hari}</Badge>
-                            <span className="font-mono text-sm font-bold">{j.jam}</span>
+                            <span className="font-mono text-xs sm:text-sm font-bold">{j.jam}</span>
                           </div>
                           <div className="space-y-2">
-                            <div className="flex items-center gap-2"><div className="bg-blue-100 p-2 rounded-xl"><BookOpen className="h-4 w-4 text-blue-600" /></div><span className="font-semibold">{j.mapel?.nama || "-"}{j.mapel?.aktif === false && <span className="ml-1 text-xs text-red-500">(nonaktif)</span>}</span></div>
-                            <div className="flex items-center gap-2"><div className="bg-purple-100 p-2 rounded-xl"><User className="h-4 w-4 text-purple-600" /></div><span>{j.guru?.nama || "-"}{j.guru?.aktif === false && <span className="ml-1 text-xs text-red-500">(nonaktif)</span>}</span></div>
+                            <div className="flex items-center gap-2"><div className="bg-blue-100 p-1.5 rounded-xl"><BookOpen className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" /></div><span className="font-semibold text-xs sm:text-sm">{j.mapel?.nama || "-"}{j.mapel?.aktif === false && <span className="ml-1 text-xs text-red-500">(nonaktif)</span>}</span></div>
+                            <div className="flex items-center gap-2"><div className="bg-purple-100 p-1.5 rounded-xl"><User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-600" /></div><span className="text-xs sm:text-sm">{j.guru?.nama || "-"}{j.guru?.aktif === false && <span className="ml-1 text-xs text-red-500">(nonaktif)</span>}</span></div>
                             <div><Badge className={getStatusColor(j.aktif)}>{j.aktif ? "Aktif" : "Nonaktif"}</Badge></div>
                           </div>
                           <div className="flex gap-2 mt-3 pt-3 border-t">
-                            <Button variant="ghost" size="sm" onClick={() => openEditJadwal(j)} className="flex-1"><Edit className="h-4 w-4 mr-1" /> Edit</Button>
-                            {j.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)} className="flex-1 text-red-500"><UserMinus className="h-4 w-4 mr-1" /> Nonaktif</Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)} className="flex-1 text-green-500"><UserPlus className="h-4 w-4 mr-1" /> Aktif</Button>}
+                            <Button variant="ghost" size="sm" onClick={() => openEditJadwal(j)} className="flex-1 text-xs sm:text-sm"><Edit className="h-3.5 w-3.5 mr-1" /> Edit</Button>
+                            {j.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)} className="flex-1 text-red-500 text-xs sm:text-sm"><UserMinus className="h-3.5 w-3.5 mr-1" /> Nonaktif</Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)} className="flex-1 text-green-500 text-xs sm:text-sm"><UserPlus className="h-3.5 w-3.5 mr-1" /> Aktif</Button>}
                           </div>
                         </CardContent>
                       </Card>
@@ -1163,40 +1163,56 @@ export default function ScheduleManagement() {
                 )}
               </TabsContent>
 
-              {/* TAB MATA PELAJARAN */}
-              <TabsContent value="mapel" className="space-y-6">
-                <div className="flex justify-between items-center flex-wrap gap-3">
-                  <div className="flex gap-2"><Button onClick={openAddMapel} className="rounded-xl h-9 bg-gradient-to-r from-blue-600 to-indigo-600"><Plus className="mr-1.5 h-3.5 w-3.5" /> Tambah Mapel</Button><Button variant="outline" onClick={() => setImportDialogOpen(true)} className="rounded-xl h-9"><Upload className="mr-1.5 h-3.5 w-3.5" /> Impor Excel</Button></div>
-                  <div className="flex gap-2"><div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" /><Input placeholder="Cari mapel..." value={mapelSearchTerm} onChange={(e) => setMapelSearchTerm(e.target.value)} className="pl-9 rounded-xl w-64 h-9 text-sm" /></div><Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}><SelectTrigger className="w-36 h-9 rounded-xl"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="semua">Semua</SelectItem><SelectItem value="aktif">Aktif</SelectItem><SelectItem value="nonaktif">Nonaktif</SelectItem></SelectContent></Select><Button variant="outline" onClick={fetchMapel} disabled={isFetchingMapel} className="rounded-xl h-9"><RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingMapel ? "animate-spin" : ""}`} /> Segarkan</Button></div>
+              {/* TAB MATA PELAJARAN - responsive */}
+              <TabsContent value="mapel" className="space-y-4 sm:space-y-6">
+                <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                    <Button onClick={openAddMapel} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600"><Plus className="mr-1 h-3 w-3" /> Tambah Mapel</Button>
+                    <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><Upload className="mr-1 h-3 w-3" /> Impor Excel</Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 justify-center sm:justify-end">
+                    <div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" /><Input placeholder="Cari mapel..." value={mapelSearchTerm} onChange={(e) => setMapelSearchTerm(e.target.value)} className="pl-8 rounded-xl w-48 sm:w-64 h-8 sm:h-9 text-xs sm:text-sm" /></div>
+                    <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}><SelectTrigger className="w-32 h-8 sm:h-9 rounded-xl text-xs sm:text-sm"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="semua">Semua</SelectItem><SelectItem value="aktif">Aktif</SelectItem><SelectItem value="nonaktif">Nonaktif</SelectItem></SelectContent></Select>
+                    <Button variant="outline" onClick={fetchMapel} disabled={isFetchingMapel} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><RefreshCw className={`mr-1 h-3 w-3 ${isFetchingMapel ? "animate-spin" : ""}`} /> Segarkan</Button>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center"><div className="flex gap-2"><Button variant={selectMode ? "default" : "outline"} onClick={() => { setSelectMode(!selectMode); if (!selectMode) setSelectedMapelIds([]); }} className="rounded-xl h-9">{selectMode ? "Batalkan Mode Pilih" : "Mode Pilih"}</Button>{selectMode && <><Button variant="default" onClick={() => handleBulkAction("aktifkan")} disabled={selectedMapelIds.length === 0 || isProcessingBulk} className="bg-green-600 hover:bg-green-700 rounded-xl h-9">Aktifkan ({selectedMapelIds.filter(id => !mapelData.find(m => m.id_mapel === id)?.aktif).length})</Button><Button variant="destructive" onClick={() => handleBulkAction("nonaktifkan")} disabled={selectedMapelIds.length === 0 || isProcessingBulk} className="rounded-xl h-9">Nonaktifkan ({selectedMapelIds.filter(id => mapelData.find(m => m.id_mapel === id)?.aktif).length})</Button></>}</div>{selectMode && <Button variant="ghost" size="sm" onClick={handleSelectAll} className="text-sm">Pilih Semua</Button>}</div>
-                <div className="border rounded-xl overflow-hidden shadow-sm"><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-slate-50">{selectMode && <TableHead className="w-10"><Checkbox checked={selectedMapelIds.length === paginatedMapel.length && paginatedMapel.length > 0} onCheckedChange={handleSelectAll} /></TableHead>}<TableHead>Nama Mata Pelajaran</TableHead><TableHead className="text-center w-24">Status</TableHead><TableHead className="text-center w-28">Aksi</TableHead></TableRow></TableHeader><TableBody>{isFetchingMapel ? <TableRow><TableCell colSpan={selectMode ? 4 : 3} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow> : filteredMapel.length === 0 ? <TableRow><TableCell colSpan={selectMode ? 4 : 3} className="text-center py-8 text-slate-500"><BookOpen className="h-8 w-8 mx-auto mb-2" />{mapelSearchTerm ? "Tidak ada mata pelajaran yang cocok" : "Belum ada mata pelajaran"}</TableCell></TableRow> : paginatedMapel.map(m => (<TableRow key={m.id_mapel}>{selectMode && <TableCell><Checkbox checked={selectedMapelIds.includes(m.id_mapel)} onCheckedChange={() => handleSelectItem(m.id_mapel)} /></TableCell>}<TableCell className="font-medium">{m.nama}</TableCell><TableCell className="text-center"><Badge className={`${getStatusColor(m.aktif)} border-0 rounded-full px-3 py-1`}>{m.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell><TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditMapel(m)}><Edit className="h-4 w-4 text-blue-500" /></Button>{m.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleMapel(m, false)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleMapel(m, true)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell></TableRow>))}</TableBody></Table></div></div>
-                {filteredMapel.length > 0 && (<div className="flex items-center justify-between"><p className="text-sm text-slate-600">Menampilkan {((mapelCurrentPage - 1) * mapelItemsPerPage) + 1}-{Math.min(mapelCurrentPage * mapelItemsPerPage, filteredMapel.length)} dari {filteredMapel.length} mata pelajaran</p><div className="flex gap-2"><Button variant="outline" size="sm" onClick={() => setMapelCurrentPage(p => Math.max(1, p - 1))} disabled={mapelCurrentPage === 1} className="rounded-lg h-8">Sebelumnya</Button><div className="flex items-center gap-1">{Array.from({ length: Math.min(mapelTotalPages, 5) }, (_, i) => i + 1).map((page) => (<Button key={page} variant={mapelCurrentPage === page ? "default" : "outline"} size="sm" onClick={() => setMapelCurrentPage(page)} className="rounded-lg h-8 w-8 p-0">{page}</Button>))}</div><Button variant="outline" size="sm" onClick={() => setMapelCurrentPage(p => Math.min(mapelTotalPages, p + 1))} disabled={mapelCurrentPage === mapelTotalPages} className="rounded-lg h-8">Berikutnya</Button></div></div>)}
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-2">
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    <Button variant={selectMode ? "default" : "outline"} onClick={() => { setSelectMode(!selectMode); if (!selectMode) setSelectedMapelIds([]); }} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">{selectMode ? "Batalkan Mode Pilih" : "Mode Pilih"}</Button>
+                    {selectMode && <>
+                      <Button variant="default" onClick={() => handleBulkAction("aktifkan")} disabled={selectedMapelIds.length === 0 || isProcessingBulk} className="bg-green-600 hover:bg-green-700 rounded-xl h-8 sm:h-9 text-xs sm:text-sm">Aktifkan ({selectedMapelIds.filter(id => !mapelData.find(m => m.id_mapel === id)?.aktif).length})</Button>
+                      <Button variant="destructive" onClick={() => handleBulkAction("nonaktifkan")} disabled={selectedMapelIds.length === 0 || isProcessingBulk} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">Nonaktifkan ({selectedMapelIds.filter(id => mapelData.find(m => m.id_mapel === id)?.aktif).length})</Button>
+                    </>}
+                  </div>
+                  {selectMode && <Button variant="ghost" size="sm" onClick={handleSelectAll} className="text-xs sm:text-sm">Pilih Semua</Button>}
+                </div>
+                <div className="border rounded-xl overflow-hidden shadow-sm"><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-slate-50">{selectMode && <TableHead className="w-10"><Checkbox checked={selectedMapelIds.length === paginatedMapel.length && paginatedMapel.length > 0} onCheckedChange={handleSelectAll} /></TableHead>}<TableHead className="text-xs sm:text-sm">Nama Mata Pelajaran</TableHead><TableHead className="text-center w-24 text-xs sm:text-sm">Status</TableHead><TableHead className="text-center w-28 text-xs sm:text-sm">Aksi</TableHead></TableRow></TableHeader><TableBody>{isFetchingMapel ? <TableRow><TableCell colSpan={selectMode ? 4 : 3} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow> : filteredMapel.length === 0 ? <TableRow><TableCell colSpan={selectMode ? 4 : 3} className="text-center py-8 text-slate-500"><BookOpen className="h-8 w-8 mx-auto mb-2" />{mapelSearchTerm ? "Tidak ada mata pelajaran yang cocok" : "Belum ada mata pelajaran"}</TableCell></TableRow> : paginatedMapel.map(m => (<TableRow key={m.id_mapel}>{selectMode && <TableCell><Checkbox checked={selectedMapelIds.includes(m.id_mapel)} onCheckedChange={() => handleSelectItem(m.id_mapel)} /></TableCell>}<TableCell className="font-medium text-xs sm:text-sm">{m.nama}</TableCell><TableCell className="text-center"><Badge className={`${getStatusColor(m.aktif)} border-0 rounded-full px-2 sm:px-3 py-0.5 sm:py-1 text-xs`}>{m.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell><TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditMapel(m)}><Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" /></Button>{m.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleMapel(m, false)}><UserMinus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleMapel(m, true)}><UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500" /></Button>}</div></TableCell></TableRow>))}</TableBody></Table></div></div>
+                {filteredMapel.length > 0 && (<div className="flex flex-col sm:flex-row items-center justify-between gap-3"><p className="text-xs sm:text-sm text-slate-600">Menampilkan {((mapelCurrentPage - 1) * mapelItemsPerPage) + 1}-{Math.min(mapelCurrentPage * mapelItemsPerPage, filteredMapel.length)} dari {filteredMapel.length} mata pelajaran</p><div className="flex gap-2"><Button variant="outline" size="sm" onClick={() => setMapelCurrentPage(p => Math.max(1, p - 1))} disabled={mapelCurrentPage === 1} className="rounded-lg h-7 sm:h-8 text-xs">Sebelumnya</Button><div className="flex items-center gap-1">{Array.from({ length: Math.min(mapelTotalPages, 5) }, (_, i) => i + 1).map((page) => (<Button key={page} variant={mapelCurrentPage === page ? "default" : "outline"} size="sm" onClick={() => setMapelCurrentPage(page)} className="rounded-lg h-7 w-7 sm:h-8 sm:w-8 p-0 text-xs">{page}</Button>))}</div><Button variant="outline" size="sm" onClick={() => setMapelCurrentPage(p => Math.min(mapelTotalPages, p + 1))} disabled={mapelCurrentPage === mapelTotalPages} className="rounded-lg h-7 sm:h-8 text-xs">Berikutnya</Button></div></div>)}
               </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
 
         {/* TIPS & FOOTER */}
-        <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50 max-w-3xl mx-auto">
-          <CardContent className="p-5"><div className="flex gap-4"><div className="bg-indigo-100 p-3 rounded-xl"><Sparkles className="h-6 w-6 text-indigo-600" /></div><div><h3 className="font-semibold">Tips Mengelola Jadwal</h3><p className="text-sm text-slate-600">Pastikan tidak ada tumpang tindih jadwal untuk guru yang sama. Sistem akan otomatis memvalidasi overlap jadwal. Gunakan filter kelas dan hari untuk melihat jadwal spesifik. Anda dapat menonaktifkan jadwal atau mata pelajaran tanpa menghapus datanya.</p></div></div></CardContent>
+        <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50 max-w-3xl mx-auto">
+          <CardContent className="p-4 sm:p-5"><div className="flex gap-3 sm:gap-4"><div className="bg-indigo-100 p-2 sm:p-3 rounded-xl"><Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" /></div><div><h3 className="font-semibold text-sm sm:text-base">Tips Mengelola Jadwal</h3><p className="text-xs sm:text-sm text-slate-600">Pastikan tidak ada tumpang tindih jadwal untuk guru yang sama. Sistem akan otomatis memvalidasi overlap jadwal. Gunakan filter kelas dan hari untuk melihat jadwal spesifik. Anda dapat menonaktifkan jadwal atau mata pelajaran tanpa menghapus datanya.</p></div></div></CardContent>
         </Card>
         <div className="text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Manajemen Jadwal - SmartAS</p><p className="text-[10px] text-slate-300 mt-1">Sistem Informasi Akademik</p></div>
       </div>
 
       {/* DIALOG JADWAL */}
       <Dialog open={jadwalDialogOpen} onOpenChange={setJadwalDialogOpen}>
-        <DialogContent className="rounded-xl max-w-2xl">
+        <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-2xl p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>{editingJadwal ? "Edit Jadwal" : "Tambah Jadwal Baru"}</DialogTitle>
-            <DialogDescription>{editingJadwal ? "Perbarui informasi jadwal pelajaran" : "Tambahkan jadwal pelajaran baru untuk kelas yang dipilih"}</DialogDescription>
+            <DialogTitle className="text-base sm:text-lg">{editingJadwal ? "Edit Jadwal" : "Tambah Jadwal Baru"}</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">{editingJadwal ? "Perbarui informasi jadwal pelajaran" : "Tambahkan jadwal pelajaran baru untuk kelas yang dipilih"}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <Label className="text-slate-700 font-medium">Kelas</Label>
+                <Label className="text-slate-700 font-medium text-xs sm:text-sm">Kelas</Label>
                 <Select value={jadwalForm.id_kelas} onValueChange={(v) => setJadwalForm({ ...jadwalForm, id_kelas: v })}>
-                  <SelectTrigger className="rounded-lg mt-1">{jadwalForm.id_kelas ? kelasList.find(k => k.id_kelas.toString() === jadwalForm.id_kelas)?.nama : "Pilih Kelas"}</SelectTrigger>
+                  <SelectTrigger className="rounded-lg mt-1 h-8 sm:h-9 text-xs sm:text-sm">{jadwalForm.id_kelas ? kelasList.find(k => k.id_kelas.toString() === jadwalForm.id_kelas)?.nama : "Pilih Kelas"}</SelectTrigger>
                   <SelectContent>
                     {kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}
                   </SelectContent>
@@ -1204,9 +1220,9 @@ export default function ScheduleManagement() {
                 {formErrors.id_kelas && <p className="text-red-500 text-xs mt-1">{formErrors.id_kelas}</p>}
               </div>
               <div>
-                <Label className="text-slate-700 font-medium">Mata Pelajaran</Label>
+                <Label className="text-slate-700 font-medium text-xs sm:text-sm">Mata Pelajaran</Label>
                 <Select value={jadwalForm.id_mapel} onValueChange={(v) => setJadwalForm({ ...jadwalForm, id_mapel: v })}>
-                  <SelectTrigger className="rounded-lg mt-1">{jadwalForm.id_mapel ? mapelData.find(m => m.id_mapel.toString() === jadwalForm.id_mapel)?.nama : "Pilih Mapel"}</SelectTrigger>
+                  <SelectTrigger className="rounded-lg mt-1 h-8 sm:h-9 text-xs sm:text-sm">{jadwalForm.id_mapel ? mapelData.find(m => m.id_mapel.toString() === jadwalForm.id_mapel)?.nama : "Pilih Mapel"}</SelectTrigger>
                   <SelectContent>
                     {mapelData.filter(m => m.aktif).map(m => <SelectItem key={m.id_mapel} value={m.id_mapel.toString()}>{m.nama}</SelectItem>)}
                   </SelectContent>
@@ -1214,11 +1230,11 @@ export default function ScheduleManagement() {
                 {formErrors.id_mapel && <p className="text-red-500 text-xs mt-1">{formErrors.id_mapel}</p>}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <Label className="text-slate-700 font-medium">Guru</Label>
+                <Label className="text-slate-700 font-medium text-xs sm:text-sm">Guru</Label>
                 <Select value={jadwalForm.id_guru} onValueChange={(v) => setJadwalForm({ ...jadwalForm, id_guru: v })}>
-                  <SelectTrigger className="rounded-lg mt-1">{jadwalForm.id_guru ? guruList.find(g => g.id_guru.toString() === jadwalForm.id_guru)?.nama : "Pilih Guru"}</SelectTrigger>
+                  <SelectTrigger className="rounded-lg mt-1 h-8 sm:h-9 text-xs sm:text-sm">{jadwalForm.id_guru ? guruList.find(g => g.id_guru.toString() === jadwalForm.id_guru)?.nama : "Pilih Guru"}</SelectTrigger>
                   <SelectContent>
                     {guruList.map(g => <SelectItem key={g.id_guru} value={g.id_guru.toString()}>{g.nama}</SelectItem>)}
                   </SelectContent>
@@ -1226,9 +1242,9 @@ export default function ScheduleManagement() {
                 {formErrors.id_guru && <p className="text-red-500 text-xs mt-1">{formErrors.id_guru}</p>}
               </div>
               <div>
-                <Label className="text-slate-700 font-medium">Hari</Label>
+                <Label className="text-slate-700 font-medium text-xs sm:text-sm">Hari</Label>
                 <Select value={jadwalForm.hari} onValueChange={(v) => setJadwalForm({ ...jadwalForm, hari: v })}>
-                  <SelectTrigger className="rounded-lg mt-1"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="rounded-lg mt-1 h-8 sm:h-9 text-xs sm:text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {HARI.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
                   </SelectContent>
@@ -1236,15 +1252,15 @@ export default function ScheduleManagement() {
               </div>
             </div>
             <div>
-              <Label className="text-slate-700 font-medium">Jam (Format: HH:MM - HH:MM)</Label>
-              <Input placeholder="07:00 - 08:30" value={jadwalForm.jam} onChange={(e) => setJadwalForm({ ...jadwalForm, jam: e.target.value })} className="rounded-lg mt-1" />
+              <Label className="text-slate-700 font-medium text-xs sm:text-sm">Jam (Format: HH:MM - HH:MM)</Label>
+              <Input placeholder="07:00 - 08:30" value={jadwalForm.jam} onChange={(e) => setJadwalForm({ ...jadwalForm, jam: e.target.value })} className="rounded-lg mt-1 h-8 sm:h-9 text-xs sm:text-sm" />
               {formErrors.jam && <p className="text-red-500 text-xs mt-1">{formErrors.jam}</p>}
               <p className="text-xs text-slate-500 mt-1">Contoh: 07:00 - 08:30, 08:30 - 10:00</p>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setJadwalDialogOpen(false)} className="rounded-lg">Batal</Button>
-            <Button onClick={handleSaveJadwal} disabled={isSavingJadwal} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600">
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
+            <Button variant="outline" onClick={() => setJadwalDialogOpen(false)} className="rounded-lg w-full sm:w-auto text-xs sm:text-sm">Batal</Button>
+            <Button onClick={handleSaveJadwal} disabled={isSavingJadwal} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 w-full sm:w-auto text-xs sm:text-sm">
               {isSavingJadwal ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Menyimpan...</> : "Simpan Jadwal"}
             </Button>
           </DialogFooter>
@@ -1253,10 +1269,10 @@ export default function ScheduleManagement() {
 
       {/* DIALOG TOGGLE JADWAL */}
       <Dialog open={toggleJadwalDialogOpen} onOpenChange={setToggleJadwalDialogOpen}>
-        <DialogContent className="rounded-xl max-w-md">
+        <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>{isActivatingJadwalMode ? "Aktifkan Jadwal" : "Nonaktifkan Jadwal"}</DialogTitle>
-            <DialogDescription>{isActivatingJadwalMode ? "Jadwal akan diaktifkan kembali" : "Jadwal akan dinonaktifkan tetapi data tetap tersimpan"}</DialogDescription>
+            <DialogTitle className="text-base sm:text-lg">{isActivatingJadwalMode ? "Aktifkan Jadwal" : "Nonaktifkan Jadwal"}</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">{isActivatingJadwalMode ? "Jadwal akan diaktifkan kembali" : "Jadwal akan dinonaktifkan tetapi data tetap tersimpan"}</DialogDescription>
           </DialogHeader>
           {togglingJadwal && (
             <div className="space-y-3 py-4">
@@ -1268,9 +1284,9 @@ export default function ScheduleManagement() {
               </div>
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setToggleJadwalDialogOpen(false)} className="rounded-lg">Batal</Button>
-            <Button onClick={executeToggleJadwal} disabled={isSavingJadwal} className={`rounded-lg ${isActivatingJadwalMode ? "bg-green-600" : "bg-red-600"}`}>
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
+            <Button variant="outline" onClick={() => setToggleJadwalDialogOpen(false)} className="rounded-lg w-full sm:w-auto text-xs sm:text-sm">Batal</Button>
+            <Button onClick={executeToggleJadwal} disabled={isSavingJadwal} className={`rounded-lg w-full sm:w-auto text-xs sm:text-sm ${isActivatingJadwalMode ? "bg-green-600" : "bg-red-600"}`}>
               {isSavingJadwal ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Memproses...</> : (isActivatingJadwalMode ? "Aktifkan" : "Nonaktifkan")}
             </Button>
           </DialogFooter>
@@ -1279,20 +1295,20 @@ export default function ScheduleManagement() {
 
       {/* DIALOG MAPEL */}
       <Dialog open={mapelDialogOpen} onOpenChange={setMapelDialogOpen}>
-        <DialogContent className="rounded-xl max-w-md">
+        <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>{editingMapel ? "Edit Mata Pelajaran" : "Tambah Mata Pelajaran"}</DialogTitle>
-            <DialogDescription>{editingMapel ? "Perbarui nama mata pelajaran" : "Tambahkan mata pelajaran baru ke dalam sistem"}</DialogDescription>
+            <DialogTitle className="text-base sm:text-lg">{editingMapel ? "Edit Mata Pelajaran" : "Tambah Mata Pelajaran"}</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">{editingMapel ? "Perbarui nama mata pelajaran" : "Tambahkan mata pelajaran baru ke dalam sistem"}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label className="text-slate-700 font-medium">Nama Mata Pelajaran</Label>
-              <Input placeholder="Contoh: Matematika, Fisika, dll" value={mapelForm.nama} onChange={(e) => setMapelForm({ nama: e.target.value })} className="rounded-lg mt-1" />
+              <Label className="text-slate-700 font-medium text-xs sm:text-sm">Nama Mata Pelajaran</Label>
+              <Input placeholder="Contoh: Matematika, Fisika, dll" value={mapelForm.nama} onChange={(e) => setMapelForm({ nama: e.target.value })} className="rounded-lg mt-1 h-8 sm:h-9 text-xs sm:text-sm" />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setMapelDialogOpen(false)} className="rounded-lg">Batal</Button>
-            <Button onClick={handleSaveMapel} disabled={isSavingMapel} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600">
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
+            <Button variant="outline" onClick={() => setMapelDialogOpen(false)} className="rounded-lg w-full sm:w-auto text-xs sm:text-sm">Batal</Button>
+            <Button onClick={handleSaveMapel} disabled={isSavingMapel} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 w-full sm:w-auto text-xs sm:text-sm">
               {isSavingMapel ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Menyimpan...</> : "Simpan Mapel"}
             </Button>
           </DialogFooter>
@@ -1301,10 +1317,10 @@ export default function ScheduleManagement() {
 
       {/* DIALOG TOGGLE MAPEL */}
       <Dialog open={toggleMapelDialogOpen} onOpenChange={setToggleMapelDialogOpen}>
-        <DialogContent className="rounded-xl max-w-md">
+        <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>{isActivatingMapelMode ? "Aktifkan Mata Pelajaran" : "Nonaktifkan Mata Pelajaran"}</DialogTitle>
-            <DialogDescription>{isActivatingMapelMode ? "Mata pelajaran akan diaktifkan kembali" : "Mata pelajaran akan dinonaktifkan tetapi data tetap tersimpan"}</DialogDescription>
+            <DialogTitle className="text-base sm:text-lg">{isActivatingMapelMode ? "Aktifkan Mata Pelajaran" : "Nonaktifkan Mata Pelajaran"}</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">{isActivatingMapelMode ? "Mata pelajaran akan diaktifkan kembali" : "Mata pelajaran akan dinonaktifkan tetapi data tetap tersimpan"}</DialogDescription>
           </DialogHeader>
           {togglingMapel && (
             <div className="py-4">
@@ -1314,9 +1330,9 @@ export default function ScheduleManagement() {
               </div>
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setToggleMapelDialogOpen(false)} className="rounded-lg">Batal</Button>
-            <Button onClick={executeToggleMapel} disabled={isSavingMapel} className={`rounded-lg ${isActivatingMapelMode ? "bg-green-600" : "bg-red-600"}`}>
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
+            <Button variant="outline" onClick={() => setToggleMapelDialogOpen(false)} className="rounded-lg w-full sm:w-auto text-xs sm:text-sm">Batal</Button>
+            <Button onClick={executeToggleMapel} disabled={isSavingMapel} className={`rounded-lg w-full sm:w-auto text-xs sm:text-sm ${isActivatingMapelMode ? "bg-green-600" : "bg-red-600"}`}>
               {isSavingMapel ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Memproses...</> : (isActivatingMapelMode ? "Aktifkan" : "Nonaktifkan")}
             </Button>
           </DialogFooter>
@@ -1325,10 +1341,10 @@ export default function ScheduleManagement() {
 
       {/* DIALOG IMPORT EXCEL MAPEL */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-        <DialogContent className="rounded-xl max-w-2xl">
+        <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-2xl p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>Impor Mata Pelajaran dari Excel</DialogTitle>
-            <DialogDescription>Upload file Excel untuk menambah mata pelajaran secara massal</DialogDescription>
+            <DialogTitle className="text-base sm:text-lg">Impor Mata Pelajaran dari Excel</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">Upload file Excel untuk menambah mata pelajaran secara massal</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50">
@@ -1341,13 +1357,13 @@ export default function ScheduleManagement() {
                 <p className="text-xs text-slate-500">atau drag & drop file Excel di sini</p>
               </div>
             </div>
-            {uploadError && <Alert className="bg-red-50 border-red-200"><AlertCircle className="h-4 w-4 text-red-600" /><AlertDescription className="text-red-700">{uploadError}</AlertDescription></Alert>}
+            {uploadError && <Alert className="bg-red-50 border-red-200"><AlertCircle className="h-4 w-4 text-red-600" /><AlertDescription className="text-red-700 text-xs">{uploadError}</AlertDescription></Alert>}
             {previewData.length > 0 && (
               <div>
                 <p className="text-sm font-medium mb-2">Preview Data ({previewData.length} item):</p>
                 <div className="border rounded-lg overflow-y-auto max-h-48">
                   <Table>
-                    <TableHeader><TableRow className="bg-slate-50"><TableHead>Nama Mapel</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow className="bg-slate-50"><TableHead className="text-xs">Nama Mapel</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {previewData.slice(0, 5).map((item, idx) => <TableRow key={idx}><TableCell className="text-sm">{item.nama}</TableCell></TableRow>)}
                       {previewData.length > 5 && <TableRow><TableCell className="text-sm text-slate-500 text-center py-2">... dan {previewData.length - 5} data lainnya</TableCell></TableRow>}
@@ -1356,11 +1372,11 @@ export default function ScheduleManagement() {
                 </div>
               </div>
             )}
-            <Button variant="outline" onClick={downloadTemplateMapel} className="w-full rounded-lg"><Download className="h-4 w-4 mr-2" /> Download Template Excel</Button>
+            <Button variant="outline" onClick={downloadTemplateMapel} className="w-full rounded-lg text-xs sm:text-sm"><Download className="h-4 w-4 mr-2" /> Download Template Excel</Button>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setImportDialogOpen(false); setPreviewData([]); setUploadError(null); }} className="rounded-lg">Batal</Button>
-            <Button onClick={handleImportMapel} disabled={isImporting || previewData.length === 0} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600">
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
+            <Button variant="outline" onClick={() => { setImportDialogOpen(false); setPreviewData([]); setUploadError(null); }} className="rounded-lg w-full sm:w-auto text-xs sm:text-sm">Batal</Button>
+            <Button onClick={handleImportMapel} disabled={isImporting || previewData.length === 0} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 w-full sm:w-auto text-xs sm:text-sm">
               {isImporting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Mengimpor...</> : "Impor Data"}
             </Button>
           </DialogFooter>
@@ -1369,10 +1385,10 @@ export default function ScheduleManagement() {
 
       {/* DIALOG IMPORT EXCEL JADWAL */}
       <Dialog open={importJadwalDialogOpen} onOpenChange={setImportJadwalDialogOpen}>
-        <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>Impor Jadwal Pelajaran dari Excel</DialogTitle>
-            <DialogDescription>Upload file Excel untuk menambah jadwal secara massal (gunakan NIK Guru)</DialogDescription>
+            <DialogTitle className="text-base sm:text-lg">Impor Jadwal Pelajaran dari Excel</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">Upload file Excel untuk menambah jadwal secara massal (gunakan NIK Guru)</DialogDescription>
           </DialogHeader>
           
           {importJadwalStep === "upload" && (
@@ -1390,13 +1406,13 @@ export default function ScheduleManagement() {
               {importJadwalUploadError && (
                 <Alert className="bg-red-50 border-red-200">
                   <AlertCircle className="h-4 w-4 text-red-600" />
-                  <AlertDescription className="text-red-700">{importJadwalUploadError}</AlertDescription>
+                  <AlertDescription className="text-red-700 text-xs">{importJadwalUploadError}</AlertDescription>
                 </Alert>
               )}
-              <Button variant="outline" onClick={downloadJadwalTemplate} className="w-full rounded-lg">
+              <Button variant="outline" onClick={downloadJadwalTemplate} className="w-full rounded-lg text-xs sm:text-sm">
                 <Download className="h-4 w-4 mr-2" /> Download Template Excel Jadwal (NIK Guru)
               </Button>
-              <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
+              <div className="bg-blue-50 p-3 rounded-lg text-xs sm:text-sm text-blue-700">
                 <p className="font-semibold">Format File:</p>
                 <p>Kolom yang diperlukan: <strong>kelas, mapel, nik_guru, hari, jam</strong></p>
                 <p className="text-xs mt-1">Contoh: X IPA 1, Matematika, 1234567890, Senin, 07:00 - 08:30</p>
@@ -1406,9 +1422,9 @@ export default function ScheduleManagement() {
           
           {importJadwalStep === "preview" && importJadwalPreviewRows.length > 0 && (
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center flex-wrap gap-2">
                 <p className="text-sm font-medium">Preview Data ({importJadwalPreviewRows.length} baris)</p>
-                <Badge className={importJadwalPreviewRows.filter(r => r.isValid).length === importJadwalPreviewRows.length ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
+                <Badge className={importJadwalPreviewRows.filter(r => r.isValid).length === importJadwalPreviewRows.length ? "bg-green-100 text-green-700 text-xs" : "bg-yellow-100 text-yellow-700 text-xs"}>
                   {importJadwalPreviewRows.filter(r => r.isValid).length} dari {importJadwalPreviewRows.length} valid
                 </Badge>
               </div>
@@ -1417,36 +1433,36 @@ export default function ScheduleManagement() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50">
-                      <TableHead className="w-12">#</TableHead>
-                      <TableHead>Kelas</TableHead>
-                      <TableHead>Mapel</TableHead>
-                      <TableHead>NIK Guru</TableHead>
-                      <TableHead>Hari</TableHead>
-                      <TableHead>Jam</TableHead>
-                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead className="w-12 text-xs">#</TableHead>
+                      <TableHead className="text-xs">Kelas</TableHead>
+                      <TableHead className="text-xs">Mapel</TableHead>
+                      <TableHead className="text-xs">NIK Guru</TableHead>
+                      <TableHead className="text-xs">Hari</TableHead>
+                      <TableHead className="text-xs">Jam</TableHead>
+                      <TableHead className="text-center text-xs">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {importJadwalPreviewRows.map((row, idx) => (
                       <TableRow key={idx} className={!row.isValid ? "bg-red-50" : ""}>
                         <TableCell className="text-xs text-slate-500">{row.rowIndex}</TableCell>
-                        <TableCell>
+                        <TableCell className="text-xs">
                           {row.kelas}
                           {!row.kelasValid && <span className="text-red-500 text-xs ml-1">(tidak ditemukan)</span>}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-xs">
                           {row.mapel}
                           {!row.mapelValid && <span className="text-red-500 text-xs ml-1">(tidak ditemukan)</span>}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-xs">
                           {row.nik_guru}
                           {!row.guruValid && <span className="text-red-500 text-xs ml-1">(tidak ditemukan)</span>}
                         </TableCell>
-                        <TableCell>{row.hari}</TableCell>
+                        <TableCell className="text-xs">{row.hari}</TableCell>
                         <TableCell className="font-mono text-xs">{row.jam}</TableCell>
                         <TableCell className="text-center">
                           {row.isValid ? (
-                            <Badge className="bg-green-100 text-green-700">Valid</Badge>
+                            <Badge className="bg-green-100 text-green-700 text-xs">Valid</Badge>
                           ) : (
                             <div className="text-xs text-red-600">
                               {row.validationErrors?.map((err: string, i: number) => (
@@ -1470,13 +1486,13 @@ export default function ScheduleManagement() {
                   setImportJadwalRawData([]);
                   setImportJadwalPreviewRows([]);
                   setImportJadwalStep("upload");
-                }} className="rounded-lg">
+                }} className="rounded-lg text-xs sm:text-sm">
                   Batal
                 </Button>
                 <Button 
                   onClick={confirmImportJadwal} 
                   disabled={isImportingJadwal || importJadwalPreviewRows.filter(r => r.isValid).length === 0}
-                  className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600"
+                  className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-xs sm:text-sm"
                 >
                   {isImportingJadwal ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Mengimpor...</> : "Impor Data"}
                 </Button>
@@ -1488,10 +1504,10 @@ export default function ScheduleManagement() {
 
       {/* DIALOG MISSING MAPEL UNTUK JADWAL */}
       <Dialog open={missingMapelDialogOpen} onOpenChange={setMissingMapelDialogOpen}>
-        <DialogContent className="rounded-xl max-w-md">
+        <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>Mata Pelajaran Belum Tersedia</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-base sm:text-lg">Mata Pelajaran Belum Tersedia</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
               Beberapa mata pelajaran dalam file Excel belum ada di database.
             </DialogDescription>
           </DialogHeader>
@@ -1505,12 +1521,12 @@ export default function ScheduleManagement() {
                 ))}
               </ul>
             </div>
-            <p className="text-sm text-slate-600">
+            <p className="text-xs sm:text-sm text-slate-600">
               Apakah Anda ingin menambahkan mata pelajaran di atas ke database dan melanjutkan import jadwal?
             </p>
           </div>
           
-          <DialogFooter className="gap-2">
+          <DialogFooter className="gap-2 flex-col sm:flex-row">
             <Button 
               variant="outline" 
               onClick={() => {
@@ -1518,14 +1534,14 @@ export default function ScheduleManagement() {
                 setImportJadwalDialogOpen(false);
                 setImportJadwalRawData([]);
               }}
-              className="rounded-lg"
+              className="rounded-lg w-full sm:w-auto text-xs sm:text-sm"
             >
               Batalkan Import
             </Button>
             <Button 
               onClick={handleAddMissingMapelsAndContinue} 
               disabled={isAddingMissingMapels}
-              className="rounded-lg bg-green-600 hover:bg-green-700"
+              className="rounded-lg bg-green-600 hover:bg-green-700 w-full sm:w-auto text-xs sm:text-sm"
             >
               {isAddingMissingMapels ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Menambahkan...</> : "Tambahkan Mapel & Lanjutkan"}
             </Button>
@@ -1535,15 +1551,15 @@ export default function ScheduleManagement() {
 
       {/* DIALOG BULK ACTION */}
       <Dialog open={bulkActionDialogOpen} onOpenChange={setBulkActionDialogOpen}>
-        <DialogContent className="rounded-xl max-w-md">
+        <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>{bulkActionType === "aktifkan" ? "Aktifkan Mata Pelajaran" : "Nonaktifkan Mata Pelajaran"}</DialogTitle>
-            <DialogDescription>{bulkActionType === "aktifkan" ? `Aktifkan ${selectedMapelIds.length} mata pelajaran?` : `Nonaktifkan ${selectedMapelIds.length} mata pelajaran?`}</DialogDescription>
+            <DialogTitle className="text-base sm:text-lg">{bulkActionType === "aktifkan" ? "Aktifkan Mata Pelajaran" : "Nonaktifkan Mata Pelajaran"}</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">{bulkActionType === "aktifkan" ? `Aktifkan ${selectedMapelIds.length} mata pelajaran?` : `Nonaktifkan ${selectedMapelIds.length} mata pelajaran?`}</DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-slate-600 py-2">Tindakan ini tidak dapat dibatalkan setelah dikonfirmasi.</p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkActionDialogOpen(false)} className="rounded-lg">Batal</Button>
-            <Button onClick={executeBulkAction} disabled={isProcessingBulk} className={`rounded-lg ${bulkActionType === "aktifkan" ? "bg-green-600" : "bg-red-600"}`}>
+          <p className="text-xs sm:text-sm text-slate-600 py-2">Tindakan ini tidak dapat dibatalkan setelah dikonfirmasi.</p>
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
+            <Button variant="outline" onClick={() => setBulkActionDialogOpen(false)} className="rounded-lg w-full sm:w-auto text-xs sm:text-sm">Batal</Button>
+            <Button onClick={executeBulkAction} disabled={isProcessingBulk} className={`rounded-lg w-full sm:w-auto text-xs sm:text-sm ${bulkActionType === "aktifkan" ? "bg-green-600" : "bg-red-600"}`}>
               {isProcessingBulk ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Memproses...</> : (bulkActionType === "aktifkan" ? "Aktifkan" : "Nonaktifkan")}
             </Button>
           </DialogFooter>

@@ -1454,25 +1454,25 @@ export default function UserManagement() {
   // ==================== RENDER ====================
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* HEADER SECTION */}
+      {/* HEADER SECTION - Responsive */}
       <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
-        <div className="container mx-auto px-6 py-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-sm"><Users className="h-8 w-8" /></div>
+        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="bg-white/20 p-2 sm:p-3 rounded-2xl backdrop-blur-sm"><Users className="h-6 w-6 sm:h-8 sm:w-8" /></div>
               <div>
                 <div className="flex items-center gap-2">
-                  {greeting === "Selamat Pagi" ? <Sun className="h-4 w-4" /> : greeting === "Selamat Malam" ? <Moon className="h-4 w-4" /> : <Cloud className="h-4 w-4" />}
-                  <p className="text-sm text-blue-100">{greeting}</p>
+                  {greeting === "Selamat Pagi" ? <Sun className="h-3 w-3 sm:h-4 sm:w-4" /> : greeting === "Selamat Malam" ? <Moon className="h-3 w-3 sm:h-4 sm:w-4" /> : <Cloud className="h-3 w-3 sm:h-4 sm:w-4" />}
+                  <p className="text-xs sm:text-sm text-blue-100">{greeting}</p>
                 </div>
-                <h1 className="text-2xl lg:text-3xl font-bold">Manajemen Data Pengguna & Kelas</h1>
-                <p className="text-blue-100 text-sm">Impor, ubah, aktifkan/nonaktifkan data guru/siswa, serta kelola kelas</p>
+                <h1 className="text-base sm:text-2xl lg:text-3xl font-bold leading-tight">Manajemen Data Pengguna &amp; Kelas</h1>
+                <p className="text-blue-100 text-xs sm:text-sm">Impor, ubah, aktifkan/nonaktifkan data guru/siswa, serta kelola kelas</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="bg-white/10 rounded-xl px-4 py-2 backdrop-blur-sm text-center">
-                <p className="text-xs text-blue-100">{formatDate(currentTime)}</p>
-                <p className="text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
+              <div className="bg-white/10 rounded-xl px-3 py-1 sm:px-4 sm:py-2 backdrop-blur-sm text-center">
+                <p className="text-[10px] sm:text-xs text-blue-100">{formatDate(currentTime)}</p>
+                <p className="text-base sm:text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
               </div>
             </div>
           </div>
@@ -1480,205 +1480,222 @@ export default function UserManagement() {
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="container mx-auto px-4 py-8 space-y-8">
-        {/* STATS CARDS */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-            <CardContent className="p-4"><div className="flex items-center justify-between"><div><p className="text-xs text-blue-600 font-medium">Total Guru</p><p className="text-2xl font-bold text-blue-900">{totalAllGuru}</p></div><User className="h-8 w-8 text-blue-500" /></div></CardContent>
+      <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8">
+        {/* STATS CARDS - responsive grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+            <CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-blue-600 font-medium">Total Guru</p><p className="text-lg sm:text-2xl font-bold text-blue-900">{totalAllGuru}</p></div><User className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" /></div></CardContent>
           </Card>
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
-            <CardContent className="p-4"><div className="flex items-center justify-between"><div><p className="text-xs text-emerald-600 font-medium">Total Siswa</p><p className="text-2xl font-bold text-emerald-900">{totalAllSiswa}</p></div><GraduationCap className="h-8 w-8 text-emerald-500" /></div></CardContent>
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
+            <CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Total Siswa</p><p className="text-lg sm:text-2xl font-bold text-emerald-900">{totalAllSiswa}</p></div><GraduationCap className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" /></div></CardContent>
           </Card>
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-            <CardContent className="p-4"><div className="flex items-center justify-between"><div><p className="text-xs text-purple-600 font-medium">Total Kelas</p><p className="text-2xl font-bold text-purple-900">{kelasList.length}</p></div><School className="h-8 w-8 text-purple-500" /></div></CardContent>
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+            <CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-purple-600 font-medium">Total Kelas</p><p className="text-lg sm:text-2xl font-bold text-purple-900">{kelasList.length}</p></div><School className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" /></div></CardContent>
           </Card>
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
-            <CardContent className="p-4"><div className="flex items-center justify-between"><div><p className="text-xs text-amber-600 font-medium">Total Akun</p><p className="text-2xl font-bold text-amber-900">{totalAllAkun}</p></div><UserCheck className="h-8 w-8 text-amber-500" /></div></CardContent>
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
+            <CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-amber-600 font-medium">Total Akun</p><p className="text-lg sm:text-2xl font-bold text-amber-900">{totalAllAkun}</p></div><UserCheck className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" /></div></CardContent>
           </Card>
         </div>
 
         {/* MAIN TABS CARD */}
-        <Card className="rounded-2xl border-0 shadow-xl overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-6">
-            <div className="flex items-center gap-3">
-              <div className="bg-white/10 p-2 rounded-xl"><Shield className="h-6 w-6" /></div>
-              <div><CardTitle className="text-xl">Manajemen Pengguna & Kelas</CardTitle><CardDescription className="text-slate-300 text-sm">Kelola data guru, siswa, dan kelas dengan soft delete</CardDescription></div>
+        <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-6">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="bg-white/10 p-1.5 sm:p-2 rounded-xl"><Shield className="h-5 w-5 sm:h-6 sm:w-6" /></div>
+              <div><CardTitle className="text-base sm:text-xl">Manajemen Pengguna &amp; Kelas</CardTitle><CardDescription className="text-slate-300 text-xs sm:text-sm">Kelola data guru, siswa, dan kelas dengan soft delete</CardDescription></div>
             </div>
           </CardHeader>
-          <CardContent className="p-6">
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-6">
+          <CardContent className="p-4 sm:p-6">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-4 sm:space-y-6">
               <div className="flex justify-center">
                 <TabsList className="bg-slate-100 p-1 rounded-xl w-auto inline-flex">
-                  <TabsTrigger value="list" className="rounded-lg data-[state=active]:bg-white"><Users className="h-3.5 w-3.5 mr-1" /> Daftar Pengguna</TabsTrigger>
-                  <TabsTrigger value="kelas" className="rounded-lg data-[state=active]:bg-white"><School className="h-3.5 w-3.5 mr-1" /> Kelola Kelas</TabsTrigger>
+                  <TabsTrigger value="list" className="rounded-lg data-[state=active]:bg-white text-xs sm:text-sm px-3 sm:px-4"><Users className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Daftar Pengguna</TabsTrigger>
+                  <TabsTrigger value="kelas" className="rounded-lg data-[state=active]:bg-white text-xs sm:text-sm px-3 sm:px-4"><School className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Kelola Kelas</TabsTrigger>
                 </TabsList>
               </div>
 
-              {/* TAB DAFTAR PENGGUNA */}
-              <TabsContent value="list" className="space-y-6">
+              {/* TAB DAFTAR PENGGUNA - fully responsive */}
+              <TabsContent value="list" className="space-y-4 sm:space-y-6">
                 <div className="flex flex-col gap-4">
-                  <div className="flex justify-between items-center flex-wrap gap-3">
-                    <div className="flex items-center gap-2">
-                      <Select value={userType} onValueChange={(v) => { setUserType(v as any); resetFilters(); }}>
-                        <SelectTrigger className="w-[180px] rounded-xl"><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="guru">Guru</SelectItem><SelectItem value="siswa">Siswa</SelectItem></SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="default" onClick={openAddDialog} className="rounded-xl h-9 text-sm bg-gradient-to-r from-blue-600 to-indigo-600">
-                        <Plus className="mr-1.5 h-3.5 w-3.5" /> Tambah
-                      </Button>
-                      <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="rounded-xl h-9 text-sm">
-                        <Upload className="mr-1.5 h-3.5 w-3.5" /> Impor Excel
-                      </Button>
-                      <Button variant="outline" onClick={() => { resetPagination(); userType === "guru" ? fetchGuru() : fetchSiswa(); }} disabled={isFetching} className="rounded-xl h-9 text-sm">
-                        <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} /> Segarkan
-                      </Button>
-                    </div>
+                  {/* Baris 1: pilih tipe user */}
+                  <div className="flex justify-start">
+                    <Select value={userType} onValueChange={(v) => { setUserType(v as any); resetFilters(); }}>
+                      <SelectTrigger className="w-[140px] sm:w-[180px] rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="guru">Guru</SelectItem><SelectItem value="siswa">Siswa</SelectItem></SelectContent>
+                    </Select>
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-3 items-end justify-between">
-                    <div className="flex-1 flex flex-col sm:flex-row gap-3">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-                        <Input type="text" placeholder={`Cari ${userType === "guru" ? "guru" : "siswa"}...`} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 pr-10 rounded-xl h-9 text-sm" />
-                        {searchQuery && <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2"><X className="h-4 w-4" /></button>}
-                      </div>
-                      {userType === "siswa" && (
-                        <div className="relative">
-                          <Button variant="outline" onClick={() => setShowFilter(!showFilter)} className={`rounded-xl h-9 text-sm gap-2 ${filterKelas !== "all" ? "bg-blue-50 border-blue-300 text-blue-700" : ""}`}>
-                            <Filter className="h-3.5 w-3.5" /> Filter Kelas
-                            {filterKelas !== "all" && <Badge className="bg-blue-500 text-white text-xs ml-1">{filterKelas === "unassigned" ? "Tanpa Kelas" : kelasList.find(k => k.id_kelas.toString() === filterKelas)?.nama || "?"}</Badge>}
-                          </Button>
-                          {showFilter && (
-                            <div className="absolute top-full mt-2 right-0 z-20 bg-white rounded-xl shadow-xl border p-3 min-w-[260px]">
-                              <div className="text-xs font-medium text-slate-500 mb-2">Filter berdasarkan kelas</div>
-                              <div className="relative mb-2"><Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" /><Input placeholder="Cari kelas..." value={filterSearchQuery} onChange={(e) => setFilterSearchQuery(e.target.value)} className="pl-7 h-8 text-sm rounded-lg" onClick={(e) => e.stopPropagation()} /></div>
-                              <div className="max-h-60 overflow-y-auto space-y-1">
-                                <button onClick={() => { setFilterKelas("all"); setShowFilter(false); setFilterSearchQuery(""); resetPagination(); }} className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-50 flex justify-between items-center ${filterKelas === "all" ? "bg-blue-50 text-blue-700" : ""}`}><span>Semua Kelas</span><Badge className="bg-slate-100 text-slate-600">{totalData}</Badge></button>
-                                <button onClick={() => { setFilterKelas("unassigned"); setShowFilter(false); setFilterSearchQuery(""); resetPagination(); }} className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-50 flex justify-between items-center ${filterKelas === "unassigned" ? "bg-blue-50 text-blue-700" : ""}`}><span className="text-amber-600">⚠️ Tanpa Kelas</span><Badge className="bg-amber-100 text-amber-600">-</Badge></button>
-                                <div className="border-t my-1"></div>
-                                {filteredKelasOptions.map(kelas => <button key={kelas.id_kelas} onClick={() => { setFilterKelas(kelas.id_kelas.toString()); setShowFilter(false); setFilterSearchQuery(""); resetPagination(); }} className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-slate-50 flex justify-between items-center ${filterKelas === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700" : ""}`}><span>{kelas.nama}</span><Badge className="bg-slate-100 text-slate-600">-</Badge></button>)}
-                                {filteredKelasOptions.length === 0 && filterSearchQuery && <div className="text-center text-xs text-slate-400 py-2">Tidak ada kelas yang cocok</div>}
-                              </div>
+
+                  {/* Baris 2: Tombol utama - grid 3 kolom di HP, flex di desktop */}
+                  <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-2">
+                    <Button variant="default" onClick={openAddDialog} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600 w-full">
+                      <Plus className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" /> Tambah
+                    </Button>
+                    <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full">
+                      <Upload className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" /> Impor
+                    </Button>
+                    <Button variant="outline" onClick={() => { resetPagination(); userType === "guru" ? fetchGuru() : fetchSiswa(); }} disabled={isFetching} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full">
+                      <RefreshCw className={`mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5 ${isFetching ? "animate-spin" : ""}`} /> Segarkan
+                    </Button>
+                  </div>
+
+                  {/* Baris 3: Search & Filter */}
+                  <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400" />
+                      <Input type="text" placeholder={`Cari ${userType === "guru" ? "guru" : "siswa"}...`} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 pr-8 rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full" />
+                      {searchQuery && <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2"><X className="h-3.5 w-3.5" /></button>}
+                    </div>
+                    {userType === "siswa" && (
+                      <div className="relative">
+                        <Button variant="outline" onClick={() => setShowFilter(!showFilter)} className={`rounded-xl h-8 sm:h-9 text-xs sm:text-sm gap-2 w-full sm:w-auto ${filterKelas !== "all" ? "bg-blue-50 border-blue-300 text-blue-700" : ""}`}>
+                          <Filter className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Filter Kelas
+                          {filterKelas !== "all" && <Badge className="bg-blue-500 text-white text-[10px] sm:text-xs ml-1 hidden sm:inline-block">{filterKelas === "unassigned" ? "Tanpa Kelas" : kelasList.find(k => k.id_kelas.toString() === filterKelas)?.nama || "?"}</Badge>}
+                        </Button>
+                        {showFilter && (
+                          <div className="absolute top-full mt-2 right-0 z-20 bg-white rounded-xl shadow-xl border p-3 min-w-[240px] sm:min-w-[260px]">
+                            <div className="text-xs font-medium text-slate-500 mb-2">Filter berdasarkan kelas</div>
+                            <div className="relative mb-2"><Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" /><Input placeholder="Cari kelas..." value={filterSearchQuery} onChange={(e) => setFilterSearchQuery(e.target.value)} className="pl-7 h-8 text-xs rounded-lg" onClick={(e) => e.stopPropagation()} /></div>
+                            <div className="max-h-60 overflow-y-auto space-y-1">
+                              <button onClick={() => { setFilterKelas("all"); setShowFilter(false); setFilterSearchQuery(""); resetPagination(); }} className={`w-full text-left px-3 py-2 text-xs sm:text-sm rounded-lg hover:bg-slate-50 flex justify-between items-center ${filterKelas === "all" ? "bg-blue-50 text-blue-700" : ""}`}><span>Semua Kelas</span><Badge className="bg-slate-100 text-slate-600 text-[10px]">{totalData}</Badge></button>
+                              <button onClick={() => { setFilterKelas("unassigned"); setShowFilter(false); setFilterSearchQuery(""); resetPagination(); }} className={`w-full text-left px-3 py-2 text-xs sm:text-sm rounded-lg hover:bg-slate-50 flex justify-between items-center ${filterKelas === "unassigned" ? "bg-blue-50 text-blue-700" : ""}`}><span className="text-amber-600">⚠️ Tanpa Kelas</span><Badge className="bg-amber-100 text-amber-600 text-[10px]">-</Badge></button>
+                              <div className="border-t my-1"></div>
+                              {filteredKelasOptions.map(kelas => <button key={kelas.id_kelas} onClick={() => { setFilterKelas(kelas.id_kelas.toString()); setShowFilter(false); setFilterSearchQuery(""); resetPagination(); }} className={`w-full text-left px-3 py-2 text-xs sm:text-sm rounded-lg hover:bg-slate-50 flex justify-between items-center ${filterKelas === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700" : ""}`}><span>{kelas.nama}</span><Badge className="bg-slate-100 text-slate-600 text-[10px]">-</Badge></button>)}
+                              {filteredKelasOptions.length === 0 && filterSearchQuery && <div className="text-center text-xs text-slate-400 py-2">Tidak ada kelas yang cocok</div>}
                             </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <Button variant={selectMode ? "default" : "outline"} onClick={toggleSelectMode} className="rounded-xl h-9 text-sm">{selectMode ? "Batalkan Mode Pilih" : "Mode Pilih"}</Button>
-                      {selectMode && (
-                        <>
-                          <Button variant="default" onClick={() => handleBulkAction("activate")} disabled={selectedIds.length === 0 || isProcessingSelected} className="rounded-xl h-9 text-sm bg-green-600 hover:bg-green-700">
-                            {isProcessingSelected && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-                            Aktifkan ({selectedIds.filter(id => { const u = userType === "guru" ? guruList.find(g => g.id_guru === id) : siswaList.find(s => s.id_siswa === id); return u && !u.aktif; }).length})
-                          </Button>
-                          <Button variant="destructive" onClick={() => handleBulkAction("deactivate")} disabled={selectedIds.length === 0 || isProcessingSelected} className="rounded-xl h-9 text-sm">
-                            {isProcessingSelected && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-                            Nonaktifkan ({selectedIds.filter(id => { const u = userType === "guru" ? guruList.find(g => g.id_guru === id) : siswaList.find(s => s.id_siswa === id); return u && u.aktif; }).length})
-                          </Button>
-                        </>
-                      )}
-                    </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Baris 4: Mode pilih & aksi massal */}
+                  <div className="flex flex-col sm:flex-row gap-2 items-center justify-between">
+                    <Button variant={selectMode ? "default" : "outline"} onClick={toggleSelectMode} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full sm:w-auto">
+                      {selectMode ? "Batalkan Mode Pilih" : "Mode Pilih"}
+                    </Button>
+                    {selectMode && (
+                      <div className="flex gap-2 w-full sm:w-auto justify-center">
+                        <Button variant="default" onClick={() => handleBulkAction("activate")} disabled={selectedIds.length === 0 || isProcessingSelected} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-initial bg-green-600 hover:bg-green-700">
+                          {isProcessingSelected && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                          Aktifkan ({selectedIds.filter(id => { const u = userType === "guru" ? guruList.find(g => g.id_guru === id) : siswaList.find(s => s.id_siswa === id); return u && !u.aktif; }).length})
+                        </Button>
+                        <Button variant="destructive" onClick={() => handleBulkAction("deactivate")} disabled={selectedIds.length === 0 || isProcessingSelected} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-initial">
+                          {isProcessingSelected && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                          Nonaktifkan ({selectedIds.filter(id => { const u = userType === "guru" ? guruList.find(g => g.id_guru === id) : siswaList.find(s => s.id_siswa === id); return u && u.aktif; }).length})
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
-                {(searchQuery || filterKelas !== "all") && <div className="flex items-center justify-between bg-slate-50 p-2 rounded-lg"><div className="text-sm">Menampilkan {totalData} data {userType}</div><Button variant="ghost" size="sm" onClick={resetFilters} className="h-7 text-xs"><X className="h-3 w-3 mr-1" /> Reset Filter</Button></div>}
-                {isFetching ? <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div> : (
+
+                {(searchQuery || filterKelas !== "all") && (
+                  <div className="flex items-center justify-between bg-slate-50 p-2 rounded-lg">
+                    <div className="text-xs sm:text-sm">Menampilkan {totalData} data {userType}</div>
+                    <Button variant="ghost" size="sm" onClick={resetFilters} className="h-7 text-xs"><X className="h-3 w-3 mr-1" /> Reset Filter</Button>
+                  </div>
+                )}
+
+                {isFetching ? (
+                  <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>
+                ) : (
                   <>
+                    {/* Tabel dengan overflow-x-auto agar full lebar & scroll horizontal */}
                     <div className="border rounded-xl overflow-hidden shadow-sm">
                       <div className="overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow className="bg-slate-50">
                               {selectMode && <TableHead className="w-10"><Checkbox checked={selectedIds.length > 0 && selectedIds.length === (userType === "guru" ? displayedGuruList.length : displayedSiswaList.length)} onCheckedChange={handleSelectAll} /></TableHead>}
-                              <TableHead>Nama</TableHead><TableHead>{userType === "guru" ? "nik" : "NIS"}</TableHead><TableHead>Email</TableHead><TableHead>Gender</TableHead>
-                              {userType === "siswa" && <TableHead>Kelas</TableHead>}<TableHead className="text-center">Status</TableHead><TableHead className="text-center">Aksi</TableHead>
+                              <TableHead>Nama</TableHead>
+                              <TableHead>{userType === "guru" ? "NIK" : "NIS"}</TableHead>
+                              <TableHead>Email</TableHead>
+                              <TableHead>Gender</TableHead>
+                              {userType === "siswa" && <TableHead>Kelas</TableHead>}
+                              <TableHead className="text-center">Status</TableHead>
+                              <TableHead className="text-center">Aksi</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {userType === "guru" ? displayedGuruList.map(guru => (
-                              <TableRow key={guru.id_guru}>
+                              <TableRow key={guru.id_guru} className="hover:bg-slate-50">
                                 {selectMode && <TableCell><Checkbox checked={selectedIds.includes(guru.id_guru)} onCheckedChange={() => handleSelectItem(guru.id_guru)} /></TableCell>}
-                                <TableCell>{guru.nama}</TableCell><TableCell className="font-mono">{guru.nik}</TableCell><TableCell>{guru.email}</TableCell>
+                                <TableCell className="whitespace-nowrap">{guru.nama}</TableCell>
+                                <TableCell className="font-mono whitespace-nowrap">{guru.nik}</TableCell>
+                                <TableCell className="break-all min-w-[180px]">{guru.email}</TableCell>
                                 <TableCell><Badge className={guru.gender === "L" ? "bg-blue-100 text-blue-700" : "bg-pink-100 text-pink-700"}>{guru.gender === "L" ? "Laki-laki" : "Perempuan"}</Badge></TableCell>
                                 <TableCell className="text-center"><Badge className={guru.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>{guru.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell>
                                 <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditDialog(guru)}><Edit className="h-4 w-4 text-blue-500" /></Button>{guru.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmDeactivate(guru)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmActivate(guru)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell>
                               </TableRow>
                             )) : displayedSiswaList.map(siswa => (
-                              <TableRow key={siswa.id_siswa}>
+                              <TableRow key={siswa.id_siswa} className="hover:bg-slate-50">
                                 {selectMode && <TableCell><Checkbox checked={selectedIds.includes(siswa.id_siswa)} onCheckedChange={() => handleSelectItem(siswa.id_siswa)} /></TableCell>}
-                                <TableCell>{siswa.nama}</TableCell><TableCell className="font-mono">{siswa.nis}</TableCell><TableCell>{siswa.email}</TableCell>
+                                <TableCell className="whitespace-nowrap">{siswa.nama}</TableCell>
+                                <TableCell className="font-mono whitespace-nowrap">{siswa.nis}</TableCell>
+                                <TableCell className="break-all min-w-[180px]">{siswa.email}</TableCell>
                                 <TableCell><Badge className={siswa.gender === "L" ? "bg-blue-100 text-blue-700" : "bg-pink-100 text-pink-700"}>{siswa.gender === "L" ? "Laki-laki" : "Perempuan"}</Badge></TableCell>
-                                <TableCell>{siswa.nama_kelas ? <Badge variant="outline" className="bg-purple-50">{siswa.nama_kelas}</Badge> : <Badge variant="outline" className="bg-amber-50">Belum kelas</Badge>}</TableCell>
+                                <TableCell className="whitespace-nowrap">{siswa.nama_kelas ? <Badge variant="outline" className="bg-purple-50">{siswa.nama_kelas}</Badge> : <Badge variant="outline" className="bg-amber-50">Belum kelas</Badge>}</TableCell>
                                 <TableCell className="text-center"><Badge className={siswa.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>{siswa.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell>
                                 <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditDialog(siswa)}><Edit className="h-4 w-4 text-blue-500" /></Button>{siswa.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmDeactivate(siswa)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmActivate(siswa)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell>
                               </TableRow>
                             ))}
-                            {((userType === "guru" && !displayedGuruList.length) || (userType === "siswa" && !displayedSiswaList.length)) && <TableRow><TableCell colSpan={userType === "guru" ? (selectMode ? 8 : 7) : (selectMode ? 9 : 8)} className="text-center py-8 text-slate-500"><Users className="h-8 w-8 mx-auto mb-2 text-slate-300" />Tidak ada data</TableCell></TableRow>}
+                            {((userType === "guru" && !displayedGuruList.length) || (userType === "siswa" && !displayedSiswaList.length)) && (
+                              <TableRow><TableCell colSpan={userType === "guru" ? (selectMode ? 8 : 7) : (selectMode ? 9 : 8)} className="text-center py-8 text-slate-500"><Users className="h-8 w-8 mx-auto mb-2 text-slate-300" />Tidak ada data</TableCell></TableRow>
+                            )}
                           </TableBody>
                         </Table>
                       </div>
                     </div>
                     {totalData > 0 && (
                       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
-                        <div className="flex items-center gap-2"><span className="text-sm">Tampilkan</span><Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}><SelectTrigger className="w-[70px] h-8"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="20">20</SelectItem><SelectItem value="50">50</SelectItem><SelectItem value="100">100</SelectItem></SelectContent></Select><span>per halaman</span></div>
-                        <div className="flex gap-1"><Button variant="outline" size="sm" onClick={goToFirstPage} disabled={currentPage === 1}><ChevronsLeft className="h-4 w-4" /></Button><Button variant="outline" size="sm" onClick={goToPreviousPage} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button><div className="px-2"><span className="font-medium">{currentPage}</span><span className="text-slate-400"> / {totalPages || 1}</span></div><Button variant="outline" size="sm" onClick={goToNextPage} disabled={currentPage === totalPages || totalPages === 0}><ChevronRight className="h-4 w-4" /></Button><Button variant="outline" size="sm" onClick={goToLastPage} disabled={currentPage === totalPages || totalPages === 0}><ChevronsRight className="h-4 w-4" /></Button></div>
-                        <div className="text-sm">Menampilkan {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, totalData)} dari {totalData} data</div>
+                        <div className="flex items-center gap-2"><span className="text-xs sm:text-sm">Tampilkan</span><Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}><SelectTrigger className="w-[70px] h-7 sm:h-8 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="20">20</SelectItem><SelectItem value="50">50</SelectItem><SelectItem value="100">100</SelectItem></SelectContent></Select><span className="text-xs sm:text-sm">per halaman</span></div>
+                        <div className="flex gap-1"><Button variant="outline" size="sm" onClick={goToFirstPage} disabled={currentPage === 1}><ChevronsLeft className="h-3.5 w-3.5" /></Button><Button variant="outline" size="sm" onClick={goToPreviousPage} disabled={currentPage === 1}><ChevronLeft className="h-3.5 w-3.5" /></Button><div className="px-2 text-sm"><span className="font-medium">{currentPage}</span><span className="text-slate-400"> / {totalPages || 1}</span></div><Button variant="outline" size="sm" onClick={goToNextPage} disabled={currentPage === totalPages || totalPages === 0}><ChevronRight className="h-3.5 w-3.5" /></Button><Button variant="outline" size="sm" onClick={goToLastPage} disabled={currentPage === totalPages || totalPages === 0}><ChevronsRight className="h-3.5 w-3.5" /></Button></div>
+                        <div className="text-xs sm:text-sm">Menampilkan {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, totalData)} dari {totalData} data</div>
                       </div>
                     )}
                   </>
                 )}
               </TabsContent>
 
-              {/* TAB KELOLA KELAS */}
-              <TabsContent value="kelas" className="space-y-6">
-                <div className="flex justify-between items-center flex-wrap gap-3">
-                  <div className="flex gap-2">
-                    <Button onClick={handleAddKelas} className="rounded-xl h-9 text-sm bg-gradient-to-r from-blue-600 to-indigo-600">
-                      <Plus className="mr-1.5 h-3.5 w-3.5" /> Tambah Kelas
+              {/* TAB KELOLA KELAS - responsive */}
+              <TabsContent value="kelas" className="space-y-4 sm:space-y-6">
+                <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                    <Button onClick={handleAddKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm px-3 bg-gradient-to-r from-blue-600 to-indigo-600">
+                      <Plus className="mr-1 h-3 w-3" /> Tambah Kelas
                     </Button>
-                    <Button variant="outline" onClick={() => setImportKelasDialogOpen(true)} className="rounded-xl h-9 text-sm">
-                      <Upload className="mr-1.5 h-3.5 w-3.5" /> Impor Excel
+                    <Button variant="outline" onClick={() => setImportKelasDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm px-3">
+                      <Upload className="mr-1 h-3 w-3" /> Impor Excel
                     </Button>
                   </div>
                   <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input type="text" placeholder="Cari kelas (nama kelas, wali kelas, ID)..." value={searchKelasQuery} onChange={(e) => setSearchKelasQuery(e.target.value)} className="pl-10 pr-10 rounded-xl border-slate-200 h-9 text-sm" />
-                    {searchKelasQuery && <button onClick={() => setSearchKelasQuery("")} className="absolute right-3 top-1/2"><X className="h-4 w-4" /></button>}
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <Input type="text" placeholder="Cari kelas (nama, wali, ID)..." value={searchKelasQuery} onChange={(e) => setSearchKelasQuery(e.target.value)} className="pl-9 pr-8 rounded-xl border-slate-200 h-8 sm:h-9 text-xs sm:text-sm w-full" />
+                    {searchKelasQuery && <button onClick={() => setSearchKelasQuery("")} className="absolute right-3 top-1/2"><X className="h-3.5 w-3.5" /></button>}
                   </div>
-                  <Button variant="outline" onClick={fetchKelas} disabled={isFetchingKelas} className="rounded-xl h-9 text-sm"><RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingKelas ? "animate-spin" : ""}`} /> Segarkan</Button>
+                  <Button variant="outline" onClick={fetchKelas} disabled={isFetchingKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm px-3"><RefreshCw className={`mr-1 h-3 w-3 ${isFetchingKelas ? "animate-spin" : ""}`} /> Segarkan</Button>
                 </div>
-                {searchKelasQuery && <div className="text-sm text-slate-500 bg-slate-50 p-2 rounded-lg">Menampilkan {filteredKelasList.length} dari {kelasList.length} kelas</div>}
+                {searchKelasQuery && <div className="text-xs sm:text-sm text-slate-500 bg-slate-50 p-2 rounded-lg">Menampilkan {filteredKelasList.length} dari {kelasList.length} kelas</div>}
                 {isFetchingKelas ? <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div> : (
                   <div className="border rounded-xl overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-slate-50">
-                            <TableHead className="font-semibold">Nama Kelas</TableHead>
-                            <TableHead className="font-semibold">Wali Kelas</TableHead>
-                            <TableHead className="font-semibold text-center">Status</TableHead>
-                            <TableHead className="font-semibold">Dibuat Pada</TableHead>
-                            <TableHead className="font-semibold text-center">Aksi</TableHead>
+                            <TableHead>Nama Kelas</TableHead>
+                            <TableHead>Wali Kelas</TableHead>
+                            <TableHead className="text-center">Status</TableHead>
+                            <TableHead>Dibuat Pada</TableHead>
+                            <TableHead className="text-center">Aksi</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {filteredKelasList.map(kelas => (
                             <TableRow key={kelas.id_kelas} className="hover:bg-slate-50 transition-colors">
-                              <TableCell className="font-medium">{kelas.nama}</TableCell>
+                              <TableCell className="whitespace-nowrap font-medium">{kelas.nama}</TableCell>
                               <TableCell><div className="flex items-center gap-2"><div className="bg-purple-100 p-1.5 rounded-lg"><User className="h-3 w-3 text-purple-600" /></div>{kelas.guru_nama || "-"}</div></TableCell>
                               <TableCell className="text-center"><Badge className={kelas.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>{kelas.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell>
-                              <TableCell className="text-slate-500 text-sm">{new Date(kelas.dibuat_pada).toLocaleDateString()}</TableCell>
-                              <TableCell className="text-center">
-                                <div className="flex gap-1 justify-center">
-                                  <Button variant="ghost" size="sm" onClick={() => handleEditKelas(kelas)} className="h-8 w-8 p-0 rounded-lg"><Edit className="h-4 w-4 text-blue-500" /></Button>
-                                  {kelas.aktif ? (
-                                    <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, false)} className="h-8 w-8 p-0 rounded-lg"><UserMinus className="h-4 w-4 text-red-500" /></Button>
-                                  ) : (
-                                    <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, true)} className="h-8 w-8 p-0 rounded-lg"><UserPlus className="h-4 w-4 text-green-500" /></Button>
-                                  )}
-                                </div>
-                              </TableCell>
+                              <TableCell className="text-slate-500 text-sm whitespace-nowrap">{new Date(kelas.dibuat_pada).toLocaleDateString()}</TableCell>
+                              <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => handleEditKelas(kelas)} className="h-8 w-8 p-0 rounded-lg"><Edit className="h-4 w-4 text-blue-500" /></Button>{kelas.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, false)} className="h-8 w-8 p-0 rounded-lg"><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, true)} className="h-8 w-8 p-0 rounded-lg"><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell>
                             </TableRow>
                           ))}
                           {!filteredKelasList.length && (
@@ -1694,23 +1711,22 @@ export default function UserManagement() {
           </CardContent>
         </Card>
 
-        {/* TIPS SECTION */}
-        <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50 max-w-3xl mx-auto">
-          <CardContent className="p-5"><div className="flex items-start gap-4"><div className="bg-indigo-100 p-3 rounded-xl"><Sparkles className="h-6 w-6 text-indigo-600" /></div><div><h3 className="font-semibold text-slate-800 mb-1">Tips Mengelola Data</h3><p className="text-sm text-slate-600">Gunakan fitur import Excel untuk menambahkan banyak data sekaligus. Pastikan format file sesuai template. Data duplikat (email, nik, NIS) akan otomatis dilewati saat import. Data ditampilkan dengan urutan nama (A-Z) untuk memudahkan pencarian. Gunakan mode Select untuk mengaktifkan/nonaktifkan banyak pengguna sekaligus. Kelas dapat diimpor melalui Excel dengan kolom nama, nik_wali (opsional), dan aktif (opsional).</p></div></div></CardContent>
+        {/* TIPS SECTION - tetap */}
+        <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50 max-w-3xl mx-auto">
+          <CardContent className="p-4 sm:p-5"><div className="flex items-start gap-3 sm:gap-4"><div className="bg-indigo-100 p-2 sm:p-3 rounded-xl"><Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" /></div><div><h3 className="font-semibold text-slate-800 text-sm sm:text-base mb-1">Tips Mengelola Data</h3><p className="text-xs sm:text-sm text-slate-600">Gunakan fitur import Excel untuk menambahkan banyak data sekaligus. Pastikan format file sesuai template. Data duplikat (email, NIK, NIS) akan otomatis dilewati saat import. Data ditampilkan dengan urutan nama (A-Z). Gunakan mode Select untuk mengaktifkan/nonaktifkan banyak pengguna. Kelas dapat diimpor melalui Excel dengan kolom nama, nik_wali (opsional), dan aktif (opsional).</p></div></div></CardContent>
         </Card>
 
         {/* FOOTER */}
-        <div className="text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Manajemen Pengguna & Kelas - SmartAS</p><p className="text-[10px] text-slate-300 mt-1">Sistem Informasi Akademik</p></div>
+        <div className="text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Manajemen Pengguna &amp; Kelas - SmartAS</p><p className="text-[10px] text-slate-300 mt-1">Sistem Informasi Akademik</p></div>
       </div>
 
-      {/* DIALOG IMPORT USER */}
+      {/* ==================== DIALOGS (semua tetap sama persis seperti asli, hanya mungkin penyesuaian padding kecil) ==================== */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-        <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Impor {userType === "guru" ? "Guru" : "Siswa"} dari Excel</DialogTitle>
             <DialogDescription>Upload file Excel untuk menambah data secara massal</DialogDescription>
           </DialogHeader>
-          
           {importStep === "upload" && (
             <div className="space-y-4">
               <div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50">
@@ -1733,47 +1749,22 @@ export default function UserManagement() {
               </div>
             </div>
           )}
-          
           {importStep === "preview" && previewData.length > 0 && (
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <p className="text-sm font-medium">Preview Data ({previewData.length} baris)</p>
-              </div>
+              <div className="flex justify-between items-center"><p className="text-sm font-medium">Preview Data ({previewData.length} baris)</p></div>
               <div className="border rounded-lg overflow-x-auto max-h-96">
                 <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50">
-                      <TableHead>Nama</TableHead>
-                      <TableHead>{userType === "guru" ? "nik" : "NIS"}</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Gender</TableHead>
-                      {userType === "siswa" && <TableHead>Kelas</TableHead>}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {previewData.slice(0, 20).map((item, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell>{item.nama}</TableCell>
-                        <TableCell>{userType === "guru" ? item.nik : item.nis}</TableCell>
-                        <TableCell>{item.email}</TableCell>
-                        <TableCell><Badge className={item.gender === "L" ? "bg-blue-100" : "bg-pink-100"}>{item.gender === "L" ? "Laki-laki" : "Perempuan"}</Badge></TableCell>
-                        {userType === "siswa" && <TableCell>{item.kelas}</TableCell>}
-                      </TableRow>
-                    ))}
-                    {previewData.length > 20 && <TableRow><TableCell colSpan={5} className="text-center text-slate-500">... dan {previewData.length - 20} baris lainnya</TableCell></TableRow>}
-                  </TableBody>
+                  <TableHeader><TableRow className="bg-slate-50"><TableHead>Nama</TableHead><TableHead>{userType === "guru" ? "nik" : "NIS"}</TableHead><TableHead>Email</TableHead><TableHead>Gender</TableHead>{userType === "siswa" && <TableHead>Kelas</TableHead>}</TableRow></TableHeader>
+                  <TableBody>{previewData.slice(0,20).map((item,idx)=>(<TableRow key={idx}><TableCell>{item.nama}</TableCell><TableCell>{userType==="guru"?item.nik:item.nis}</TableCell><TableCell>{item.email}</TableCell><TableCell><Badge className={item.gender==="L"?"bg-blue-100":"bg-pink-100"}>{item.gender==="L"?"Laki-laki":"Perempuan"}</Badge></TableCell>{userType==="siswa"&&<TableCell>{item.kelas}</TableCell>}</TableRow>))}
+                  {previewData.length>20 && <TableRow><TableCell colSpan={5} className="text-center text-slate-500">... dan {previewData.length-20} baris lainnya</TableCell></TableRow>}</TableBody>
                 </Table>
               </div>
-              <div className="flex gap-3 justify-end">
-                <Button variant="outline" onClick={() => { setImportDialogOpen(false); setPreviewData([]); setImportRawData([]); setImportStep("upload"); }} className="rounded-lg">Batal</Button>
-                <Button onClick={handleImport} disabled={isLoading} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Impor Data</Button>
-              </div>
+              <div className="flex gap-3 justify-end"><Button variant="outline" onClick={()=>{setImportDialogOpen(false);setPreviewData([]);setImportRawData([]);setImportStep("upload");}} className="rounded-lg">Batal</Button><Button onClick={handleImport} disabled={isLoading} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Impor Data</Button></div>
             </div>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG TAMBAH MANUAL */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent className="rounded-2xl">
           <DialogHeader>
@@ -1801,7 +1792,6 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG EDIT PENGGUNA */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="rounded-2xl"><DialogHeader><DialogTitle><Edit className="h-5 w-5 inline mr-2 text-blue-600" /> Edit Pengguna</DialogTitle><DialogDescription>Ubah informasi user. Kosongkan password jika tidak ingin mengubah.</DialogDescription></DialogHeader>
           <div className="space-y-4"><div><Label>Nama</Label><Input value={editForm.nama} onChange={e => setEditForm({...editForm, nama: e.target.value})} className="rounded-xl mt-1" /></div><div><Label>Email</Label><Input type="email" value={editForm.email} onChange={e => setEditForm({...editForm, email: e.target.value})} className="rounded-xl mt-1" /></div>
@@ -1816,29 +1806,24 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG KONFIRMASI AKTIFKAN / NONAKTIFKAN PENGGUNA */}
       <Dialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}><DialogContent className="rounded-2xl max-w-lg"><DialogHeader><DialogTitle>{isActivatingMode ? <UserPlus className="h-5 w-5 inline mr-2 text-green-600" /> : <UserMinus className="h-5 w-5 inline mr-2 text-red-600" />}{isActivatingMode ? "Aktifkan Pengguna" : "Nonaktifkan Pengguna"}</DialogTitle><DialogDescription>{isActivatingMode ? `Aktifkan kembali pengguna ${deactivatingUser?.nama}?` : `Yakin ingin menonaktifkan ${deactivatingUser?.nama}?`}</DialogDescription></DialogHeader>
         {!isActivatingMode && deactivateConstraints.length > 0 && <div className="bg-amber-50 border border-amber-200 rounded-lg p-3"><p className="font-medium text-amber-800 text-sm flex items-center gap-2"><AlertCircle className="h-4 w-4" /> Informasi - Data Terkait</p><ul className="list-disc list-inside text-xs text-amber-700 mt-2">{deactivateConstraints.map((c,i)=><li key={i}>{c}</li>)}</ul><p className="text-xs text-amber-600 mt-2">User akan dinonaktifkan, namun data terkait tetap tersimpan.</p></div>}
         <DialogFooter><Button variant="outline" onClick={() => setDeactivateDialogOpen(false)}>Batal</Button><Button variant={isActivatingMode ? "default" : "destructive"} onClick={executeToggleActive} disabled={isLoading}>{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isActivatingMode ? "Ya, Aktifkan" : "Nonaktifkan"}</Button></DialogFooter></DialogContent>
       </Dialog>
 
-      {/* DIALOG KONFIRMASI AKTIFKAN / NONAKTIFKAN KELAS */}
       <Dialog open={toggleKelasDialogOpen} onOpenChange={setToggleKelasDialogOpen}><DialogContent className="rounded-2xl max-w-lg"><DialogHeader><DialogTitle className="text-xl flex items-center gap-2">{isActivatingKelasMode ? <UserPlus className="h-5 w-5 text-green-600" /> : <UserMinus className="h-5 w-5 text-red-600" />}{isActivatingKelasMode ? "Aktifkan Kelas" : "Nonaktifkan Kelas"}</DialogTitle><DialogDescription>{isActivatingKelasMode ? `Aktifkan kembali kelas ${togglingKelas?.nama}? Kelas yang aktif dapat digunakan untuk siswa.` : `Yakin ingin menonaktifkan kelas ${togglingKelas?.nama}? Kelas yang dinonaktifkan tidak dapat dipilih untuk siswa.`}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setToggleKelasDialogOpen(false)}>Batal</Button><Button variant={isActivatingKelasMode ? "default" : "destructive"} onClick={executeToggleActiveKelas} disabled={isSavingKelas}>{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isActivatingKelasMode ? "Ya, Aktifkan" : "Nonaktifkan"}</Button></DialogFooter></DialogContent>
       </Dialog>
 
-      {/* DIALOG BULK ACTION */}
       <Dialog open={bulkActionDialogOpen} onOpenChange={setBulkActionDialogOpen}><DialogContent className="rounded-2xl max-w-lg"><DialogHeader><DialogTitle>{bulkActionType === "activate" ? "Aktifkan Massal" : "Nonaktifkan Massal"}</DialogTitle><DialogDescription>Anda akan {bulkActionType === "activate" ? "mengaktifkan" : "menonaktifkan"} {bulkActionData?.users.length} pengguna.</DialogDescription></DialogHeader>
         {bulkActionData && bulkActionData.cannotProcess.length > 0 && bulkActionType === "deactivate" && <div className="bg-amber-50 border border-amber-200 rounded-lg p-3"><p className="font-medium text-amber-800 text-sm">⚠️ Beberapa pengguna memiliki data terkait:</p><ul className="list-disc list-inside text-xs mt-1">{bulkActionData.cannotProcess.map(c=><li key={c.id}>{c.nama}: {c.reasons.join(", ")}</li>)}</ul><p className="text-xs text-amber-600 mt-2">User tersebut tetap dapat dinonaktifkan, data terkait akan tetap tersimpan.</p></div>}
         <DialogFooter><Button variant="outline" onClick={() => setBulkActionDialogOpen(false)}>Batal</Button><Button variant={bulkActionType === "activate" ? "default" : "destructive"} onClick={executeBulkAction} disabled={isProcessingSelected}>{isProcessingSelected && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Ya, {bulkActionType === "activate" ? "Aktifkan" : "Nonaktifkan"} {bulkActionData?.canProcessIds.length} User</Button></DialogFooter></DialogContent>
       </Dialog>
 
-      {/* DIALOG KELAS (TAMBAH/EDIT) */}
       <Dialog open={kelasDialogOpen} onOpenChange={setKelasDialogOpen}><DialogContent className="rounded-2xl"><DialogHeader><DialogTitle><School className="h-5 w-5 inline mr-2 text-blue-600" />{editingKelas ? "Ubah Kelas" : "Tambah Kelas Baru"}</DialogTitle></DialogHeader><div className="space-y-4"><div><Label>Nama Kelas</Label><Input value={kelasForm.nama} onChange={e => setKelasForm({...kelasForm, nama: e.target.value})} placeholder="Contoh: XII RPL 1" className="rounded-xl mt-1" /></div><div><Label>Wali Kelas</Label><Select value={kelasForm.id_guru} onValueChange={v => setKelasForm({...kelasForm, id_guru: v})}><SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="Pilih wali kelas (opsional)" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada wali kelas</SelectItem>{guruOptions.map(guru => <SelectItem key={guru.id_guru} value={guru.id_guru.toString()}>{guru.nama} (nik: {guru.nik})</SelectItem>)}</SelectContent></Select></div></div><DialogFooter><Button variant="outline" onClick={() => setKelasDialogOpen(false)}>Batal</Button><Button onClick={handleSaveKelas} disabled={isSavingKelas} className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600">{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button></DialogFooter></DialogContent>
       </Dialog>
 
-      {/* DIALOG IMPORT KELAS */}
       <Dialog open={importKelasDialogOpen} onOpenChange={setImportKelasDialogOpen}>
-        <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader><DialogTitle>Impor Kelas dari Excel</DialogTitle><DialogDescription>Upload file Excel untuk menambah kelas secara massal</DialogDescription></DialogHeader>
           {importKelasStep === "upload" && (
             <div className="space-y-4">
@@ -1850,16 +1835,15 @@ export default function UserManagement() {
           )}
           {importKelasStep === "preview" && importKelasPreviewRows.length > 0 && (
             <div className="space-y-4">
-              <div className="flex justify-between items-center"><p className="text-sm font-medium">Preview Data ({importKelasPreviewRows.length} baris)</p><Badge className={importKelasPreviewRows.filter(r => r.isValid).length === importKelasPreviewRows.length ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>{importKelasPreviewRows.filter(r => r.isValid).length} dari {importKelasPreviewRows.length} valid</Badge></div>
-              <div className="border rounded-lg overflow-x-auto max-h-96"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead className="w-12">#</TableHead><TableHead>Nama Kelas</TableHead><TableHead>nik Wali</TableHead><TableHead>Aktif</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader><TableBody>{importKelasPreviewRows.map((row, idx) => (<TableRow key={idx} className={!row.isValid ? "bg-red-50" : ""}><TableCell className="text-xs text-slate-500">{row.rowIndex}</TableCell><TableCell>{row.nama}</TableCell><TableCell>{row.nik_wali || "-"}{!row.guruValid && row.nik_wali && <span className="text-red-500 text-xs ml-1">(tidak ditemukan)</span>}</TableCell><TableCell><Badge className={row.aktif ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>{row.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell><TableCell className="text-center">{row.isValid ? <Badge className="bg-green-100 text-green-700">Valid</Badge> : <div className="text-xs text-red-600">{row.validationErrors?.map((err: string, i: number) => <div key={i}>{err}</div>)}{row.nik_wali && !row.guruValid && <div>nik wali tidak ditemukan</div>}</div>}</TableCell></TableRow>))}</TableBody></Table></div>
-              <div className="flex gap-3 justify-end"><Button variant="outline" onClick={() => { setImportKelasDialogOpen(false); setImportKelasRawData([]); setImportKelasPreviewRows([]); setImportKelasStep("upload"); }} className="rounded-lg">Batal</Button><Button onClick={confirmImportKelas} disabled={isImportingKelas || importKelasPreviewRows.filter(r => r.isValid).length === 0} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600">{isImportingKelas ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Mengimpor...</> : "Impor Data"}</Button></div>
+              <div className="flex justify-between items-center"><p className="text-sm font-medium">Preview Data ({importKelasPreviewRows.length} baris)</p><Badge className={importKelasPreviewRows.filter(r=>r.isValid).length===importKelasPreviewRows.length?"bg-green-100 text-green-700":"bg-yellow-100 text-yellow-700"}>{importKelasPreviewRows.filter(r=>r.isValid).length} dari {importKelasPreviewRows.length} valid</Badge></div>
+              <div className="border rounded-lg overflow-x-auto max-h-96"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead className="w-12">#</TableHead><TableHead>Nama Kelas</TableHead><TableHead>nik Wali</TableHead><TableHead>Aktif</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader><TableBody>{importKelasPreviewRows.map((row,idx)=>(<TableRow key={idx} className={!row.isValid?"bg-red-50":""}><TableCell className="text-xs text-slate-500">{row.rowIndex}</TableCell><TableCell>{row.nama}</TableCell><TableCell>{row.nik_wali||"-"}{!row.guruValid && row.nik_wali && <span className="text-red-500 text-xs ml-1">(tidak ditemukan)</span>}</TableCell><TableCell><Badge className={row.aktif?"bg-green-100 text-green-700":"bg-gray-100 text-gray-700"}>{row.aktif?"Aktif":"Nonaktif"}</Badge></TableCell><TableCell className="text-center">{row.isValid?<Badge className="bg-green-100 text-green-700">Valid</Badge>:<div className="text-xs text-red-600">{row.validationErrors?.map((err:string,i:number)=><div key={i}>{err}</div>)}{row.nik_wali && !row.guruValid && <div>nik wali tidak ditemukan</div>}</div>}</TableCell></TableRow>))}</TableBody></Table></div>
+              <div className="flex gap-3 justify-end"><Button variant="outline" onClick={()=>{setImportKelasDialogOpen(false);setImportKelasRawData([]);setImportKelasPreviewRows([]);setImportKelasStep("upload");}} className="rounded-lg">Batal</Button><Button onClick={confirmImportKelas} disabled={isImportingKelas || importKelasPreviewRows.filter(r=>r.isValid).length===0} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600">{isImportingKelas?<><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Mengimpor...</>:"Impor Data"}</Button></div>
             </div>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG MISSING GURU UNTUK IMPORT KELAS */}
-      <Dialog open={missingGuruDialogOpen} onOpenChange={setMissingGuruDialogOpen}><DialogContent className="rounded-xl max-w-md"><DialogHeader><DialogTitle>Wali Kelas Tidak Ditemukan</DialogTitle><DialogDescription>Beberapa nik wali kelas dalam file Excel tidak ditemukan di database guru.</DialogDescription></DialogHeader><div className="space-y-4"><div className="bg-yellow-50 p-3 rounded-lg"><p className="text-sm font-medium text-yellow-800">nik yang tidak ditemukan:</p><ul className="list-disc list-inside mt-2 space-y-1">{Array.from(importKelasMissingGurus).map((nik, idx) => <li key={idx} className="text-sm text-yellow-700 font-mono">{nik}</li>)}</ul></div><p className="text-sm text-slate-600">Baris dengan nik yang tidak ditemukan akan dilewati (tidak diimpor). Apakah Anda ingin melanjutkan import?</p></div><DialogFooter className="gap-2"><Button variant="outline" onClick={() => { setMissingGuruDialogOpen(false); setImportKelasDialogOpen(false); setImportKelasRawData([]); }} className="rounded-lg">Batalkan Import</Button><Button onClick={handleSkipMissingGurus} disabled={isImportingKelas} className="rounded-lg bg-green-600 hover:bg-green-700">Lanjutkan (Lewati Baris Bermasalah)</Button></DialogFooter></DialogContent>
+      <Dialog open={missingGuruDialogOpen} onOpenChange={setMissingGuruDialogOpen}><DialogContent className="rounded-xl max-w-md"><DialogHeader><DialogTitle>Wali Kelas Tidak Ditemukan</DialogTitle><DialogDescription>Beberapa nik wali kelas dalam file Excel tidak ditemukan di database guru.</DialogDescription></DialogHeader><div className="space-y-4"><div className="bg-yellow-50 p-3 rounded-lg"><p className="text-sm font-medium text-yellow-800">nik yang tidak ditemukan:</p><ul className="list-disc list-inside mt-2 space-y-1">{Array.from(importKelasMissingGurus).map((nik,idx)=><li key={idx} className="text-sm text-yellow-700 font-mono">{nik}</li>)}</ul></div><p className="text-sm text-slate-600">Baris dengan nik yang tidak ditemukan akan dilewati (tidak diimpor). Apakah Anda ingin melanjutkan import?</p></div><DialogFooter className="gap-2"><Button variant="outline" onClick={() => { setMissingGuruDialogOpen(false); setImportKelasDialogOpen(false); setImportKelasRawData([]); }} className="rounded-lg">Batalkan Import</Button><Button onClick={handleSkipMissingGurus} disabled={isImportingKelas} className="rounded-lg bg-green-600 hover:bg-green-700">Lanjutkan (Lewati Baris Bermasalah)</Button></DialogFooter></DialogContent>
       </Dialog>
     </div>
   );
