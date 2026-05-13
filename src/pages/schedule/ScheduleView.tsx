@@ -62,19 +62,19 @@ import {
   Gitlab,
   Figma,
   Slack,
-  Discord,
-  Zoom,
-  Google,
-  Apple,
-  Windows,
-  Linux,
-  Android,
-  Ios,
-  Chrome,
-  Firefox,
-  Safari,
-  Edge,
-  Opera
+  // Discord,
+  // Zoom,
+  // Google,
+  // Apple,
+  // Windows,
+  // Linux,
+  // Android,
+  // Ios,
+  Chrome
+  // Firefox,
+  // Safari,
+  // Edge,
+  // Opera
 } from "lucide-react";
 
 interface JadwalItem {

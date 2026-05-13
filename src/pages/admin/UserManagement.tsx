@@ -74,7 +74,7 @@ import {
 // ==================== TYPES ====================
 interface GuruImportData {
   nama: string;
-  nip: string;
+  nik: string;
   email: string;
   gender: string;
   password?: string;
@@ -92,7 +92,7 @@ interface SiswaImportData {
 interface GuruData {
   id_guru: number;
   nama: string;
-  nip: string;
+  nik: string;
   email: string;
   gender: string;
   aktif: boolean;
@@ -121,7 +121,7 @@ interface Kelas {
 interface GuruSimple {
   id_guru: number;
   nama: string;
-  nip: string;
+  nik: string;
 }
 
 // Type for bulk action data
@@ -162,7 +162,7 @@ export default function UserManagement() {
     nama: "",
     email: "",
     gender: "",
-    nip: "",
+    nik: "",
     nis: "",
     kelas_id: "",
     password: "",
@@ -182,7 +182,7 @@ export default function UserManagement() {
     nama: "",
     email: "",
     gender: "",
-    nip: "",
+    nik: "",
     nis: "",
     kelas_id: "",
     password: "",
@@ -256,7 +256,7 @@ export default function UserManagement() {
       const q = searchQuery.toLowerCase();
       return (
         guru.nama.toLowerCase().includes(q) ||
-        guru.nip.toLowerCase().includes(q) ||
+        guru.nik.toLowerCase().includes(q) ||
         guru.email.toLowerCase().includes(q) ||
         guru.id_guru.toString().includes(q)
       );
@@ -307,14 +307,14 @@ export default function UserManagement() {
     try {
       const { data, error } = await supabase
         .from("guru")
-        .select("id_guru, nama, nip")
+        .select("id_guru, nama, nik")
         .eq("aktif", true)
         .order("nama", { ascending: true });
       if (error) throw error;
       const formatted: GuruSimple[] = (data || []).map((g: any) => ({ 
         id_guru: g.id_guru, 
         nama: g.nama, 
-        nip: g.nip?.toString() || "" 
+        nik: g.nik?.toString() || "" 
       }));
       setGuruOptions(formatted);
     } catch (error) { console.error(error); }
@@ -358,7 +358,7 @@ export default function UserManagement() {
 
       const { data: guruData, error: guruError } = await supabase
         .from("guru")
-        .select("id_guru, nama, nip, gender, aktif")
+        .select("id_guru, nama, nik, gender, aktif")
         .order("nama", { ascending: true })
         .range(from, to);
       if (guruError) throw guruError;
@@ -376,7 +376,7 @@ export default function UserManagement() {
       const combined: GuruData[] = (guruData || []).map(guru => ({
         id_guru: guru.id_guru,
         nama: guru.nama,
-        nip: guru.nip?.toString() || "",
+        nik: guru.nik?.toString() || "",
         email: emailMap.get(guru.id_guru) || "",
         gender: guru.gender,
         aktif: guru.aktif,
@@ -491,7 +491,7 @@ export default function UserManagement() {
     let headers: string[];
     let data: any[][];
     if (type === "guru") {
-      headers = ["nama", "nip", "email", "gender", "password"];
+      headers = ["nama", "nik", "email", "gender", "password"];
       data = [
         ["Ahmad Santoso", "198512342021011001", "ahmad.santoso@school.com", "L", "password123"],
         ["Siti Aminah", "198709152021012002", "siti.aminah@school.com", "P", "password123"],
@@ -523,7 +523,7 @@ export default function UserManagement() {
       if (jsonData.length === 0) throw new Error("File kosong");
       
       let requiredColumns: string[];
-      if (userType === "guru") requiredColumns = ["nama", "nip", "email", "gender"];
+      if (userType === "guru") requiredColumns = ["nama", "nik", "email", "gender"];
       else requiredColumns = ["nama", "nis", "email", "gender", "kelas"];
       
       const firstRow = jsonData[0] as any;
@@ -559,7 +559,7 @@ export default function UserManagement() {
 
   const checkExistingData = async (type: "guru" | "siswa", data: any[]) => {
     const emails = data.map(item => item.email).filter(Boolean);
-    const nipNisValues = data.map(item => type === "guru" ? item.nip : item.nis).filter(Boolean);
+    const nikNisValues = data.map(item => type === "guru" ? item.nik : item.nis).filter(Boolean);
     
     const { data: existingAccounts } = await supabase
       .from("akun")
@@ -567,14 +567,14 @@ export default function UserManagement() {
       .in("email", emails);
     const existingEmails = existingAccounts?.map(acc => acc.email) || [];
     
-    const field = type === "guru" ? "nip" : "nis";
+    const field = type === "guru" ? "nik" : "nis";
     const { data: existingRecords } = await supabase
       .from(type as any)
       .select(field)
-      .in(field, nipNisValues as any[]);
-    const existingNipNis = existingRecords?.map((record: Record<string, any>) => record[field]) || [];
+      .in(field, nikNisValues as any[]);
+    const existingnikNis = existingRecords?.map((record: Record<string, any>) => record[field]) || [];
     
-    return { existingEmails, existingNipNis };
+    return { existingEmails, existingnikNis };
   };
 
   const getKelasIdFromName = async (namaKelas: string): Promise<number | null> => {
@@ -589,10 +589,10 @@ export default function UserManagement() {
 
   const importGuru = async (data: GuruImportData[]) => {
     try {
-      const { existingEmails, existingNipNis } = await checkExistingData("guru", data);
+      const { existingEmails, existingnikNis } = await checkExistingData("guru", data);
       const filteredData = data.filter(item =>
         !existingEmails.includes(item.email) &&
-        !existingNipNis.includes(item.nip)
+        !existingnikNis.includes(item.nik)
       );
       const skippedCount = data.length - filteredData.length;
       if (!filteredData.length) {
@@ -602,7 +602,7 @@ export default function UserManagement() {
       const guruRecords = filteredData.map((item, idx) => ({
         id_guru: nextId + idx,
         nama: item.nama,
-        nip: parseInt(item.nip),
+        nik: parseInt(item.nik),
         gender: item.gender.toUpperCase(),
         aktif: true,
         dibuat_pada: new Date().toISOString(),
@@ -645,10 +645,10 @@ export default function UserManagement() {
         if (!id) throw new Error(`Kelas "${nama}" tidak ditemukan.`);
         kelasMap.set(nama, id);
       }
-      const { existingEmails, existingNipNis } = await checkExistingData("siswa", data);
+      const { existingEmails, existingnikNis } = await checkExistingData("siswa", data);
       const filteredData = data.filter(item =>
         !existingEmails.includes(item.email) &&
-        !existingNipNis.includes(item.nis)
+        !existingnikNis.includes(item.nis)
       );
       const skippedCount = data.length - filteredData.length;
       if (!filteredData.length) throw new Error(`Semua data sudah ada (${skippedCount} duplikat)`);
@@ -728,7 +728,7 @@ export default function UserManagement() {
       nama: "",
       email: "",
       gender: "",
-      nip: "",
+      nik: "",
       nis: "",
       kelas_id: "",
       password: "",
@@ -750,8 +750,8 @@ export default function UserManagement() {
       return;
     }
     if (userType === "guru") {
-      if (!addForm.nip.trim()) {
-        toast({ title: "Error", description: "NIP tidak boleh kosong", variant: "destructive" });
+      if (!addForm.nik.trim()) {
+        toast({ title: "Error", description: "NIK tidak boleh kosong", variant: "destructive" });
         return;
       }
     } else {
@@ -774,19 +774,19 @@ export default function UserManagement() {
       }
 
       if (userType === "guru") {
-        // Cek duplikat NIP
-        const { data: existingNip } = await supabase
+        // Cek duplikat nik
+        const { data: existingnik } = await supabase
           .from("guru")
-          .select("nip")
-          .eq("nip", parseInt(addForm.nip))
+          .select("nik")
+          .eq("nik", parseInt(addForm.nik))
           .maybeSingle();
-        if (existingNip) throw new Error("NIP sudah digunakan.");
+        if (existingnik) throw new Error("NIK sudah digunakan.");
 
         const nextId = await getNextId("guru");
         const { error: guruError } = await supabase.from("guru").insert({
           id_guru: nextId,
           nama: addForm.nama,
-          nip: parseInt(addForm.nip),
+          nik: parseInt(addForm.nik),
           gender: addForm.gender.toUpperCase(),
           aktif: true,
           dibuat_pada: new Date().toISOString(),
@@ -875,10 +875,10 @@ export default function UserManagement() {
     return (data && data.length > 0);
   };
 
-  const checkDuplicateNip = async (nip: string, excludeGuruId?: number): Promise<boolean> => {
-    const numericNip = parseInt(nip);
-    if (isNaN(numericNip)) return false;
-    let query = supabase.from('guru').select('nip').eq('nip', numericNip);
+  const checkDuplicatenik = async (nik: string, excludeGuruId?: number): Promise<boolean> => {
+    const numericnik = parseInt(nik);
+    if (isNaN(numericnik)) return false;
+    let query = supabase.from('guru').select('nik').eq('nik', numericnik);
     if (excludeGuruId) query = query.not('id_guru', 'eq', excludeGuruId);
     const { data, error } = await query;
     if (error) throw error;
@@ -901,7 +901,7 @@ export default function UserManagement() {
       nama: user.nama,
       email: user.email,
       gender: user.gender,
-      nip: user.nip || "",
+      nik: user.nik || "",
       nis: user.nis || "",
       kelas_id: user.id_kelas?.toString() || "",
       password: "",
@@ -924,10 +924,10 @@ export default function UserManagement() {
       }
 
       if (isGuru) {
-        if (editForm.nip && editForm.nip !== editingUser.nip) {
-          const isNipExist = await checkDuplicateNip(editForm.nip, userId);
-          if (isNipExist) {
-            toast({ title: "Kesalahan", description: "NIP sudah digunakan oleh guru lain.", variant: "destructive" });
+        if (editForm.nik && editForm.nik !== editingUser.nik) {
+          const isnikExist = await checkDuplicatenik(editForm.nik, userId);
+          if (isnikExist) {
+            toast({ title: "Kesalahan", description: "nik sudah digunakan oleh guru lain.", variant: "destructive" });
             return;
           }
         }
@@ -949,8 +949,8 @@ export default function UserManagement() {
         aktif: editForm.aktif,
       };
       
-      if (isGuru && editForm.nip && editForm.nip !== editingUser.nip) {
-        updateData.nip = parseInt(editForm.nip);
+      if (isGuru && editForm.nik && editForm.nik !== editingUser.nik) {
+        updateData.nik = parseInt(editForm.nik);
       }
       if (!isGuru && editForm.nis && editForm.nis !== editingUser.nis) {
         updateData.nis = parseInt(editForm.nis);
@@ -1294,7 +1294,7 @@ export default function UserManagement() {
 
   // ==================== IMPORT KELAS ====================
   const downloadKelasTemplate = () => {
-    const headers = ["nama", "nip_wali", "aktif"];
+    const headers = ["nama", "nik_wali", "aktif"];
     const data = [
       ["X IPA 1", "198512342021011001", "1"],
       ["XI IPS 2", "198709152021012002", "1"],
@@ -1322,13 +1322,13 @@ export default function UserManagement() {
       const validationErrors = validateKelasImportRow(row, i);
       
       const namaKelas = row.nama?.toString().trim();
-      const nipWali = row.nip_wali?.toString().trim();
+      const nikWali = row.nik_wali?.toString().trim();
       
       let guru: GuruSimple | undefined = undefined;
-      if (nipWali) {
-        guru = guruOptions.find(g => g.nip === nipWali);
+      if (nikWali) {
+        guru = guruOptions.find(g => g.nik === nikWali);
         if (!guru) {
-          missingGurusSet.add(nipWali);
+          missingGurusSet.add(nikWali);
         }
       }
       
@@ -1336,13 +1336,13 @@ export default function UserManagement() {
       
       previewWithValidation.push({
         nama: namaKelas,
-        nip_wali: nipWali || null,
+        nik_wali: nikWali || null,
         aktif: aktif,
         rowIndex: i + 1,
         guruId: guru?.id_guru || null,
-        guruValid: !nipWali || !!guru,
+        guruValid: !nikWali || !!guru,
         validationErrors,
-        isValid: validationErrors.length === 0 && (!nipWali || !!guru),
+        isValid: validationErrors.length === 0 && (!nikWali || !!guru),
       });
     }
     
@@ -1373,7 +1373,7 @@ export default function UserManagement() {
       const preview = await processKelasPreview(jsonData);
       setImportKelasPreviewRows(preview);
       
-      if (preview.some(p => !p.guruValid && p.nip_wali)) {
+      if (preview.some(p => !p.guruValid && p.nik_wali)) {
         setMissingGuruDialogOpen(true);
       } else {
         setImportKelasStep("preview");
@@ -1435,8 +1435,8 @@ export default function UserManagement() {
 
   const handleSkipMissingGurus = () => {
     const filteredRows = importKelasPreviewRows.map(row => {
-      if (!row.guruValid && row.nip_wali) {
-        return { ...row, isValid: false, validationErrors: [...row.validationErrors, "NIP wali tidak ditemukan, baris akan dilewati"] };
+      if (!row.guruValid && row.nik_wali) {
+        return { ...row, isValid: false, validationErrors: [...row.validationErrors, "nik wali tidak ditemukan, baris akan dilewati"] };
       }
       return row;
     });
@@ -1591,7 +1591,7 @@ export default function UserManagement() {
                           <TableHeader>
                             <TableRow className="bg-slate-50">
                               {selectMode && <TableHead className="w-10"><Checkbox checked={selectedIds.length > 0 && selectedIds.length === (userType === "guru" ? displayedGuruList.length : displayedSiswaList.length)} onCheckedChange={handleSelectAll} /></TableHead>}
-                              <TableHead>Nama</TableHead><TableHead>{userType === "guru" ? "NIP" : "NIS"}</TableHead><TableHead>Email</TableHead><TableHead>Gender</TableHead>
+                              <TableHead>Nama</TableHead><TableHead>{userType === "guru" ? "nik" : "NIS"}</TableHead><TableHead>Email</TableHead><TableHead>Gender</TableHead>
                               {userType === "siswa" && <TableHead>Kelas</TableHead>}<TableHead className="text-center">Status</TableHead><TableHead className="text-center">Aksi</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -1599,7 +1599,7 @@ export default function UserManagement() {
                             {userType === "guru" ? displayedGuruList.map(guru => (
                               <TableRow key={guru.id_guru}>
                                 {selectMode && <TableCell><Checkbox checked={selectedIds.includes(guru.id_guru)} onCheckedChange={() => handleSelectItem(guru.id_guru)} /></TableCell>}
-                                <TableCell>{guru.nama}</TableCell><TableCell className="font-mono">{guru.nip}</TableCell><TableCell>{guru.email}</TableCell>
+                                <TableCell>{guru.nama}</TableCell><TableCell className="font-mono">{guru.nik}</TableCell><TableCell>{guru.email}</TableCell>
                                 <TableCell><Badge className={guru.gender === "L" ? "bg-blue-100 text-blue-700" : "bg-pink-100 text-pink-700"}>{guru.gender === "L" ? "Laki-laki" : "Perempuan"}</Badge></TableCell>
                                 <TableCell className="text-center"><Badge className={guru.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>{guru.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell>
                                 <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditDialog(guru)}><Edit className="h-4 w-4 text-blue-500" /></Button>{guru.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmDeactivate(guru)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmActivate(guru)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell>
@@ -1696,7 +1696,7 @@ export default function UserManagement() {
 
         {/* TIPS SECTION */}
         <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50 max-w-3xl mx-auto">
-          <CardContent className="p-5"><div className="flex items-start gap-4"><div className="bg-indigo-100 p-3 rounded-xl"><Sparkles className="h-6 w-6 text-indigo-600" /></div><div><h3 className="font-semibold text-slate-800 mb-1">Tips Mengelola Data</h3><p className="text-sm text-slate-600">Gunakan fitur import Excel untuk menambahkan banyak data sekaligus. Pastikan format file sesuai template. Data duplikat (email, NIP, NIS) akan otomatis dilewati saat import. Data ditampilkan dengan urutan nama (A-Z) untuk memudahkan pencarian. Gunakan mode Select untuk mengaktifkan/nonaktifkan banyak pengguna sekaligus. Kelas dapat diimpor melalui Excel dengan kolom nama, nip_wali (opsional), dan aktif (opsional).</p></div></div></CardContent>
+          <CardContent className="p-5"><div className="flex items-start gap-4"><div className="bg-indigo-100 p-3 rounded-xl"><Sparkles className="h-6 w-6 text-indigo-600" /></div><div><h3 className="font-semibold text-slate-800 mb-1">Tips Mengelola Data</h3><p className="text-sm text-slate-600">Gunakan fitur import Excel untuk menambahkan banyak data sekaligus. Pastikan format file sesuai template. Data duplikat (email, nik, NIS) akan otomatis dilewati saat import. Data ditampilkan dengan urutan nama (A-Z) untuk memudahkan pencarian. Gunakan mode Select untuk mengaktifkan/nonaktifkan banyak pengguna sekaligus. Kelas dapat diimpor melalui Excel dengan kolom nama, nik_wali (opsional), dan aktif (opsional).</p></div></div></CardContent>
         </Card>
 
         {/* FOOTER */}
@@ -1727,7 +1727,7 @@ export default function UserManagement() {
               <Button variant="outline" onClick={() => downloadTemplate(userType)} className="w-full rounded-lg"><Download className="h-4 w-4 mr-2" /> Download Template Excel</Button>
               <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
                 <p className="font-semibold">Format File:</p>
-                <p>Kolom yang diperlukan: <strong>nama, {userType === "guru" ? "nip, email, gender" : "nis, email, gender, kelas"}</strong></p>
+                <p>Kolom yang diperlukan: <strong>nama, {userType === "guru" ? "nik, email, gender" : "nis, email, gender, kelas"}</strong></p>
                 {userType === "siswa" && <p className="text-xs mt-1">Pastikan nama kelas sudah ada di database.</p>}
                 <p className="text-xs mt-1">Kolom password opsional, default "password123".</p>
               </div>
@@ -1744,7 +1744,7 @@ export default function UserManagement() {
                   <TableHeader>
                     <TableRow className="bg-slate-50">
                       <TableHead>Nama</TableHead>
-                      <TableHead>{userType === "guru" ? "NIP" : "NIS"}</TableHead>
+                      <TableHead>{userType === "guru" ? "nik" : "NIS"}</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Gender</TableHead>
                       {userType === "siswa" && <TableHead>Kelas</TableHead>}
@@ -1754,7 +1754,7 @@ export default function UserManagement() {
                     {previewData.slice(0, 20).map((item, idx) => (
                       <TableRow key={idx}>
                         <TableCell>{item.nama}</TableCell>
-                        <TableCell>{userType === "guru" ? item.nip : item.nis}</TableCell>
+                        <TableCell>{userType === "guru" ? item.nik : item.nis}</TableCell>
                         <TableCell>{item.email}</TableCell>
                         <TableCell><Badge className={item.gender === "L" ? "bg-blue-100" : "bg-pink-100"}>{item.gender === "L" ? "Laki-laki" : "Perempuan"}</Badge></TableCell>
                         {userType === "siswa" && <TableCell>{item.kelas}</TableCell>}
@@ -1785,7 +1785,7 @@ export default function UserManagement() {
             <div><Label>Email</Label><Input type="email" value={addForm.email} onChange={e => setAddForm({...addForm, email: e.target.value})} className="rounded-xl mt-1" placeholder="email@example.com" /></div>
             <div><Label>Gender</Label><Select value={addForm.gender} onValueChange={v => setAddForm({...addForm, gender: v})}><SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="Pilih gender" /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>
             {userType === "guru" ? (
-              <div><Label>NIP</Label><Input value={addForm.nip} onChange={e => setAddForm({...addForm, nip: e.target.value})} className="rounded-xl mt-1" placeholder="Nomor Induk Pegawai" /></div>
+              <div><Label>nik</Label><Input value={addForm.nik} onChange={e => setAddForm({...addForm, nik: e.target.value})} className="rounded-xl mt-1" placeholder="Nomor Induk Pegawai" /></div>
             ) : (
               <>
                 <div><Label>NIS</Label><Input value={addForm.nis} onChange={e => setAddForm({...addForm, nis: e.target.value})} className="rounded-xl mt-1" placeholder="Nomor Induk Siswa" /></div>
@@ -1805,7 +1805,7 @@ export default function UserManagement() {
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="rounded-2xl"><DialogHeader><DialogTitle><Edit className="h-5 w-5 inline mr-2 text-blue-600" /> Edit Pengguna</DialogTitle><DialogDescription>Ubah informasi user. Kosongkan password jika tidak ingin mengubah.</DialogDescription></DialogHeader>
           <div className="space-y-4"><div><Label>Nama</Label><Input value={editForm.nama} onChange={e => setEditForm({...editForm, nama: e.target.value})} className="rounded-xl mt-1" /></div><div><Label>Email</Label><Input type="email" value={editForm.email} onChange={e => setEditForm({...editForm, email: e.target.value})} className="rounded-xl mt-1" /></div>
-          {userType === "guru" && <div><Label>NIP</Label><Input value={editForm.nip} onChange={e => setEditForm({...editForm, nip: e.target.value})} className="rounded-xl mt-1" /></div>}
+          {userType === "guru" && <div><Label>nik</Label><Input value={editForm.nik} onChange={e => setEditForm({...editForm, nik: e.target.value})} className="rounded-xl mt-1" /></div>}
           {userType === "siswa" && <div><Label>NIS</Label><Input value={editForm.nis} onChange={e => setEditForm({...editForm, nis: e.target.value})} className="rounded-xl mt-1" /></div>}
           <div><Label>Gender</Label><Select value={editForm.gender} onValueChange={v => setEditForm({...editForm, gender: v})}><SelectTrigger className="rounded-xl mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>
           {userType === "siswa" && <div><Label>Kelas</Label><Select value={editForm.kelas_id} onValueChange={v => setEditForm({...editForm, kelas_id: v})}><SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="Pilih kelas" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada kelas</SelectItem>{kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}</SelectContent></Select></div>}
@@ -1833,7 +1833,7 @@ export default function UserManagement() {
       </Dialog>
 
       {/* DIALOG KELAS (TAMBAH/EDIT) */}
-      <Dialog open={kelasDialogOpen} onOpenChange={setKelasDialogOpen}><DialogContent className="rounded-2xl"><DialogHeader><DialogTitle><School className="h-5 w-5 inline mr-2 text-blue-600" />{editingKelas ? "Ubah Kelas" : "Tambah Kelas Baru"}</DialogTitle></DialogHeader><div className="space-y-4"><div><Label>Nama Kelas</Label><Input value={kelasForm.nama} onChange={e => setKelasForm({...kelasForm, nama: e.target.value})} placeholder="Contoh: XII RPL 1" className="rounded-xl mt-1" /></div><div><Label>Wali Kelas</Label><Select value={kelasForm.id_guru} onValueChange={v => setKelasForm({...kelasForm, id_guru: v})}><SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="Pilih wali kelas (opsional)" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada wali kelas</SelectItem>{guruOptions.map(guru => <SelectItem key={guru.id_guru} value={guru.id_guru.toString()}>{guru.nama} (NIP: {guru.nip})</SelectItem>)}</SelectContent></Select></div></div><DialogFooter><Button variant="outline" onClick={() => setKelasDialogOpen(false)}>Batal</Button><Button onClick={handleSaveKelas} disabled={isSavingKelas} className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600">{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button></DialogFooter></DialogContent>
+      <Dialog open={kelasDialogOpen} onOpenChange={setKelasDialogOpen}><DialogContent className="rounded-2xl"><DialogHeader><DialogTitle><School className="h-5 w-5 inline mr-2 text-blue-600" />{editingKelas ? "Ubah Kelas" : "Tambah Kelas Baru"}</DialogTitle></DialogHeader><div className="space-y-4"><div><Label>Nama Kelas</Label><Input value={kelasForm.nama} onChange={e => setKelasForm({...kelasForm, nama: e.target.value})} placeholder="Contoh: XII RPL 1" className="rounded-xl mt-1" /></div><div><Label>Wali Kelas</Label><Select value={kelasForm.id_guru} onValueChange={v => setKelasForm({...kelasForm, id_guru: v})}><SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="Pilih wali kelas (opsional)" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada wali kelas</SelectItem>{guruOptions.map(guru => <SelectItem key={guru.id_guru} value={guru.id_guru.toString()}>{guru.nama} (nik: {guru.nik})</SelectItem>)}</SelectContent></Select></div></div><DialogFooter><Button variant="outline" onClick={() => setKelasDialogOpen(false)}>Batal</Button><Button onClick={handleSaveKelas} disabled={isSavingKelas} className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600">{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button></DialogFooter></DialogContent>
       </Dialog>
 
       {/* DIALOG IMPORT KELAS */}
@@ -1845,13 +1845,13 @@ export default function UserManagement() {
               <div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50"><div className="flex flex-col items-center gap-2"><Upload className="h-8 w-8 text-slate-400" /><label htmlFor="kelas-file-input" className="cursor-pointer"><span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk upload</span><input id="kelas-file-input" type="file" accept=".xlsx,.xls" onChange={handleKelasFileUpload} className="hidden" disabled={isImportingKelas} /></label><p className="text-xs text-slate-500">atau drag & drop file Excel di sini</p></div></div>
               {importKelasUploadError && <Alert className="bg-red-50 border-red-200"><AlertCircle className="h-4 w-4 text-red-600" /><AlertDescription className="text-red-700">{importKelasUploadError}</AlertDescription></Alert>}
               <Button variant="outline" onClick={downloadKelasTemplate} className="w-full rounded-lg"><Download className="h-4 w-4 mr-2" /> Download Template Excel Kelas</Button>
-              <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700"><p className="font-semibold">Format File:</p><p>Kolom yang diperlukan: <strong>nama</strong> (wajib), <strong>nip_wali</strong> (opsional), <strong>aktif</strong> (opsional, 1 untuk aktif, 0 untuk nonaktif)</p><p className="text-xs mt-1">Contoh: X IPA 1, 198512342021011001, 1</p><p className="text-xs mt-1 text-red-600">* NIP wali harus sesuai dengan data guru di database</p></div>
+              <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700"><p className="font-semibold">Format File:</p><p>Kolom yang diperlukan: <strong>nama</strong> (wajib), <strong>nik_wali</strong> (opsional), <strong>aktif</strong> (opsional, 1 untuk aktif, 0 untuk nonaktif)</p><p className="text-xs mt-1">Contoh: X IPA 1, 198512342021011001, 1</p><p className="text-xs mt-1 text-red-600">* nik wali harus sesuai dengan data guru di database</p></div>
             </div>
           )}
           {importKelasStep === "preview" && importKelasPreviewRows.length > 0 && (
             <div className="space-y-4">
               <div className="flex justify-between items-center"><p className="text-sm font-medium">Preview Data ({importKelasPreviewRows.length} baris)</p><Badge className={importKelasPreviewRows.filter(r => r.isValid).length === importKelasPreviewRows.length ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>{importKelasPreviewRows.filter(r => r.isValid).length} dari {importKelasPreviewRows.length} valid</Badge></div>
-              <div className="border rounded-lg overflow-x-auto max-h-96"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead className="w-12">#</TableHead><TableHead>Nama Kelas</TableHead><TableHead>NIP Wali</TableHead><TableHead>Aktif</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader><TableBody>{importKelasPreviewRows.map((row, idx) => (<TableRow key={idx} className={!row.isValid ? "bg-red-50" : ""}><TableCell className="text-xs text-slate-500">{row.rowIndex}</TableCell><TableCell>{row.nama}</TableCell><TableCell>{row.nip_wali || "-"}{!row.guruValid && row.nip_wali && <span className="text-red-500 text-xs ml-1">(tidak ditemukan)</span>}</TableCell><TableCell><Badge className={row.aktif ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>{row.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell><TableCell className="text-center">{row.isValid ? <Badge className="bg-green-100 text-green-700">Valid</Badge> : <div className="text-xs text-red-600">{row.validationErrors?.map((err: string, i: number) => <div key={i}>{err}</div>)}{row.nip_wali && !row.guruValid && <div>NIP wali tidak ditemukan</div>}</div>}</TableCell></TableRow>))}</TableBody></Table></div>
+              <div className="border rounded-lg overflow-x-auto max-h-96"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead className="w-12">#</TableHead><TableHead>Nama Kelas</TableHead><TableHead>nik Wali</TableHead><TableHead>Aktif</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader><TableBody>{importKelasPreviewRows.map((row, idx) => (<TableRow key={idx} className={!row.isValid ? "bg-red-50" : ""}><TableCell className="text-xs text-slate-500">{row.rowIndex}</TableCell><TableCell>{row.nama}</TableCell><TableCell>{row.nik_wali || "-"}{!row.guruValid && row.nik_wali && <span className="text-red-500 text-xs ml-1">(tidak ditemukan)</span>}</TableCell><TableCell><Badge className={row.aktif ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>{row.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell><TableCell className="text-center">{row.isValid ? <Badge className="bg-green-100 text-green-700">Valid</Badge> : <div className="text-xs text-red-600">{row.validationErrors?.map((err: string, i: number) => <div key={i}>{err}</div>)}{row.nik_wali && !row.guruValid && <div>nik wali tidak ditemukan</div>}</div>}</TableCell></TableRow>))}</TableBody></Table></div>
               <div className="flex gap-3 justify-end"><Button variant="outline" onClick={() => { setImportKelasDialogOpen(false); setImportKelasRawData([]); setImportKelasPreviewRows([]); setImportKelasStep("upload"); }} className="rounded-lg">Batal</Button><Button onClick={confirmImportKelas} disabled={isImportingKelas || importKelasPreviewRows.filter(r => r.isValid).length === 0} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600">{isImportingKelas ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Mengimpor...</> : "Impor Data"}</Button></div>
             </div>
           )}
@@ -1859,7 +1859,7 @@ export default function UserManagement() {
       </Dialog>
 
       {/* DIALOG MISSING GURU UNTUK IMPORT KELAS */}
-      <Dialog open={missingGuruDialogOpen} onOpenChange={setMissingGuruDialogOpen}><DialogContent className="rounded-xl max-w-md"><DialogHeader><DialogTitle>Wali Kelas Tidak Ditemukan</DialogTitle><DialogDescription>Beberapa NIP wali kelas dalam file Excel tidak ditemukan di database guru.</DialogDescription></DialogHeader><div className="space-y-4"><div className="bg-yellow-50 p-3 rounded-lg"><p className="text-sm font-medium text-yellow-800">NIP yang tidak ditemukan:</p><ul className="list-disc list-inside mt-2 space-y-1">{Array.from(importKelasMissingGurus).map((nip, idx) => <li key={idx} className="text-sm text-yellow-700 font-mono">{nip}</li>)}</ul></div><p className="text-sm text-slate-600">Baris dengan NIP yang tidak ditemukan akan dilewati (tidak diimpor). Apakah Anda ingin melanjutkan import?</p></div><DialogFooter className="gap-2"><Button variant="outline" onClick={() => { setMissingGuruDialogOpen(false); setImportKelasDialogOpen(false); setImportKelasRawData([]); }} className="rounded-lg">Batalkan Import</Button><Button onClick={handleSkipMissingGurus} disabled={isImportingKelas} className="rounded-lg bg-green-600 hover:bg-green-700">Lanjutkan (Lewati Baris Bermasalah)</Button></DialogFooter></DialogContent>
+      <Dialog open={missingGuruDialogOpen} onOpenChange={setMissingGuruDialogOpen}><DialogContent className="rounded-xl max-w-md"><DialogHeader><DialogTitle>Wali Kelas Tidak Ditemukan</DialogTitle><DialogDescription>Beberapa nik wali kelas dalam file Excel tidak ditemukan di database guru.</DialogDescription></DialogHeader><div className="space-y-4"><div className="bg-yellow-50 p-3 rounded-lg"><p className="text-sm font-medium text-yellow-800">nik yang tidak ditemukan:</p><ul className="list-disc list-inside mt-2 space-y-1">{Array.from(importKelasMissingGurus).map((nik, idx) => <li key={idx} className="text-sm text-yellow-700 font-mono">{nik}</li>)}</ul></div><p className="text-sm text-slate-600">Baris dengan nik yang tidak ditemukan akan dilewati (tidak diimpor). Apakah Anda ingin melanjutkan import?</p></div><DialogFooter className="gap-2"><Button variant="outline" onClick={() => { setMissingGuruDialogOpen(false); setImportKelasDialogOpen(false); setImportKelasRawData([]); }} className="rounded-lg">Batalkan Import</Button><Button onClick={handleSkipMissingGurus} disabled={isImportingKelas} className="rounded-lg bg-green-600 hover:bg-green-700">Lanjutkan (Lewati Baris Bermasalah)</Button></DialogFooter></DialogContent>
       </Dialog>
     </div>
   );

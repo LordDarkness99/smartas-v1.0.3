@@ -77,7 +77,7 @@ import {
 interface Guru {
   id_guru: number;
   nama: string;
-  nip: string;
+  nik: string; // diubah dari nip
 }
 
 interface PKL {
@@ -194,18 +194,18 @@ export default function PklManagement() {
     try {
       const { data, error } = await supabase
         .from("guru")
-        .select("id_guru, nama, nip")
+        .select("id_guru, nama, nik") // nip -> nik
         .eq("aktif", true)
         .order("nama");
       if (error) throw error;
-      const formatted: Guru[] = data.map((g: any) => ({ ...g, nip: g.nip?.toString() || "" }));
+      const formatted: Guru[] = data.map((g: any) => ({ ...g, nik: g.nik?.toString() || "" }));
       setGuruList(formatted);
     } catch (error: any) {
       console.error("Fetch guru error:", error);
     }
   };
 
-  // ========== FETCH LOKASI PKL (urut: aktif abjad dulu, nonaktif abjad di belakang) ==========
+  // ========== FETCH LOKASI PKL ==========
   const fetchPKL = async () => {
     setIsFetchingPKL(true);
     try {
@@ -229,7 +229,6 @@ export default function PklManagement() {
         guru_nama: item.guru?.nama || "-",
         aktif: item.aktif ?? true,
       }));
-      // Urutkan: aktif true dulu (A-Z), lalu aktif false (A-Z)
       formatted.sort((a, b) => {
         if (a.aktif === b.aktif) {
           return a.tempat_pkl.localeCompare(b.tempat_pkl);
@@ -237,7 +236,6 @@ export default function PklManagement() {
         return a.aktif ? -1 : 1;
       });
       setPklList(formatted);
-      // Reset halaman ke 1 setiap kali data berubah
       setPklCurrentPage(1);
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -410,7 +408,7 @@ export default function PklManagement() {
     let headers: string[];
     let data: any[][];
     if (type === "lokasi") {
-      headers = ["tempat_pkl", "koordinat_pkl", "guru_nip"];
+      headers = ["tempat_pkl", "koordinat_pkl", "guru_nik"]; // nip -> nik
       data = [
         ["PT. Maju Jaya", "-6.200000,106.816666", "123456789"],
         ["CV. Karya Mandiri", "-6.208333,106.845555", "123456790"],
@@ -480,24 +478,24 @@ export default function PklManagement() {
           const duplicates = existing.map((e) => e.tempat_pkl);
           throw new Error(`Tempat PKL sudah ada: ${duplicates.join(", ")}`);
         }
-        const guruNips = [...new Set(importPreview.map((row: any) => row.guru_nip).filter(Boolean))];
+        const guruNiks = [...new Set(importPreview.map((row: any) => row.guru_nik).filter(Boolean))]; // nip -> nik
         let guruMap = new Map<string, number>();
-        if (guruNips.length) {
+        if (guruNiks.length) {
           const { data: guruData, error: guruError } = await supabase
             .from("guru")
-            .select("id_guru, nip")
-            .in("nip", guruNips);
+            .select("id_guru, nik") // nip -> nik
+            .in("nik", guruNiks); // nip -> nik
           if (guruError) throw guruError;
-          guruData?.forEach((g) => guruMap.set(g.nip?.toString() || "", g.id_guru));
-          const missingGuru = guruNips.filter((nip) => !guruMap.has(nip.toString()));
+          guruData?.forEach((g) => guruMap.set(g.nik?.toString() || "", g.id_guru));
+          const missingGuru = guruNiks.filter((nik) => !guruMap.has(nik.toString()));
           if (missingGuru.length) {
-            throw new Error(`Guru dengan NIP tidak ditemukan: ${missingGuru.join(", ")}`);
+            throw new Error(`Guru dengan NIK tidak ditemukan: ${missingGuru.join(", ")}`); // NIP -> NIK
           }
         }
         const dataToInsert = importPreview.map((row: any) => ({
           tempat_pkl: row.tempat_pkl,
           koordinat_pkl: row.koordinat_pkl || null,
-          id_guru: row.guru_nip ? guruMap.get(row.guru_nip.toString()) : null,
+          id_guru: row.guru_nik ? guruMap.get(row.guru_nik.toString()) : null, // nip -> nik
           aktif: true,
         }));
         await supabase.from("pkl").insert(dataToInsert);
@@ -512,7 +510,6 @@ export default function PklManagement() {
           .in("tempat_pkl", tempatNames);
         if (pklError) throw pklError;
         
-        // Filter hanya tempat yang aktif
         const activePkl = pklData?.filter(p => p.aktif === true) || [];
         const tempatToId = new Map();
         activePkl.forEach((p) => tempatToId.set(p.tempat_pkl, p.id_pkl));
@@ -1195,7 +1192,7 @@ export default function PklManagement() {
             <DialogDescription>
               Upload file Excel (.xlsx, .xls, .csv) dengan format yang sesuai.
               {importType === "lokasi"
-                ? " Kolom: tempat_pkl (wajib), koordinat_pkl (opsional), guru_nip (NIP guru pendamping, opsional)."
+                ? " Kolom: tempat_pkl (wajib), koordinat_pkl (opsional), guru_nik (NIK guru pendamping, opsional)."
                 : " Kolom: nis (wajib), tempat_pkl (wajib, nama tempat PKL harus sudah ada dan aktif di database)."}
             </DialogDescription>
           </DialogHeader>
@@ -1299,7 +1296,7 @@ export default function PklManagement() {
               <p className="text-xs text-slate-400 mt-1">Format: latitude,longitude</p>
             </div>
             <div>
-              <Label>Guru Pendamping (NIP)</Label>
+              <Label>Guru Pendamping (NIK)</Label> {/* NIP -> NIK */}
               <Select value={pklForm.id_guru || "0"} onValueChange={(v) => setPklForm({ ...pklForm, id_guru: v })}>
                 <SelectTrigger className="rounded-xl mt-1">
                   <SelectValue placeholder="Pilih guru pendamping" />
@@ -1308,7 +1305,7 @@ export default function PklManagement() {
                   <SelectItem value="0">- Tidak ada -</SelectItem>
                   {guruList.map((guru) => (
                     <SelectItem key={guru.id_guru} value={guru.id_guru.toString()}>
-                      {guru.nip} - {guru.nama}
+                      {guru.nik} - {guru.nama} {/* nip -> nik */}
                     </SelectItem>
                   ))}
                 </SelectContent>

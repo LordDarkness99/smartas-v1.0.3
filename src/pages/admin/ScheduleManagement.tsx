@@ -85,7 +85,7 @@ interface MataPelajaran {
 interface Guru {
   id_guru: number;
   nama: string;
-  nip?: number | string;
+  nik?: number | string;
   aktif: boolean;
 }
 
@@ -272,7 +272,7 @@ export default function ScheduleManagement() {
   };
 
   const fetchGuru = async () => {
-    const { data, error } = await supabase.from("guru").select("id_guru, nama, nip, aktif").eq("aktif", true).order("nama");
+    const { data, error } = await supabase.from("guru").select("id_guru, nama, nik, aktif").eq("aktif", true).order("nama");
     if (!error) setGuruList(data || []);
   };
 
@@ -599,9 +599,9 @@ export default function ScheduleManagement() {
     }
   };
 
-  // ========== IMPORT EXCEL JADWAL (MENGGUNAKAN NIP) ==========
+  // ========== IMPORT EXCEL JADWAL (MENGGUNAKAN nik) ==========
   const downloadJadwalTemplate = () => {
-    const headers = ["kelas", "mapel", "nip_guru", "hari", "jam"];
+    const headers = ["kelas", "mapel", "nik_guru", "hari", "jam"];
     const data = [
       ["X IPA 1", "Matematika", "1234567890", "Senin", "07:00 - 08:30"],
       ["X IPA 1", "Fisika", "0987654321", "Senin", "08:30 - 10:00"],
@@ -624,13 +624,13 @@ export default function ScheduleManagement() {
     
     const kelas = toStringTrim(row.kelas);
     const mapel = toStringTrim(row.mapel);
-    const nipGuru = toStringTrim(row.nip_guru);
+    const nikGuru = toStringTrim(row.nik_guru);
     const hari = toStringTrim(row.hari);
     const jam = toStringTrim(row.jam);
     
     if (!kelas) errors.push("Kelas tidak boleh kosong");
     if (!mapel) errors.push("Mata pelajaran tidak boleh kosong");
-    if (!nipGuru) errors.push("NIP guru tidak boleh kosong");
+    if (!nikGuru) errors.push("nik guru tidak boleh kosong");
     if (!hari) errors.push("Hari tidak boleh kosong");
     if (!jam) errors.push("Jam tidak boleh kosong");
     
@@ -656,8 +656,8 @@ export default function ScheduleManagement() {
       const kelasNama = toStringTrim(row.kelas);
       const kelas = kelasList.find(k => k.nama.toLowerCase() === kelasNama.toLowerCase());
       
-      const nipGuru = toStringTrim(row.nip_guru);
-      const guru = guruList.find(g => g.nip && g.nip.toString() === nipGuru);
+      const nikGuru = toStringTrim(row.nik_guru);
+      const guru = guruList.find(g => g.nik && g.nik.toString() === nikGuru);
       
       const mapelNama = toStringTrim(row.mapel);
       const mapel = mapelData.find(m => m.nama.toLowerCase() === mapelNama.toLowerCase());
@@ -669,7 +669,7 @@ export default function ScheduleManagement() {
       previewWithValidation.push({
         kelas: row.kelas,
         mapel: row.mapel,
-        nip_guru: row.nip_guru,
+        nik_guru: row.nik_guru,
         hari: toStringTrim(row.hari),
         jam: toStringTrim(row.jam),
         rowIndex: i + 1,
@@ -704,11 +704,11 @@ export default function ScheduleManagement() {
       if (jsonData.length === 0) throw new Error("File kosong");
       
       const firstRow = jsonData[0] as any;
-      const requiredColumns = ["kelas", "mapel", "nip_guru", "hari", "jam"];
+      const requiredColumns = ["kelas", "mapel", "nik_guru", "hari", "jam"];
       const missingColumns = requiredColumns.filter(col => !(col in firstRow));
       
       if (missingColumns.length > 0) {
-        throw new Error(`Kolom tidak ditemukan: ${missingColumns.join(", ")}. Pastikan file memiliki kolom: kelas, mapel, nip_guru, hari, jam`);
+        throw new Error(`Kolom tidak ditemukan: ${missingColumns.join(", ")}. Pastikan file memiliki kolom: kelas, mapel, nik_guru, hari, jam`);
       }
       
       setImportJadwalRawData(jsonData);
@@ -824,7 +824,7 @@ export default function ScheduleManagement() {
         if (isGuruOverlap) {
           failures.push({ 
             row: row.rowIndex, 
-            error: `Guru dengan NIP ${row.nip_guru} sudah memiliki jadwal lain di hari ${row.hari} pada jam yang tumpang tindih` 
+            error: `Guru dengan NIK ${row.nik_guru} sudah memiliki jadwal lain di hari ${row.hari} pada jam yang tumpang tindih` 
           });
           failCount++;
           continue;
@@ -1372,7 +1372,7 @@ export default function ScheduleManagement() {
         <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Impor Jadwal Pelajaran dari Excel</DialogTitle>
-            <DialogDescription>Upload file Excel untuk menambah jadwal secara massal (gunakan NIP Guru)</DialogDescription>
+            <DialogDescription>Upload file Excel untuk menambah jadwal secara massal (gunakan NIK Guru)</DialogDescription>
           </DialogHeader>
           
           {importJadwalStep === "upload" && (
@@ -1394,11 +1394,11 @@ export default function ScheduleManagement() {
                 </Alert>
               )}
               <Button variant="outline" onClick={downloadJadwalTemplate} className="w-full rounded-lg">
-                <Download className="h-4 w-4 mr-2" /> Download Template Excel Jadwal (NIP Guru)
+                <Download className="h-4 w-4 mr-2" /> Download Template Excel Jadwal (NIK Guru)
               </Button>
               <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
                 <p className="font-semibold">Format File:</p>
-                <p>Kolom yang diperlukan: <strong>kelas, mapel, nip_guru, hari, jam</strong></p>
+                <p>Kolom yang diperlukan: <strong>kelas, mapel, nik_guru, hari, jam</strong></p>
                 <p className="text-xs mt-1">Contoh: X IPA 1, Matematika, 1234567890, Senin, 07:00 - 08:30</p>
               </div>
             </div>
@@ -1420,7 +1420,7 @@ export default function ScheduleManagement() {
                       <TableHead className="w-12">#</TableHead>
                       <TableHead>Kelas</TableHead>
                       <TableHead>Mapel</TableHead>
-                      <TableHead>NIP Guru</TableHead>
+                      <TableHead>NIK Guru</TableHead>
                       <TableHead>Hari</TableHead>
                       <TableHead>Jam</TableHead>
                       <TableHead className="text-center">Status</TableHead>
@@ -1439,7 +1439,7 @@ export default function ScheduleManagement() {
                           {!row.mapelValid && <span className="text-red-500 text-xs ml-1">(tidak ditemukan)</span>}
                         </TableCell>
                         <TableCell>
-                          {row.nip_guru}
+                          {row.nik_guru}
                           {!row.guruValid && <span className="text-red-500 text-xs ml-1">(tidak ditemukan)</span>}
                         </TableCell>
                         <TableCell>{row.hari}</TableCell>
@@ -1453,7 +1453,7 @@ export default function ScheduleManagement() {
                                 <div key={i}>{err}</div>
                               ))}
                               {!row.kelasValid && <div>Kelas tidak ditemukan</div>}
-                              {!row.guruValid && <div>Guru dengan NIP tersebut tidak ditemukan</div>}
+                              {!row.guruValid && <div>Guru dengan nik tersebut tidak ditemukan</div>}
                               {!row.mapelValid && <div>Mapel tidak ditemukan</div>}
                             </div>
                           )}
