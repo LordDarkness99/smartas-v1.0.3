@@ -78,7 +78,8 @@ export default function Notifications() {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
+      // Gunakan any untuk menghindari type error karena tabel notifications mungkin belum terdaftar di types
+      const { data, error } = await (supabase as any)
         .from('notifications')
         .select('*')
         .eq('user_id', user.id)
@@ -88,6 +89,8 @@ export default function Notifications() {
       setNotifications(data || []);
     } catch (error) {
       console.error('Error fetching notifications:', error);
+      // Fallback: jika tabel belum ada, tampilkan data dummy atau kosong
+      setNotifications([]);
     } finally {
       setLoading(false);
     }
@@ -100,7 +103,7 @@ export default function Notifications() {
   // ==================== MARK AS READ ====================
   const markAsRead = async (id: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('notifications')
         .update({ read: true })
         .eq('id', id);
@@ -118,7 +121,7 @@ export default function Notifications() {
   // ==================== MARK ALL AS READ ====================
   const markAllAsRead = async () => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('notifications')
         .update({ read: true })
         .eq('user_id', user?.id)
@@ -135,7 +138,7 @@ export default function Notifications() {
   // ==================== DELETE NOTIFICATION ====================
   const deleteNotification = async (id: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('notifications')
         .delete()
         .eq('id', id);
@@ -151,7 +154,7 @@ export default function Notifications() {
   // ==================== DELETE ALL READ ====================
   const deleteAllRead = async () => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('notifications')
         .delete()
         .eq('user_id', user?.id)
@@ -220,32 +223,32 @@ export default function Notifications() {
     );
   }
 
-  // ==================== MAIN RENDER ====================
+  // ==================== MAIN RENDER - RESPONSIF MOBILE ====================
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
       
-      {/* HEADER SECTION */}
-      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
-        <div className="container mx-auto px-6 py-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-sm relative">
-                <Bell className="h-8 w-8" />
+      {/* HEADER SECTION - Responsif Mobile */}
+      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-2xl sm:rounded-3xl shadow-xl mx-3 sm:mx-4 mt-3 sm:mt-4">
+        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="bg-white/20 p-2 sm:p-3 rounded-2xl backdrop-blur-sm relative">
+                <Bell className="h-6 w-6 sm:h-8 sm:w-8" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center animate-pulse">
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] sm:text-xs font-bold rounded-full h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center animate-pulse">
                     {unreadCount}
                   </span>
                 )}
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  {greeting === "Selamat Pagi" ? <Sun className="h-4 w-4" /> : 
-                   greeting === "Selamat Malam" ? <Moon className="h-4 w-4" /> : 
-                   <Cloud className="h-4 w-4" />}
-                  <p className="text-sm text-blue-100">{greeting}</p>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  {greeting === "Selamat Pagi" ? <Sun className="h-3 w-3 sm:h-4 sm:w-4" /> : 
+                   greeting === "Selamat Malam" ? <Moon className="h-3 w-3 sm:h-4 sm:w-4" /> : 
+                   <Cloud className="h-3 w-3 sm:h-4 sm:w-4" />}
+                  <p className="text-xs sm:text-sm text-blue-100">{greeting}</p>
                 </div>
-                <h1 className="text-2xl lg:text-3xl font-bold">Notifikasi</h1>
-                <p className="text-blue-100 text-sm">
+                <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold">Notifikasi</h1>
+                <p className="text-blue-100 text-xs sm:text-sm">
                   {unreadCount > 0 
                     ? `Anda memiliki ${unreadCount} notifikasi belum dibaca`
                     : 'Semua notifikasi sudah dibaca'}
@@ -253,19 +256,19 @@ export default function Notifications() {
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
-              <div className="bg-white/10 rounded-xl px-4 py-2 backdrop-blur-sm text-center">
-                <p className="text-xs text-blue-100">{formatDate(currentTime)}</p>
-                <p className="text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
+            <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3">
+              <div className="bg-white/10 rounded-xl px-2 py-1 sm:px-4 sm:py-2 backdrop-blur-sm text-center">
+                <p className="text-[8px] sm:text-xs text-blue-100">{formatDate(currentTime)}</p>
+                <p className="text-xs sm:text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
               </div>
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="bg-white/10 hover:bg-white/20 text-white rounded-xl"
+                className="bg-white/10 hover:bg-white/20 text-white rounded-xl h-8 w-8 sm:h-10 sm:w-10"
                 onClick={handleRefresh}
                 disabled={refreshing}
               >
-                <RefreshCw className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-4 w-4 sm:h-5 sm:w-5 ${refreshing ? 'animate-spin' : ''}`} />
               </Button>
             </div>
           </div>
@@ -273,87 +276,87 @@ export default function Notifications() {
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="container mx-auto px-4 py-8 space-y-8">
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-4 sm:space-y-8">
         
-        {/* STATS CARDS */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-            <CardContent className="p-4">
+        {/* STATS CARDS - Responsif grid 2 kolom */}
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-blue-600 font-medium">Total Notifikasi</p>
-                  <p className="text-2xl font-bold text-blue-900">{notifications.length}</p>
+                  <p className="text-[10px] sm:text-xs text-blue-600 font-medium">Total Notifikasi</p>
+                  <p className="text-base sm:text-2xl font-bold text-blue-900">{notifications.length}</p>
                 </div>
-                <Inbox className="h-8 w-8 text-blue-500" />
+                <Inbox className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
           
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
-            <CardContent className="p-4">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-emerald-600 font-medium">Belum Dibaca</p>
-                  <p className="text-2xl font-bold text-emerald-900">{unreadCount}</p>
+                  <p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Belum Dibaca</p>
+                  <p className="text-base sm:text-2xl font-bold text-emerald-900">{unreadCount}</p>
                 </div>
-                <Bell className="h-8 w-8 text-emerald-500" />
+                <Bell className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />
               </div>
             </CardContent>
           </Card>
           
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-            <CardContent className="p-4">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-purple-600 font-medium">Sudah Dibaca</p>
-                  <p className="text-2xl font-bold text-purple-900">{notifications.filter(n => n.read).length}</p>
+                  <p className="text-[10px] sm:text-xs text-purple-600 font-medium">Sudah Dibaca</p>
+                  <p className="text-base sm:text-2xl font-bold text-purple-900">{notifications.filter(n => n.read).length}</p>
                 </div>
-                <CheckCheck className="h-8 w-8 text-purple-500" />
+                <CheckCheck className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" />
               </div>
             </CardContent>
           </Card>
           
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
-            <CardContent className="p-4">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-amber-600 font-medium">Hari Ini</p>
-                  <p className="text-2xl font-bold text-amber-900">
+                  <p className="text-[10px] sm:text-xs text-amber-600 font-medium">Hari Ini</p>
+                  <p className="text-base sm:text-2xl font-bold text-amber-900">
                     {notifications.filter(n => {
                       const today = new Date().toISOString().split("T")[0];
                       return n.created_at.split("T")[0] === today;
                     }).length}
                   </p>
                 </div>
-                <Calendar className="h-8 w-8 text-amber-500" />
+                <Calendar className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" />
               </div>
             </CardContent>
           </Card>
         </div>
 
         {/* MAIN NOTIFICATIONS CARD */}
-        <Card className="rounded-2xl border-0 shadow-xl overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/10 p-2 rounded-xl">
-                  <MessageSquare className="h-6 w-6" />
+        <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 sm:gap-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="bg-white/10 p-1.5 sm:p-2 rounded-xl">
+                  <MessageSquare className="h-5 w-5 sm:h-6 sm:w-6" />
                 </div>
                 <div>
-                  <CardTitle className="text-xl">Daftar Notifikasi</CardTitle>
-                  <CardDescription className="text-slate-300 text-sm">
+                  <CardTitle className="text-base sm:text-xl">Daftar Notifikasi</CardTitle>
+                  <CardDescription className="text-slate-300 text-[10px] sm:text-sm">
                     Semua pemberitahuan dan informasi penting untuk Anda
                   </CardDescription>
                 </div>
               </div>
               
-              <div className="flex items-center gap-2">
-                {/* Filter Buttons */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Filter Buttons - Responsif */}
                 <div className="flex gap-1 bg-white/10 p-1 rounded-xl">
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className={`rounded-lg text-white hover:bg-white/20 ${filter === "all" ? "bg-white/20" : ""}`}
+                    className={`rounded-lg text-white hover:bg-white/20 text-xs sm:text-sm px-2 sm:px-3 ${filter === "all" ? "bg-white/20" : ""}`}
                     onClick={() => setFilter("all")}
                   >
                     Semua
@@ -361,7 +364,7 @@ export default function Notifications() {
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className={`rounded-lg text-white hover:bg-white/20 ${filter === "unread" ? "bg-white/20" : ""}`}
+                    className={`rounded-lg text-white hover:bg-white/20 text-xs sm:text-sm px-2 sm:px-3 ${filter === "unread" ? "bg-white/20" : ""}`}
                     onClick={() => setFilter("unread")}
                   >
                     Belum Dibaca
@@ -369,23 +372,24 @@ export default function Notifications() {
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className={`rounded-lg text-white hover:bg-white/20 ${filter === "read" ? "bg-white/20" : ""}`}
+                    className={`rounded-lg text-white hover:bg-white/20 text-xs sm:text-sm px-2 sm:px-3 ${filter === "read" ? "bg-white/20" : ""}`}
                     onClick={() => setFilter("read")}
                   >
                     Sudah Dibaca
                   </Button>
                 </div>
                 
-                {/* Action Buttons */}
+                {/* Action Buttons - Responsif */}
                 {unreadCount > 0 && (
                   <Button 
                     onClick={markAllAsRead} 
                     variant="ghost" 
                     size="sm"
-                    className="bg-white/10 hover:bg-white/20 text-white rounded-xl"
+                    className="bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
                   >
-                    <CheckCheck className="h-4 w-4 mr-1" />
-                    Tandai Semua
+                    <CheckCheck className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    <span className="hidden sm:inline">Tandai Semua</span>
+                    <span className="inline sm:hidden">Semua</span>
                   </Button>
                 )}
                 {notifications.some(n => n.read) && (
@@ -393,10 +397,11 @@ export default function Notifications() {
                     onClick={deleteAllRead} 
                     variant="ghost" 
                     size="sm"
-                    className="bg-white/10 hover:bg-red-500/20 text-white hover:text-red-300 rounded-xl"
+                    className="bg-white/10 hover:bg-red-500/20 text-white hover:text-red-300 rounded-xl text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
                   >
-                    <Trash2 className="h-4 w-4 mr-1" />
-                    Hapus yang Dibaca
+                    <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    <span className="hidden sm:inline">Hapus yang Dibaca</span>
+                    <span className="inline sm:hidden">Hapus</span>
                   </Button>
                 )}
               </div>
@@ -418,10 +423,10 @@ export default function Notifications() {
                       }`}
                       onClick={() => !notification.read && markAsRead(notification.id)}
                     >
-                      <div className="p-5">
-                        <div className="flex items-start gap-4">
+                      <div className="p-3 sm:p-5">
+                        <div className="flex items-start gap-2 sm:gap-4">
                           {/* Icon Section */}
-                          <div className={`flex-shrink-0 p-2.5 rounded-xl ${
+                          <div className={`flex-shrink-0 p-1.5 sm:p-2.5 rounded-xl ${
                             isUnread ? style.bgLight : 'bg-slate-100 text-slate-400'
                           } ${isUnread ? style.textDark : 'text-slate-400'}`}>
                             {style.icon}
@@ -429,33 +434,33 @@ export default function Notifications() {
                           
                           {/* Content Section */}
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center flex-wrap gap-2 mb-1">
-                              <h3 className={`font-semibold ${isUnread ? 'text-slate-800' : 'text-slate-500'}`}>
+                            <div className="flex items-center flex-wrap gap-1 sm:gap-2 mb-1">
+                              <h3 className={`font-semibold text-xs sm:text-sm ${isUnread ? 'text-slate-800' : 'text-slate-500'}`}>
                                 {notification.title}
                               </h3>
                               {isUnread && (
-                                <Badge className="bg-blue-500 text-white rounded-full text-xs px-2 py-0">
+                                <Badge className="bg-blue-500 text-white rounded-full text-[8px] sm:text-xs px-1.5 py-0">
                                   Baru
                                 </Badge>
                               )}
-                              <Badge className={`${style.badgeBg} ${style.badgeText} rounded-full text-xs border-0`}>
+                              <Badge className={`${style.badgeBg} ${style.badgeText} rounded-full text-[8px] sm:text-xs border-0 px-1.5 py-0`}>
                                 {notification.entity || "Umum"}
                               </Badge>
                             </div>
-                            <p className={`text-sm ${isUnread ? 'text-slate-600' : 'text-slate-400'} mt-1`}>
+                            <p className={`text-[10px] sm:text-sm ${isUnread ? 'text-slate-600' : 'text-slate-400'} mt-0.5 sm:mt-1`}>
                               {notification.message}
                             </p>
-                            <div className="flex items-center gap-3 mt-2">
-                              <div className="flex items-center gap-1 text-xs text-slate-400">
-                                <Clock className="h-3 w-3" />
+                            <div className="flex items-center gap-2 sm:gap-3 mt-1 sm:mt-2">
+                              <div className="flex items-center gap-0.5 sm:gap-1 text-[9px] sm:text-xs text-slate-400">
+                                <Clock className="h-2 w-2 sm:h-3 sm:w-3" />
                                 {formatDistanceToNow(new Date(notification.created_at), { 
                                   addSuffix: true,
                                   locale: id 
                                 })}
                               </div>
                               {notification.entity_id && (
-                                <div className="flex items-center gap-1 text-xs text-slate-400">
-                                  <Info className="h-3 w-3" />
+                                <div className="flex items-center gap-0.5 sm:gap-1 text-[9px] sm:text-xs text-slate-400">
+                                  <Info className="h-2 w-2 sm:h-3 sm:w-3" />
                                   ID: {notification.entity_id}
                                 </div>
                               )}
@@ -463,30 +468,30 @@ export default function Notifications() {
                           </div>
                           
                           {/* Actions */}
-                          <div className="flex-shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                          <div className="flex-shrink-0 flex items-center gap-0.5 sm:gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                             {isUnread && (
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg"
+                                className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   markAsRead(notification.id);
                                 }}
                               >
-                                <Eye className="h-4 w-4" />
+                                <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
                               </Button>
                             )}
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                              className="h-6 w-6 sm:h-8 sm:w-8 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 deleteNotification(notification.id);
                               }}
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
                           </div>
                         </div>
@@ -496,12 +501,12 @@ export default function Notifications() {
                 })}
               </div>
             ) : (
-              <div className="text-center py-16">
-                <div className="bg-slate-100 rounded-full w-24 h-24 mx-auto flex items-center justify-center mb-4">
-                  <BellOff className="h-12 w-12 text-slate-400" />
+              <div className="text-center py-8 sm:py-16">
+                <div className="bg-slate-100 rounded-full w-16 h-16 sm:w-24 sm:h-24 mx-auto flex items-center justify-center mb-3 sm:mb-4">
+                  <BellOff className="h-8 w-8 sm:h-12 sm:w-12 text-slate-400" />
                 </div>
-                <p className="text-slate-500 font-medium text-lg">Tidak Ada Notifikasi</p>
-                <p className="text-slate-400 text-sm mt-1">
+                <p className="text-slate-500 font-medium text-sm sm:text-lg">Tidak Ada Notifikasi</p>
+                <p className="text-slate-400 text-xs sm:text-sm mt-1">
                   {filter === "unread" 
                     ? "Semua notifikasi sudah dibaca" 
                     : filter === "read" 
@@ -515,15 +520,15 @@ export default function Notifications() {
 
         {/* TIPS SECTION */}
         {notifications.length > 0 && (
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50">
-            <CardContent className="p-5">
-              <div className="flex items-start gap-4">
-                <div className="bg-indigo-100 p-3 rounded-xl">
-                  <Sparkles className="h-6 w-6 text-indigo-600" />
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50">
+            <CardContent className="p-3 sm:p-5">
+              <div className="flex items-start gap-2 sm:gap-4">
+                <div className="bg-indigo-100 p-2 sm:p-3 rounded-xl">
+                  <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-slate-800 mb-1">Tips Mengelola Notifikasi</h3>
-                  <p className="text-sm text-slate-600">
+                  <h3 className="font-semibold text-slate-800 text-sm sm:text-base mb-0.5 sm:mb-1">Tips Mengelola Notifikasi</h3>
+                  <p className="text-[10px] sm:text-sm text-slate-600">
                     Klik notifikasi untuk menandai sebagai sudah dibaca. Gunakan tombol "Tandai Semua" untuk 
                     menandai semua notifikasi sebagai sudah dibaca, atau "Hapus yang Dibaca" untuk membersihkan 
                     notifikasi yang sudah tidak diperlukan.
@@ -535,12 +540,12 @@ export default function Notifications() {
         )}
 
         {/* FOOTER */}
-        <div className="text-center pt-4">
-          <Separator className="mb-4" />
-          <p className="text-xs text-slate-400">
+        <div className="text-center pt-3 sm:pt-4">
+          <Separator className="mb-3 sm:mb-4" />
+          <p className="text-[10px] sm:text-xs text-slate-400">
             © {new Date().getFullYear()} Sistem Notifikasi - SmartAS
           </p>
-          <p className="text-[10px] text-slate-300 mt-1">
+          <p className="text-[8px] sm:text-[10px] text-slate-300 mt-0.5 sm:mt-1">
             Notifikasi akan tersimpan selama 30 hari
           </p>
         </div>

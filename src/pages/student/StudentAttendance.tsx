@@ -85,7 +85,6 @@ export default function StudentAttendance() {
 
   // Koordinat sekolah
   const SCHOOL_COORD = { lat: -7.25826733665077, lng: 112.72468705518851 };
-  //const SCHOOL_COORD = { lat: -7.310498935234229, lng: 112.7243203565491 };
 
   // ==================== GREETING EFFECT ====================
   useEffect(() => {
@@ -223,34 +222,26 @@ export default function StudentAttendance() {
           const { latitude, longitude, accuracy, speed } = position.coords;
           const timestamp = position.timestamp;
 
-          // ==================== DETEKSI FAKE GPS DASAR ====================
-
-          // 1. Akurasi mencurigakan (terlalu bagus / terlalu buruk)
+          // Anti fake GPS basic
           if (accuracy < 5) {
             resolve({ valid: false, message: "⚠️ Lokasi terdeteksi tidak wajar (akurasi terlalu tinggi)" });
             return;
           }
-
           if (accuracy > 1000) {
             resolve({ valid: false, message: "⚠️ GPS tidak stabil, coba aktifkan ulang lokasi" });
             return;
           }
-
-          // 2. Timestamp terlalu lama (fake GPS kadang statis)
           const now = Date.now();
           if (now - timestamp > 10000) {
             resolve({ valid: false, message: "⚠️ Lokasi tidak real-time (terdeteksi delay)" });
             return;
           }
-
-          // 3. Speed tidak wajar (loncat lokasi)
           if (speed && speed > 50) {
             resolve({ valid: false, message: "⚠️ Pergerakan tidak wajar terdeteksi" });
             return;
           }
 
-          // ==================== VALIDASI LOKASI ASLI ====================
-
+          // Tentukan target lokasi
           let targetCoord = SCHOOL_COORD;
           let targetName = "Sekolah";
 
@@ -417,28 +408,26 @@ export default function StudentAttendance() {
     console.error(error);
   };
 
-  // ==================== PROSES QR DENGAN VALIDASI DINAMIS (30 DETIK, SEKALI PAKAI) ====================
+  // ==================== PROSES QR DENGAN VALIDASI DINAMIS ====================
   const processQRCode = async (qrData: string) => {
     try {
       const payload = JSON.parse(qrData);
       const { id_jadwal, nonce, exp } = payload;
 
-      // 1. Pastikan payload memiliki id_jadwal, nonce, dan exp
       if (!id_jadwal || !nonce || !exp) {
         toast({ title: "QR tidak valid", description: "QR Code tidak dikenali (format tidak lengkap)", variant: "destructive" });
         return;
       }
 
-      // 2. Cek masa berlaku (expiry) - hanya 30 detik sejak generate
       const now = Date.now();
       if (now > exp) {
         toast({ title: "QR kadaluarsa", description: "QR Code sudah tidak berlaku (hanya 30 detik)", variant: "destructive" });
         return;
       }
 
-      // 3. Cek apakah nonce ada di tabel active_qr_nonce dan belum digunakan
-      const { data: existingNonce, error: nonceError } = await supabase
-        .from("active_qr_nonce")
+      // Gunakan 'as any' untuk tabel active_qr_nonce yang mungkin belum ada di types
+      const { data: existingNonce, error: nonceError } = await (supabase
+        .from('active_qr_nonce') as any)
         .select("nonce, used")
         .eq("nonce", nonce)
         .single();
@@ -453,13 +442,10 @@ export default function StudentAttendance() {
         return;
       }
 
-      // 4. Tandai nonce sebagai sudah terpakai (sekali pakai)
-      await supabase
-        .from("active_qr_nonce")
+      await (supabase.from('active_qr_nonce') as any)
         .update({ used: true })
         .eq("nonce", nonce);
 
-      // 5. Validasi jadwal (sama seperti kode asli)
       const { data: jadwal, error: jadwalError } = await supabase
         .from("jadwal")
         .select(`
@@ -499,14 +485,12 @@ export default function StudentAttendance() {
         return;
       }
 
-      // 6. Validasi lokasi
       const { valid, message } = await validateLocation();
       if (!valid) {
         toast({ title: "Lokasi tidak valid", description: message, variant: "destructive" });
         return;
       }
 
-      // 7. Simpan presensi
       const { error: insertError } = await supabase.from("presensi_siswa_mapel").insert({
         id_siswa: siswa!.id_siswa,
         id_jadwal: id_jadwal,
@@ -522,7 +506,6 @@ export default function StudentAttendance() {
         }
       } else {
         toast({ title: "Berhasil", description: `✅ Presensi ${jadwal.mapel?.nama} tercatat` });
-        // Refresh tampilan jadwal
         const todayStr = today.toISOString().split("T")[0];
         const start = `${todayStr}T00:00:00`;
         const end = `${todayStr}T23:59:59`;
@@ -565,7 +548,6 @@ export default function StudentAttendance() {
     });
   };
 
-  // Calculate attendance percentage for today
   const attendanceProgress = (() => {
     const totalJadwal = jadwalHariIni.length;
     const sudahPresensi = jadwalHariIni.filter(j => j.sudah_presensi).length;
@@ -585,45 +567,45 @@ export default function StudentAttendance() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 overflow-x-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
       
-      {/* HEADER SECTION */}
-      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
-        <div className="container mx-auto px-6 py-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <Avatar className="h-14 w-14 border-2 border-white/30 rounded-2xl">
-                <AvatarFallback className="bg-white/20 text-white text-xl font-bold rounded-2xl">
+      {/* HEADER - Responsif */}
+      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-2xl sm:rounded-3xl shadow-xl mx-3 sm:mx-4 mt-3 sm:mt-4">
+        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <Avatar className="h-10 w-10 sm:h-14 sm:w-14 border-2 border-white/30 rounded-xl sm:rounded-2xl">
+                <AvatarFallback className="bg-white/20 text-white text-base sm:text-xl font-bold rounded-xl sm:rounded-2xl">
                   {siswa?.nama?.charAt(0) || "S"}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <div className="flex items-center gap-2">
-                  {greeting === "Selamat Pagi" ? <Sun className="h-4 w-4" /> : 
-                   greeting === "Selamat Malam" ? <Moon className="h-4 w-4" /> : 
-                   <Cloud className="h-4 w-4" />}
-                  <p className="text-sm text-blue-100">{greeting}</p>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  {greeting === "Selamat Pagi" ? <Sun className="h-3 w-3 sm:h-4 sm:w-4" /> : 
+                   greeting === "Selamat Malam" ? <Moon className="h-3 w-3 sm:h-4 sm:w-4" /> : 
+                   <Cloud className="h-3 w-3 sm:h-4 sm:w-4" />}
+                  <p className="text-xs sm:text-sm text-blue-100">{greeting}</p>
                 </div>
-                <h1 className="text-2xl lg:text-3xl font-bold">Presensi Siswa</h1>
-                <p className="text-blue-100 text-sm">
+                <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold">Presensi Siswa</h1>
+                <p className="text-blue-100 text-xs sm:text-sm">
                   {siswa?.nama} • {siswa?.nis}
                 </p>
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
-              <div className="bg-white/10 rounded-xl px-4 py-2 backdrop-blur-sm text-center">
-                <p className="text-xs text-blue-100">{formatDate(currentTime)}</p>
-                <p className="text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
+            <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3">
+              <div className="bg-white/10 rounded-xl px-2 py-1 sm:px-4 sm:py-2 backdrop-blur-sm text-center">
+                <p className="text-[9px] sm:text-xs text-blue-100">{formatDate(currentTime)}</p>
+                <p className="text-xs sm:text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
               </div>
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="bg-white/10 hover:bg-white/20 text-white rounded-xl"
+                className="bg-white/10 hover:bg-white/20 text-white rounded-xl h-8 w-8 sm:h-10 sm:w-10"
                 onClick={handleRefresh}
                 disabled={refreshing}
               >
-                <RefreshCw className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-4 w-4 sm:h-5 sm:w-5 ${refreshing ? 'animate-spin' : ''}`} />
               </Button>
             </div>
           </div>
@@ -631,58 +613,58 @@ export default function StudentAttendance() {
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="container mx-auto px-4 py-8 space-y-8">
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-4 sm:space-y-8">
         
-        {/* INFO CARDS */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-            <CardContent className="p-4">
+        {/* INFO CARDS - Responsif 2 kolom */}
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-blue-600 font-medium">NIS</p>
-                  <p className="text-lg font-bold text-blue-900">{siswa?.nis}</p>
+                  <p className="text-[10px] sm:text-xs text-blue-600 font-medium">NIS</p>
+                  <p className="text-sm sm:text-lg font-bold text-blue-900 truncate">{siswa?.nis}</p>
                 </div>
-                <User className="h-8 w-8 text-blue-500" />
+                <User className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
           
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
-            <CardContent className="p-4">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-emerald-600 font-medium">Status</p>
-                  <p className="text-lg font-bold text-emerald-900">
+                  <p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Status</p>
+                  <p className="text-sm sm:text-lg font-bold text-emerald-900">
                     {siswa?.id_pkl ? "PKL" : "Sekolah"}
                   </p>
                 </div>
-                {siswa?.id_pkl ? <Briefcase className="h-8 w-8 text-emerald-500" /> : <School className="h-8 w-8 text-emerald-500" />}
+                {siswa?.id_pkl ? <Briefcase className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" /> : <School className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />}
               </div>
             </CardContent>
           </Card>
           
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
-            <CardContent className="p-4">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-amber-600 font-medium">Presensi Masuk</p>
-                  <p className="text-lg font-bold text-amber-900">
+                  <p className="text-[10px] sm:text-xs text-amber-600 font-medium">Presensi Masuk</p>
+                  <p className="text-sm sm:text-lg font-bold text-amber-900">
                     {todayPresensi.masuk ? "Sudah" : "Belum"}
                   </p>
                 </div>
-                <Calendar className="h-8 w-8 text-amber-500" />
+                <Calendar className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" />
               </div>
             </CardContent>
           </Card>
           
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-            <CardContent className="p-4">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-purple-600 font-medium">Progress Mapel</p>
-                  <p className="text-lg font-bold text-purple-900">{attendanceProgress}%</p>
+                  <p className="text-[10px] sm:text-xs text-purple-600 font-medium">Progress Mapel</p>
+                  <p className="text-sm sm:text-lg font-bold text-purple-900">{attendanceProgress}%</p>
                 </div>
-                <Activity className="h-8 w-8 text-purple-500" />
+                <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" />
               </div>
             </CardContent>
           </Card>
@@ -690,13 +672,13 @@ export default function StudentAttendance() {
 
         {/* PKL INFO */}
         {siswa?.id_pkl && siswa?.tempat_pkl && (
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-r from-indigo-500 to-purple-500 text-white">
-            <CardContent className="p-4">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-r from-indigo-500 to-purple-500 text-white">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center gap-3">
-                <Briefcase className="h-8 w-8" />
+                <Briefcase className="h-6 w-6 sm:h-8 sm:w-8" />
                 <div>
-                  <p className="text-sm opacity-90">Tempat PKL</p>
-                  <p className="font-semibold">{siswa.tempat_pkl}</p>
+                  <p className="text-[10px] sm:text-sm opacity-90">Tempat PKL</p>
+                  <p className="text-xs sm:text-base font-semibold truncate">{siswa.tempat_pkl}</p>
                 </div>
               </div>
             </CardContent>
@@ -704,61 +686,63 @@ export default function StudentAttendance() {
         )}
 
         {/* MAIN TABS CARD */}
-        <Card className="rounded-2xl border-0 shadow-xl overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-6">
+        <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-6">
             <div className="flex items-center gap-3">
-              <div className="bg-white/10 p-2 rounded-xl">
-                <Fingerprint className="h-6 w-6" />
+              <div className="bg-white/10 p-1.5 sm:p-2 rounded-xl">
+                <Fingerprint className="h-5 w-5 sm:h-6 sm:w-6" />
               </div>
               <div>
-                <CardTitle className="text-xl">Form Presensi</CardTitle>
-                <CardDescription className="text-slate-300 text-sm">
+                <CardTitle className="text-base sm:text-xl">Form Presensi</CardTitle>
+                <CardDescription className="text-slate-300 text-[10px] sm:text-sm">
                   Lakukan presensi harian dan presensi mata pelajaran
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
           
-          <CardContent className="p-6">
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-6">
-              <TabsList className="bg-slate-100 p-1 rounded-xl w-full max-w-md">
-                <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Presensi Harian
-                </TabsTrigger>
-                <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2">
-                  <QrCode className="h-4 w-4" />
-                  Presensi Mapel
-                </TabsTrigger>
-              </TabsList>
+          <CardContent className="p-4 sm:p-6">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-4 sm:space-y-6">
+              <div className="flex justify-center">
+                <TabsList className="bg-slate-100 p-1 rounded-xl w-full max-w-xs sm:max-w-md">
+                  <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-3 py-1">
+                    <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+                    Presensi Harian
+                  </TabsTrigger>
+                  <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-3 py-1">
+                    <QrCode className="h-3 w-3 sm:h-4 sm:w-4" />
+                    Presensi Mapel
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
               {/* TAB PRESENSI HARIAN */}
-              <TabsContent value="harian" className="space-y-6">
-                <div className="grid gap-6 md:grid-cols-2">
+              <TabsContent value="harian" className="space-y-4 sm:space-y-6">
+                <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
                   {/* Card Masuk */}
                   <Card className="rounded-xl border-0 shadow-md overflow-hidden relative">
-                    <CardHeader className="pb-3">
+                    <CardHeader className="pb-2 p-4 sm:p-5">
                       <div className="flex items-center gap-2">
-                        <div className="bg-emerald-100 p-2 rounded-xl">
-                          <Calendar className="h-5 w-5 text-emerald-600" />
+                        <div className="bg-emerald-100 p-1.5 sm:p-2 rounded-xl">
+                          <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600" />
                         </div>
-                        <CardTitle className="text-lg">Presensi Masuk</CardTitle>
+                        <CardTitle className="text-sm sm:text-lg">Presensi Masuk</CardTitle>
                       </div>
-                      <CardDescription>Jam masuk sekolah / PKL</CardDescription>
+                      <CardDescription className="text-xs sm:text-sm">Jam masuk sekolah / PKL</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="p-4 sm:p-5 pt-0">
                       {todayPresensi.masuk ? (
                         <div className="space-y-3">
-                          <div className="bg-emerald-50 rounded-xl p-4 flex items-center gap-3">
-                            <CheckCircle className="h-8 w-8 text-emerald-600" />
+                          <div className="bg-emerald-50 rounded-xl p-3 sm:p-4 flex items-center gap-3">
+                            <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-600" />
                             <div>
-                              <p className="font-semibold text-emerald-800">Sudah Presensi</p>
-                              <p className="text-sm text-emerald-600">
+                              <p className="font-semibold text-emerald-800 text-sm sm:text-base">Sudah Presensi</p>
+                              <p className="text-xs sm:text-sm text-emerald-600">
                                 {new Date(todayPresensi.masuk.waktu_presensi).toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' })}
                               </p>
                             </div>
                           </div>
-                          <Badge className="bg-emerald-100 text-emerald-700 rounded-full">
+                          <Badge className="bg-emerald-100 text-emerald-700 rounded-full text-xs">
                             Status: {todayPresensi.masuk.status_presensi}
                           </Badge>
                         </div>
@@ -766,7 +750,7 @@ export default function StudentAttendance() {
                         <Button 
                           onClick={handleMasuk} 
                           disabled={isSubmitting} 
-                          className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
+                          className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-sm sm:text-base h-9 sm:h-10"
                         >
                           {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapPin className="mr-2 h-4 w-4" />}
                           Presensi Masuk Sekarang
@@ -777,22 +761,22 @@ export default function StudentAttendance() {
 
                   {/* Card Pulang */}
                   <Card className="rounded-xl border-0 shadow-md overflow-hidden relative">
-                    <CardHeader className="pb-3">
+                    <CardHeader className="pb-2 p-4 sm:p-5">
                       <div className="flex items-center gap-2">
-                        <div className="bg-orange-100 p-2 rounded-xl">
-                          <Clock className="h-5 w-5 text-orange-600" />
+                        <div className="bg-orange-100 p-1.5 sm:p-2 rounded-xl">
+                          <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-orange-600" />
                         </div>
-                        <CardTitle className="text-lg">Presensi Pulang</CardTitle>
+                        <CardTitle className="text-sm sm:text-lg">Presensi Pulang</CardTitle>
                       </div>
-                      <CardDescription>Jam pulang sekolah / PKL</CardDescription>
+                      <CardDescription className="text-xs sm:text-sm">Jam pulang sekolah / PKL</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="p-4 sm:p-5 pt-0">
                       {todayPresensi.pulang ? (
-                        <div className="bg-orange-50 rounded-xl p-4 flex items-center gap-3">
-                          <CheckCircle className="h-8 w-8 text-orange-600" />
+                        <div className="bg-orange-50 rounded-xl p-3 sm:p-4 flex items-center gap-3">
+                          <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-orange-600" />
                           <div>
-                            <p className="font-semibold text-orange-800">Sudah Presensi</p>
-                            <p className="text-sm text-orange-600">
+                            <p className="font-semibold text-orange-800 text-sm sm:text-base">Sudah Presensi</p>
+                            <p className="text-xs sm:text-sm text-orange-600">
                               {new Date(todayPresensi.pulang.waktu_presensi).toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' })}
                             </p>
                           </div>
@@ -802,7 +786,7 @@ export default function StudentAttendance() {
                           onClick={handlePulang} 
                           disabled={isSubmitting || !todayPresensi.masuk} 
                           variant="outline" 
-                          className="w-full rounded-xl"
+                          className="w-full rounded-xl text-sm sm:text-base h-9 sm:h-10"
                         >
                           {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapPin className="mr-2 h-4 w-4" />}
                           Presensi Pulang
@@ -825,14 +809,14 @@ export default function StudentAttendance() {
                 )}
 
                 {/* Tips */}
-                <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4">
+                <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-3 sm:p-4">
                   <div className="flex items-start gap-3">
-                    <div className="bg-blue-100 p-2 rounded-xl">
-                      <Sparkles className="h-5 w-5 text-blue-600" />
+                    <div className="bg-blue-100 p-1.5 sm:p-2 rounded-xl">
+                      <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                     </div>
                     <div>
-                      <p className="font-medium text-slate-800">Tips Presensi</p>
-                      <p className="text-sm text-slate-600">
+                      <p className="font-medium text-slate-800 text-sm sm:text-base">Tips Presensi</p>
+                      <p className="text-xs sm:text-sm text-slate-600">
                         Pastikan GPS aktif dan Anda berada di lokasi sekolah/PKL saat melakukan presensi.
                         Batas waktu presensi masuk adalah pukul 07:30 WIB.
                       </p>
@@ -842,29 +826,29 @@ export default function StudentAttendance() {
               </TabsContent>
 
               {/* TAB PRESENSI MAPEL */}
-              <TabsContent value="mapel" className="space-y-6">
+              <TabsContent value="mapel" className="space-y-4 sm:space-y-6">
                 {isLoadingJadwal ? (
                   <div className="flex justify-center py-12">
                     <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
                   </div>
                 ) : jadwalHariIni.length === 0 ? (
                   <div className="text-center py-12">
-                    <div className="bg-slate-100 rounded-full w-20 h-20 mx-auto flex items-center justify-center mb-4">
-                      <Calendar className="h-10 w-10 text-slate-400" />
+                    <div className="bg-slate-100 rounded-full w-16 h-16 sm:w-20 sm:h-20 mx-auto flex items-center justify-center mb-4">
+                      <Calendar className="h-8 w-8 sm:h-10 sm:w-10 text-slate-400" />
                     </div>
-                    <p className="text-slate-500 font-medium">Tidak ada jadwal mata pelajaran untuk hari ini</p>
-                    <p className="text-slate-400 text-sm mt-1">Selamat beristirahat! 🎉</p>
+                    <p className="text-slate-500 font-medium text-sm sm:text-base">Tidak ada jadwal mata pelajaran untuk hari ini</p>
+                    <p className="text-slate-400 text-xs sm:text-sm mt-1">Selamat beristirahat! 🎉</p>
                   </div>
                 ) : (
-                  <div className="space-y-5">
+                  <div className="space-y-4 sm:space-y-5">
                     {/* Progress Section */}
-                    <div className="bg-slate-50 rounded-xl p-5">
+                    <div className="bg-slate-50 rounded-xl p-4 sm:p-5">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <Activity className="h-5 w-5 text-slate-600" />
-                          <span className="font-medium text-slate-700">Progress Presensi Hari Ini</span>
+                          <Activity className="h-4 w-4 sm:h-5 sm:w-5 text-slate-600" />
+                          <span className="font-medium text-slate-700 text-sm sm:text-base">Progress Presensi Hari Ini</span>
                         </div>
-                        <span className="text-2xl font-bold text-blue-600">{attendanceProgress}%</span>
+                        <span className="text-xl sm:text-2xl font-bold text-blue-600">{attendanceProgress}%</span>
                       </div>
                       <Progress value={parseFloat(attendanceProgress as string)} className="h-2" />
                       <p className="text-xs text-slate-500 mt-2">
@@ -874,31 +858,31 @@ export default function StudentAttendance() {
 
                     {/* Schedule List */}
                     <div className="space-y-3">
-                      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                        <School className="h-5 w-5 text-blue-600" />
+                      <h3 className="text-base sm:text-lg font-semibold text-slate-800 flex items-center gap-2">
+                        <School className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                         Jadwal Mata Pelajaran Hari Ini:
                       </h3>
                       <div className="grid gap-4">
                         {jadwalHariIni.map((jadwal, index) => (
                           <Card key={jadwal.id_jadwal} className="rounded-xl border-0 shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden group relative">
                             <div className={`absolute top-0 left-0 w-1 h-full ${jadwal.sudah_presensi ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                            <CardContent className="pt-5 pb-5 pl-6">
+                            <CardContent className="pt-4 pb-4 sm:pt-5 sm:pb-5 pl-5 sm:pl-6">
                               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2 mb-2">
-                                    <Badge className={`rounded-full ${jadwal.sudah_presensi ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'} border-0`}>
+                                    <Badge className={`rounded-full ${jadwal.sudah_presensi ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'} border-0 text-[10px] sm:text-xs px-2 py-0 sm:px-3 sm:py-1`}>
                                       {jadwal.sudah_presensi ? "✓ Selesai" : "⏳ Belum"}
                                     </Badge>
-                                    <span className="text-xs text-slate-400">#{index + 1}</span>
+                                    <span className="text-[10px] sm:text-xs text-slate-400">#{index + 1}</span>
                                   </div>
-                                  <h4 className="font-bold text-slate-800 text-lg">{jadwal.mata_pelajaran}</h4>
+                                  <h4 className="font-bold text-slate-800 text-base sm:text-lg">{jadwal.mata_pelajaran}</h4>
                                   <div className="flex flex-wrap gap-3 mt-2">
-                                    <div className="flex items-center gap-1.5 text-sm text-slate-500">
-                                      <Clock className="h-4 w-4" />
+                                    <div className="flex items-center gap-1.5 text-xs sm:text-sm text-slate-500">
+                                      <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
                                       {jadwal.jam}
                                     </div>
-                                    <div className="flex items-center gap-1.5 text-sm text-slate-500">
-                                      <User className="h-4 w-4" />
+                                    <div className="flex items-center gap-1.5 text-xs sm:text-sm text-slate-500">
+                                      <User className="h-3 w-3 sm:h-4 sm:w-4" />
                                       {jadwal.guru}
                                     </div>
                                   </div>
@@ -906,21 +890,21 @@ export default function StudentAttendance() {
                                 
                                 <div>
                                   {jadwal.sudah_presensi ? (
-                                    <div className="flex items-center gap-2 bg-emerald-50 px-4 py-2 rounded-xl">
-                                      <CheckCircle className="h-5 w-5 text-emerald-600" />
-                                      <span className="text-emerald-700 font-medium">Sudah Presensi</span>
+                                    <div className="flex items-center gap-2 bg-emerald-50 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl">
+                                      <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600" />
+                                      <span className="text-emerald-700 font-medium text-xs sm:text-sm">Sudah Presensi</span>
                                     </div>
                                   ) : scanningJadwalId === jadwal.id_jadwal ? (
                                     <div className="space-y-3">
-                                      <div id={scannerContainerId} className="w-72 rounded-xl overflow-hidden"></div>
-                                      <Button onClick={stopScanner} variant="outline" size="sm" className="rounded-xl w-full">
+                                      <div id={scannerContainerId} className="w-64 sm:w-72 rounded-xl overflow-hidden"></div>
+                                      <Button onClick={stopScanner} variant="outline" size="sm" className="rounded-xl w-full text-xs sm:text-sm">
                                         Batal Scan
                                       </Button>
                                     </div>
                                   ) : (
                                     <Button 
                                       onClick={() => startScanner(jadwal.id_jadwal)} 
-                                      className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                                      className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-xs sm:text-sm h-9 sm:h-10"
                                     >
                                       <QrCode className="mr-2 h-4 w-4" /> Scan QR Code
                                     </Button>
@@ -933,15 +917,15 @@ export default function StudentAttendance() {
                       </div>
                     </div>
 
-                    {/* QR Info - diupdate sesuai sistem dinamis */}
-                    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-4">
+                    {/* QR Info */}
+                    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-3 sm:p-4">
                       <div className="flex items-start gap-3">
-                        <div className="bg-indigo-100 p-2 rounded-xl">
-                          <Shield className="h-5 w-5 text-indigo-600" />
+                        <div className="bg-indigo-100 p-1.5 sm:p-2 rounded-xl">
+                          <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-600" />
                         </div>
                         <div>
-                          <p className="font-medium text-slate-800">Informasi QR Code Dinamis</p>
-                          <p className="text-sm text-slate-600">
+                          <p className="font-medium text-slate-800 text-sm sm:text-base">Informasi QR Code Dinamis</p>
+                          <p className="text-xs sm:text-sm text-slate-600">
                             QR Code yang ditampilkan guru berubah setiap <strong>30 detik</strong> dan hanya berlaku <strong>30 detik</strong>. 
                             QR hanya dapat dipakai <strong>sekali</strong> untuk presensi. Pastikan Anda scan sebelum QR habis masa berlaku.
                           </p>
@@ -956,12 +940,12 @@ export default function StudentAttendance() {
         </Card>
 
         {/* FOOTER */}
-        <div className="text-center pt-4">
-          <Separator className="mb-4" />
-          <p className="text-xs text-slate-400">
+        <div className="text-center pt-3 sm:pt-4">
+          <Separator className="mb-3 sm:mb-4" />
+          <p className="text-[10px] sm:text-xs text-slate-400">
             © {new Date().getFullYear()} Sistem Presensi - SmartAS
           </p>
-          <p className="text-[10px] text-slate-300 mt-1">
+          <p className="text-[8px] sm:text-[10px] text-slate-300 mt-1">
             Gunakan fitur presensi dengan bijak
           </p>
         </div>

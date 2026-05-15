@@ -62,59 +62,69 @@ import {
   Gitlab,
   Figma,
   Slack,
-  // Discord,
-  // Zoom,
-  // Google,
-  // Apple,
-  // Windows,
-  // Linux,
-  // Android,
-  // Ios,
   Chrome
-  // Firefox,
-  // Safari,
-  // Edge,
-  // Opera
 } from "lucide-react";
 
+// ----------------------------------------------------------------------
+// INTERFACE / TYPE DEFINITIONS
+// ----------------------------------------------------------------------
+
+/** Data jadwal setelah diformat dari database */
 interface JadwalItem {
   id_jadwal: number;
-  hari: string;
-  jam: string;
+  hari: string;               // "Senin", "Selasa", dst.
+  jam: string;               // Format "07:30 - 09:00"
   mata_pelajaran: string;
   guru: string;
   id_kelas: number;
   kelas_nama: string;
 }
 
+/** Informasi kelas siswa (hanya untuk role siswa) */
 interface Kelas {
   id_kelas: number;
   nama: string;
 }
 
+/** Ringkasan statistik jadwal */
 interface StatistikJadwal {
-  totalMapel: number;
-  totalJam: number;
-  hariTersibuk: string;
-  jamTersibuk: string;
+  totalMapel: number;        // Jumlah mata pelajaran unik
+  totalJam: number;          // Total entri jadwal (jam pelajaran)
+  hariTersibuk: string;      // Hari dengan jadwal terbanyak
+  jamTersibuk: string;       // Jam mulai yang paling sering muncul
 }
 
+// ----------------------------------------------------------------------
+// COMPONENT UTAMA
+// ----------------------------------------------------------------------
 export default function ScheduleView() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [jadwal, setJadwal] = useState<JadwalItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [kelasSiswa, setKelasSiswa] = useState<Kelas | null>(null);
-  const [activeDay, setActiveDay] = useState<string>("");
-  const [viewMode, setViewMode] = useState<"table" | "card">("table");
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [greeting, setGreeting] = useState("");
 
-  // Mapping hari Indonesia ke bahasa Indonesia
+  // --------------------------------------------------------------------
+  // STATE MANAJEMEN
+  // --------------------------------------------------------------------
+  const [jadwal, setJadwal] = useState<JadwalItem[]>([]);   // Semua jadwal yang ditampilkan
+  const [loading, setLoading] = useState(true);             // Indikator loading pertama kali
+  const [refreshing, setRefreshing] = useState(false);     // Indikator refresh manual
+  const [kelasSiswa, setKelasSiswa] = useState<Kelas | null>(null); // Kelas milik siswa (jika role siswa)
+  const [activeDay, setActiveDay] = useState<string>("");   // Hari yang sedang aktif di tab
+  const [viewMode, setViewMode] = useState<"table" | "card">("table"); // Mode tampilan: tabel atau kartu
+  const [currentTime, setCurrentTime] = useState(new Date()); // Waktu realtime untuk header
+  const [greeting, setGreeting] = useState("");            // Sapaan berdasarkan jam (Pagi/Siang/Malam)
+
+  // Daftar hari dalam bahasa Indonesia (Senin - Sabtu, Minggu tidak dipakai karena biasanya libur)
   const days = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
   
-  // Mapping dari Date API ke hari Indonesia
+  // --------------------------------------------------------------------
+  // FUNGSI BANTU
+  // --------------------------------------------------------------------
+
+  /**
+   * Mendapatkan nama hari dalam bahasa Indonesia berdasarkan tanggal sekarang.
+   * Digunakan untuk menentukan hari aktif default dan menandai hari ini di tab.
+   * @returns string nama hari (Senin, Selasa, ... Minggu)
+   */
   const getCurrentDayInIndonesian = useCallback(() => {
     const date = new Date();
     const dayIndex = date.getDay(); // 0 = Minggu, 1 = Senin, ..., 6 = Sabtu
@@ -130,7 +140,74 @@ export default function ScheduleView() {
     return dayMap[dayIndex];
   }, []);
 
-  // ==================== GREETING EFFECT ====================
+  /**
+   * Memformat tanggal untuk ditampilkan di header.
+   * @param date objek Date
+   * @returns string dengan format "Hari, Tanggal Bulan Tahun" (misal: Senin, 1 Januari 2023)
+   */
+  const formatDate = useCallback((date: Date) => {
+    return date.toLocaleDateString("id-ID", { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  }, []);
+
+  /**
+   * Menentukan status waktu suatu jadwal (selesai, sebentar, atau akan datang) berdasarkan jam mulai.
+   * @param jamMulai string format "HH:MM" (contoh "07:30")
+   * @returns object { status, color, icon } untuk ditampilkan di badge
+   */
+  const getWaktuStatus = useCallback((jamMulai: string) => {
+    const now = new Date();
+    const [hour, minute] = jamMulai.split(":").map(Number);
+    const jamDate = new Date();
+    jamDate.setHours(hour, minute, 0);
+    
+    // Jika sudah lewat jam mulai -> status selesai
+    if (now > jamDate) {
+      return { 
+        status: "selesai", 
+        color: "bg-slate-100 text-slate-500", 
+        icon: <CheckCircle2 className="h-3 w-3" /> 
+      };
+    }
+    // Jika kurang dari 1 jam lagi -> status sebentar
+    const selisih = jamDate.getTime() - now.getTime();
+    if (selisih < 3600000) {
+      return { 
+        status: "sebentar", 
+        color: "bg-amber-100 text-amber-700", 
+        icon: <AlertCircle className="h-3 w-3" /> 
+      };
+    }
+    // Lebih dari 1 jam -> akan datang
+    return { 
+      status: "akan datang", 
+      color: "bg-emerald-100 text-emerald-700", 
+      icon: <Clock className="h-3 w-3" /> 
+    };
+  }, []);
+
+  /**
+   * Memfilter jadwal berdasarkan hari dan mengurutkan berdasarkan jam mulai.
+   * @param hari string nama hari
+   * @returns array JadwalItem[] yang sudah diurutkan
+   */
+  const jadwalByDay = useCallback((hari: string) => {
+    return jadwal.filter(j => j.hari === hari).sort((a, b) => {
+      const aStart = a.jam.split(" - ")[0];
+      const bStart = b.jam.split(" - ")[0];
+      return aStart.localeCompare(bStart);
+    });
+  }, [jadwal]);
+
+  // --------------------------------------------------------------------
+  // EFEK SAMPING (SIDE EFFECTS)
+  // --------------------------------------------------------------------
+
+  /** Efek untuk greeting dan timer realtime */
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour < 12) setGreeting("Selamat Pagi");
@@ -141,23 +218,20 @@ export default function ScheduleView() {
     return () => clearInterval(timer);
   }, []);
 
-  // ==================== SET ACTIVE DAY BASED ON CURRENT DAY ====================
+  /** Efek untuk menentukan hari aktif default (hindari Minggu) */
   useEffect(() => {
     const today = getCurrentDayInIndonesian();
-    // Jika hari ini adalah Minggu, set ke Senin (karena biasanya tidak ada jadwal Minggu)
-    if (today === "Minggu") {
-      setActiveDay("Senin");
-    } else {
-      setActiveDay(today);
-    }
+    // Jika hari ini Minggu, set ke Senin karena biasanya tidak ada jadwal Minggu
+    setActiveDay(today === "Minggu" ? "Senin" : today);
   }, [getCurrentDayInIndonesian]);
 
-  // ==================== FETCH SCHEDULE (SAMA PERSIS DENGAN ASLI) ====================
+  /** Efek utama: mengambil data jadwal dari Supabase berdasarkan role pengguna */
   useEffect(() => {
     const fetchSchedule = async () => {
       if (!user) return;
       setLoading(true);
       try {
+        // Query dasar: ambil semua jadwal aktif beserta relasi kelas, mapel, guru
         let query = supabase
           .from("jadwal")
           .select(`
@@ -171,6 +245,7 @@ export default function ScheduleView() {
           `)
           .eq("aktif", true);
 
+        // Jika pengguna adalah siswa: cari kelasnya terlebih dahulu, lalu filter berdasarkan kelas
         if (user.peran === "siswa") {
           const { data: siswa, error: siswaError } = await supabase
             .from("siswa")
@@ -182,17 +257,21 @@ export default function ScheduleView() {
             setKelasSiswa({ id_kelas: siswa.id_kelas, nama: siswa.kelas?.nama || "-" });
             query = query.eq("id_kelas", siswa.id_kelas);
           } else {
+            // Jika siswa tidak memiliki kelas, set kosong
             setJadwal([]);
             setLoading(false);
             return;
           }
-        } else if (user.peran === "guru" && user.id_guru) {
+        } 
+        // Jika pengguna adalah guru: filter berdasarkan id_guru
+        else if (user.peran === "guru" && user.id_guru) {
           query = query.eq("id_guru", user.id_guru);
         }
 
         const { data, error } = await query.order("jam");
         if (error) throw error;
 
+        // Format data sesuai interface JadwalItem
         const formatted: JadwalItem[] = data.map((item: any) => ({
           id_jadwal: item.id_jadwal,
           hari: item.hari,
@@ -212,11 +291,10 @@ export default function ScheduleView() {
     fetchSchedule();
   }, [user, toast]);
 
-  // ==================== STATISTICS ====================
+  /** Statistik jadwal (memoized untuk performa) */
   const statistik = useMemo<StatistikJadwal>(() => {
     const mapelSet = new Set(jadwal.map(j => j.mata_pelajaran));
     const totalJam = jadwal.length;
-    
     const hariCount: Record<string, number> = {};
     const jamCount: Record<string, number> = {};
     
@@ -229,24 +307,10 @@ export default function ScheduleView() {
     const hariTersibuk = Object.entries(hariCount).sort((a, b) => b[1] - a[1])[0]?.[0] || "-";
     const jamTersibuk = Object.entries(jamCount).sort((a, b) => b[1] - a[1])[0]?.[0] || "-";
     
-    return {
-      totalMapel: mapelSet.size,
-      totalJam,
-      hariTersibuk,
-      jamTersibuk
-    };
+    return { totalMapel: mapelSet.size, totalJam, hariTersibuk, jamTersibuk };
   }, [jadwal]);
 
-  // ==================== FILTER JADWAL (SAMA PERSIS DENGAN ASLI) ====================
-  const jadwalByDay = useCallback((hari: string) => {
-    return jadwal.filter(j => j.hari === hari).sort((a, b) => {
-      const aStart = a.jam.split(" - ")[0];
-      const bStart = b.jam.split(" - ")[0];
-      return aStart.localeCompare(bStart);
-    });
-  }, [jadwal]);
-
-  // ==================== HANDLE REFRESH ====================
+  /** Fungsi untuk refresh manual jadwal (button refresh) */
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
@@ -271,7 +335,6 @@ export default function ScheduleView() {
 
       const { data, error } = await query.order("jam");
       if (error) throw error;
-
       const formatted: JadwalItem[] = data.map((item: any) => ({
         id_jadwal: item.id_jadwal,
         hari: item.hari,
@@ -290,34 +353,9 @@ export default function ScheduleView() {
     }
   };
 
-  // ==================== GET STATUS WAKTU ====================
-  const getWaktuStatus = useCallback((jamMulai: string) => {
-    const now = new Date();
-    const [hour, minute] = jamMulai.split(":").map(Number);
-    const jamDate = new Date();
-    jamDate.setHours(hour, minute, 0);
-    
-    if (now > jamDate) {
-      return { status: "selesai", color: "bg-slate-100 text-slate-500", icon: <CheckCircle2 className="h-3 w-3" /> };
-    }
-    const selisih = jamDate.getTime() - now.getTime();
-    if (selisih < 3600000) {
-      return { status: "sebentar", color: "bg-amber-100 text-amber-700", icon: <AlertCircle className="h-3 w-3" /> };
-    }
-    return { status: "akan datang", color: "bg-emerald-100 text-emerald-700", icon: <Clock className="h-3 w-3" /> };
-  }, []);
-
-  // ==================== FORMAT DATE ====================
-  const formatDate = useCallback((date: Date) => {
-    return date.toLocaleDateString("id-ID", { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
-  }, []);
-
-  // ==================== LOADING STATE ====================
+  // --------------------------------------------------------------------
+  // RENDER KONDISI LOADING
+  // --------------------------------------------------------------------
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
@@ -329,27 +367,30 @@ export default function ScheduleView() {
     );
   }
 
-  // ==================== MAIN RENDER ====================
+  // --------------------------------------------------------------------
+  // RENDER UTAMA (RESPONSIF MOBILE)
+  // --------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
       
-      {/* HEADER SECTION */}
-      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
-        <div className="container mx-auto px-6 py-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-sm">
-                <Calendar className="h-8 w-8" />
+      {/* ---------------------------- HEADER SECTION ---------------------------- */}
+      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-2xl sm:rounded-3xl shadow-xl mx-3 sm:mx-4 mt-3 sm:mt-4">
+        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+            {/* Logo dan teks sapaan */}
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="bg-white/20 p-2 sm:p-3 rounded-xl sm:rounded-2xl backdrop-blur-sm">
+                <Calendar className="h-6 w-6 sm:h-8 sm:w-8" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  {greeting === "Selamat Pagi" ? <Sun className="h-4 w-4" /> : 
-                   greeting === "Selamat Malam" ? <Moon className="h-4 w-4" /> : 
-                   <Cloud className="h-4 w-4" />}
-                  <p className="text-sm text-blue-100">{greeting}</p>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  {greeting === "Selamat Pagi" ? <Sun className="h-3 w-3 sm:h-4 sm:w-4" /> : 
+                   greeting === "Selamat Malam" ? <Moon className="h-3 w-3 sm:h-4 sm:w-4" /> : 
+                   <Cloud className="h-3 w-3 sm:h-4 sm:w-4" />}
+                  <p className="text-xs sm:text-sm text-blue-100">{greeting}</p>
                 </div>
-                <h1 className="text-2xl lg:text-3xl font-bold">Jadwal Mata Pelajaran</h1>
-                <p className="text-blue-100 text-sm">
+                <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold">Jadwal Mata Pelajaran</h1>
+                <p className="text-blue-100 text-xs sm:text-sm">
                   {user?.peran === "siswa" 
                     ? `Kelas: ${kelasSiswa?.nama || "-"}`
                     : "Jadwal mengajar Anda"}
@@ -357,90 +398,91 @@ export default function ScheduleView() {
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
-              <div className="bg-white/10 rounded-xl px-4 py-2 backdrop-blur-sm text-center">
-                <p className="text-xs text-blue-100">{formatDate(currentTime)}</p>
-                <p className="text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
+            {/* Tanggal & Jam realtime + tombol refresh */}
+            <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3">
+              <div className="bg-white/10 rounded-xl px-2 py-1 sm:px-4 sm:py-2 backdrop-blur-sm text-center">
+                <p className="text-[9px] sm:text-xs text-blue-100">{formatDate(currentTime)}</p>
+                <p className="text-xs sm:text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
               </div>
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="bg-white/10 hover:bg-white/20 text-white rounded-xl"
+                className="bg-white/10 hover:bg-white/20 text-white rounded-xl h-8 w-8 sm:h-10 sm:w-10"
                 onClick={handleRefresh}
                 disabled={refreshing}
               >
-                <RefreshCw className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-4 w-4 sm:h-5 sm:w-5 ${refreshing ? 'animate-spin' : ''}`} />
               </Button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* MAIN CONTENT */}
-      <div className="container mx-auto px-4 py-8 space-y-8">
+      {/* ---------------------------- KONTEN UTAMA ---------------------------- */}
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-4 sm:space-y-8">
         
-        {/* STATISTICS CARDS */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-            <CardContent className="p-4">
+        {/* STATISTIK CARD (grid 2 kolom responsif) */}
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-blue-600 font-medium">Total Mata Pelajaran</p>
-                  <p className="text-2xl font-bold text-blue-900">{statistik.totalMapel}</p>
+                  <p className="text-[10px] sm:text-xs text-blue-600 font-medium">Total Mata Pelajaran</p>
+                  <p className="text-lg sm:text-2xl font-bold text-blue-900">{statistik.totalMapel}</p>
                 </div>
-                <BookOpen className="h-8 w-8 text-blue-500" />
+                <BookOpen className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
           
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
-            <CardContent className="p-4">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-emerald-600 font-medium">Total Jam Pelajaran</p>
-                  <p className="text-2xl font-bold text-emerald-900">{statistik.totalJam}</p>
+                  <p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Total Jam Pelajaran</p>
+                  <p className="text-lg sm:text-2xl font-bold text-emerald-900">{statistik.totalJam}</p>
                 </div>
-                <Timer className="h-8 w-8 text-emerald-500" />
+                <Timer className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />
               </div>
             </CardContent>
           </Card>
           
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-            <CardContent className="p-4">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-purple-600 font-medium">Hari Tersibuk</p>
-                  <p className="text-xl font-bold text-purple-900">{statistik.hariTersibuk}</p>
+                  <p className="text-[10px] sm:text-xs text-purple-600 font-medium">Hari Tersibuk</p>
+                  <p className="text-sm sm:text-xl font-bold text-purple-900">{statistik.hariTersibuk}</p>
                 </div>
-                <Calendar className="h-8 w-8 text-purple-500" />
+                <Calendar className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" />
               </div>
             </CardContent>
           </Card>
           
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
-            <CardContent className="p-4">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-amber-600 font-medium">Jam Tersibuk</p>
-                  <p className="text-xl font-bold text-amber-900">{statistik.jamTersibuk}</p>
+                  <p className="text-[10px] sm:text-xs text-amber-600 font-medium">Jam Tersibuk</p>
+                  <p className="text-sm sm:text-xl font-bold text-amber-900">{statistik.jamTersibuk}</p>
                 </div>
-                <Clock className="h-8 w-8 text-amber-500" />
+                <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" />
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* MAIN SCHEDULE CARD */}
-        <Card className="rounded-2xl border-0 shadow-xl overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/10 p-2 rounded-xl">
-                  <School className="h-6 w-6" />
+        {/* CARD UTAMA JADWAL (TABS + TABEL/KARTU) */}
+        <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="bg-white/10 p-1.5 sm:p-2 rounded-xl">
+                  <School className="h-5 w-5 sm:h-6 sm:w-6" />
                 </div>
                 <div>
-                  <CardTitle className="text-xl">Jadwal Pelajaran</CardTitle>
-                  <CardDescription className="text-slate-300 text-sm">
+                  <CardTitle className="text-base sm:text-xl">Jadwal Pelajaran</CardTitle>
+                  <CardDescription className="text-slate-300 text-[10px] sm:text-sm">
                     {user?.peran === "siswa" 
                       ? `Jadwal untuk kelas ${kelasSiswa?.nama}`
                       : "Jadwal mengajar Anda"}
@@ -448,32 +490,34 @@ export default function ScheduleView() {
                 </div>
               </div>
               
+              {/* Tombol ganti mode tampilan (Tabel / Kartu) */}
               <div className="flex items-center gap-2">
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  className={`rounded-xl ${viewMode === "table" ? "bg-white/20" : "bg-white/10"}`}
+                  className={`rounded-xl text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3 ${viewMode === "table" ? "bg-white/20" : "bg-white/10"}`}
                   onClick={() => setViewMode("table")}
                 >
-                  <LayoutGrid className="h-4 w-4 mr-1" />
+                  <LayoutGrid className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                   Tabel
                 </Button>
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  className={`rounded-xl ${viewMode === "card" ? "bg-white/20" : "bg-white/10"}`}
+                  className={`rounded-xl text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3 ${viewMode === "card" ? "bg-white/20" : "bg-white/10"}`}
                   onClick={() => setViewMode("card")}
                 >
-                  <List className="h-4 w-4 mr-1" />
+                  <List className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                   Kartu
                 </Button>
               </div>
             </div>
           </CardHeader>
           
-          <CardContent className="p-6">
-            <Tabs value={activeDay} onValueChange={setActiveDay} className="space-y-6">
-              <TabsList className="bg-slate-100 p-1 rounded-xl w-full overflow-x-auto flex-wrap h-auto">
+          <CardContent className="p-3 sm:p-6">
+            <Tabs value={activeDay} onValueChange={setActiveDay} className="space-y-4 sm:space-y-6">
+              {/* TAB LIST HORIZONTAL SCROLL UNTUK MOBILE */}
+              <TabsList className="bg-slate-100 p-1 rounded-xl w-full overflow-x-auto flex-nowrap flex h-auto">
                 {days.map(day => {
                   const today = getCurrentDayInIndonesian();
                   const isToday = day === today;
@@ -481,19 +525,20 @@ export default function ScheduleView() {
                     <TabsTrigger 
                       key={day} 
                       value={day}
-                      className={`rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm px-4 py-2 transition-all duration-200 ${
+                      className={`rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm whitespace-nowrap transition-all duration-200 ${
                         isToday && activeDay === day ? "ring-2 ring-blue-400 ring-offset-1" : ""
                       }`}
                     >
                       {day}
                       {isToday && (
-                        <span className="ml-1.5 w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                        <span className="ml-1.5 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-emerald-500 rounded-full animate-pulse" />
                       )}
                     </TabsTrigger>
                   );
                 })}
               </TabsList>
               
+              {/* KONTEN UNTUK SETIAP HARI */}
               {days.map(day => {
                 const dayJadwal = jadwalByDay(day);
                 const today = getCurrentDayInIndonesian();
@@ -501,37 +546,39 @@ export default function ScheduleView() {
                 const isActive = activeDay === day;
                 
                 return (
-                  <TabsContent key={day} value={day} className="space-y-4">
+                  <TabsContent key={day} value={day} className="space-y-3 sm:space-y-4">
+                    {/* Pesan motivasi jika hari ini dan ada jadwal */}
                     {isToday && dayJadwal.length > 0 && isActive && (
-                      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-4 border border-emerald-200 animate-in slide-in-from-top-2 duration-300">
+                      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-3 sm:p-4 border border-emerald-200 animate-in slide-in-from-top-2 duration-300">
                         <div className="flex items-center gap-2">
-                          <Sparkles className="h-5 w-5 text-emerald-600" />
-                          <p className="text-sm text-emerald-700 font-medium">
+                          <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600" />
+                          <p className="text-xs sm:text-sm text-emerald-700 font-medium">
                             🎉 Hari ini adalah {day}, semangat belajar! 🎉
                           </p>
                         </div>
                       </div>
                     )}
                     
+                    {/* TIDAK ADA JADWAL */}
                     {dayJadwal.length === 0 ? (
-                      <div className="text-center py-12">
-                        <div className="bg-slate-100 rounded-full w-20 h-20 mx-auto flex items-center justify-center mb-4">
-                          <Calendar className="h-10 w-10 text-slate-400" />
+                      <div className="text-center py-8 sm:py-12">
+                        <div className="bg-slate-100 rounded-full w-16 h-16 sm:w-20 sm:h-20 mx-auto flex items-center justify-center mb-3 sm:mb-4">
+                          <Calendar className="h-8 w-8 sm:h-10 sm:w-10 text-slate-400" />
                         </div>
-                        <p className="text-slate-500 font-medium">Tidak ada jadwal untuk hari {day}</p>
-                        <p className="text-slate-400 text-sm mt-1">Istirahat atau libur 🎉</p>
+                        <p className="text-slate-500 font-medium text-sm sm:text-base">Tidak ada jadwal untuk hari {day}</p>
+                        <p className="text-slate-400 text-xs sm:text-sm mt-1">Istirahat atau libur 🎉</p>
                       </div>
                     ) : viewMode === "table" ? (
-                      // TABLE VIEW
-                      <div className="border rounded-xl overflow-hidden">
-                        <Table>
+                      // -------------------- MODE TABEL (DENGAN SCROLL HORIZONTAL UNTUK MOBILE) --------------------
+                      <div className="border rounded-xl overflow-x-auto">
+                        <Table className="min-w-[500px] sm:min-w-full">
                           <TableHeader>
                             <TableRow className="bg-slate-50">
-                              <TableHead className="w-32 font-semibold">Jam</TableHead>
-                              <TableHead className="font-semibold">Mata Pelajaran</TableHead>
-                              <TableHead className="font-semibold">Guru</TableHead>
-                              {user?.peran === "guru" && <TableHead className="font-semibold">Kelas</TableHead>}
-                              <TableHead className="w-24 font-semibold">Status</TableHead>
+                              <TableHead className="w-24 sm:w-32 font-semibold text-xs sm:text-sm">Jam</TableHead>
+                              <TableHead className="font-semibold text-xs sm:text-sm">Mata Pelajaran</TableHead>
+                              <TableHead className="font-semibold text-xs sm:text-sm">Guru</TableHead>
+                              {user?.peran === "guru" && <TableHead className="font-semibold text-xs sm:text-sm">Kelas</TableHead>}
+                              <TableHead className="w-20 sm:w-24 font-semibold text-xs sm:text-sm">Status</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -540,32 +587,32 @@ export default function ScheduleView() {
                               const waktuStatus = getWaktuStatus(jamMulai);
                               return (
                                 <TableRow key={item.id_jadwal} className="hover:bg-slate-50 transition-colors">
-                                  <TableCell className="font-mono text-sm font-medium">{item.jam}</TableCell>
+                                  <TableCell className="font-mono text-xs sm:text-sm font-medium">{item.jam}</TableCell>
                                   <TableCell>
-                                    <div className="flex items-center gap-2">
-                                      <div className="bg-blue-100 p-1.5 rounded-lg">
-                                        <BookOpen className="h-4 w-4 text-blue-600" />
+                                    <div className="flex items-center gap-1.5 sm:gap-2">
+                                      <div className="bg-blue-100 p-1 sm:p-1.5 rounded-lg">
+                                        <BookOpen className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
                                       </div>
-                                      <span className="font-medium">{item.mata_pelajaran}</span>
+                                      <span className="font-medium text-xs sm:text-sm">{item.mata_pelajaran}</span>
                                     </div>
                                   </TableCell>
                                   <TableCell>
-                                    <div className="flex items-center gap-2">
-                                      <div className="bg-purple-100 p-1.5 rounded-lg">
-                                        <User className="h-4 w-4 text-purple-600" />
+                                    <div className="flex items-center gap-1.5 sm:gap-2">
+                                      <div className="bg-purple-100 p-1 sm:p-1.5 rounded-lg">
+                                        <User className="h-3 w-3 sm:h-4 sm:w-4 text-purple-600" />
                                       </div>
-                                      <span>{item.guru}</span>
+                                      <span className="text-xs sm:text-sm">{item.guru}</span>
                                     </div>
                                   </TableCell>
                                   {user?.peran === "guru" && (
                                     <TableCell>
-                                      <Badge variant="outline" className="rounded-full">
+                                      <Badge variant="outline" className="rounded-full text-[10px] sm:text-xs">
                                         {item.kelas_nama}
                                       </Badge>
                                     </TableCell>
                                   )}
                                   <TableCell>
-                                    <Badge className={`${waktuStatus.color} border-0 rounded-full flex items-center gap-1 w-fit text-xs`}>
+                                    <Badge className={`${waktuStatus.color} border-0 rounded-full flex items-center gap-1 w-fit text-[10px] sm:text-xs px-2 py-0.5 sm:px-3 sm:py-1`}>
                                       {waktuStatus.icon}
                                       {waktuStatus.status === "sebentar" ? "Segera" : 
                                        waktuStatus.status === "selesai" ? "Selesai" : "Akan Datang"}
@@ -578,47 +625,47 @@ export default function ScheduleView() {
                         </Table>
                       </div>
                     ) : (
-                      // CARD VIEW
-                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      // -------------------- MODE KARTU (GRID RESPONSIF) --------------------
+                      <div className="grid gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3">
                         {dayJadwal.map((item) => {
                           const jamMulai = item.jam.split(" - ")[0];
                           const waktuStatus = getWaktuStatus(jamMulai);
                           return (
                             <Card key={item.id_jadwal} className="rounded-xl border-0 shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden group">
-                              <div className={`absolute top-0 right-0 w-20 h-20 -mr-10 -mt-10 rounded-full ${waktuStatus.color} opacity-20 group-hover:scale-150 transition-transform duration-500`} />
-                              <CardContent className="p-4 relative z-10">
-                                <div className="flex items-start justify-between mb-3">
-                                  <Badge className={`${waktuStatus.color} border-0 rounded-full text-xs`}>
+                              <div className={`absolute top-0 right-0 w-16 h-16 sm:w-20 sm:h-20 -mr-8 sm:-mr-10 -mt-8 sm:-mt-10 rounded-full ${waktuStatus.color} opacity-20 group-hover:scale-150 transition-transform duration-500`} />
+                              <CardContent className="p-3 sm:p-4 relative z-10">
+                                <div className="flex items-start justify-between mb-2 sm:mb-3">
+                                  <Badge className={`${waktuStatus.color} border-0 rounded-full text-[10px] sm:text-xs px-2 py-0.5 sm:px-3 sm:py-1`}>
                                     {waktuStatus.icon}
                                     <span className="ml-1">
                                       {waktuStatus.status === "sebentar" ? "Segera" : 
                                        waktuStatus.status === "selesai" ? "Selesai" : "Akan Datang"}
                                     </span>
                                   </Badge>
-                                  <span className="font-mono text-sm font-bold text-slate-700">{item.jam}</span>
+                                  <span className="font-mono text-xs sm:text-sm font-bold text-slate-700">{item.jam}</span>
                                 </div>
                                 
                                 <div className="space-y-2">
                                   <div className="flex items-center gap-2">
-                                    <div className="bg-blue-100 p-2 rounded-xl">
-                                      <BookOpen className="h-4 w-4 text-blue-600" />
+                                    <div className="bg-blue-100 p-1.5 sm:p-2 rounded-xl">
+                                      <BookOpen className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
                                     </div>
-                                    <span className="font-semibold text-slate-800">{item.mata_pelajaran}</span>
+                                    <span className="font-semibold text-slate-800 text-xs sm:text-sm">{item.mata_pelajaran}</span>
                                   </div>
                                   
                                   <div className="flex items-center gap-2">
-                                    <div className="bg-purple-100 p-2 rounded-xl">
-                                      <User className="h-4 w-4 text-purple-600" />
+                                    <div className="bg-purple-100 p-1.5 sm:p-2 rounded-xl">
+                                      <User className="h-3 w-3 sm:h-4 sm:w-4 text-purple-600" />
                                     </div>
-                                    <span className="text-sm text-slate-600">{item.guru}</span>
+                                    <span className="text-xs sm:text-sm text-slate-600">{item.guru}</span>
                                   </div>
                                   
                                   {user?.peran === "guru" && (
                                     <div className="flex items-center gap-2">
-                                      <div className="bg-emerald-100 p-2 rounded-xl">
-                                        <School className="h-4 w-4 text-emerald-600" />
+                                      <div className="bg-emerald-100 p-1.5 sm:p-2 rounded-xl">
+                                        <School className="h-3 w-3 sm:h-4 sm:w-4 text-emerald-600" />
                                       </div>
-                                      <span className="text-sm text-slate-600">{item.kelas_nama}</span>
+                                      <span className="text-xs sm:text-sm text-slate-600">{item.kelas_nama}</span>
                                     </div>
                                   )}
                                 </div>
@@ -635,16 +682,16 @@ export default function ScheduleView() {
           </CardContent>
         </Card>
 
-        {/* TIPS SECTION */}
-        <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-orange-50">
-          <CardContent className="p-5">
-            <div className="flex items-start gap-4">
-              <div className="bg-amber-100 p-3 rounded-xl">
-                <Trophy className="h-6 w-6 text-amber-600" />
+        {/* ---------------------------- TIPS SECTION ---------------------------- */}
+        <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-orange-50">
+          <CardContent className="p-3 sm:p-5">
+            <div className="flex items-start gap-3 sm:gap-4">
+              <div className="bg-amber-100 p-2 sm:p-3 rounded-xl">
+                <Trophy className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-slate-800 mb-1">Tips Belajar Efektif</h3>
-                <p className="text-sm text-slate-600">
+                <h3 className="font-semibold text-slate-800 text-sm sm:text-base mb-1">Tips Belajar Efektif</h3>
+                <p className="text-xs sm:text-sm text-slate-600">
                   Persiapkan buku dan catatan 10 menit sebelum jam pelajaran dimulai. 
                   Jangan lupa untuk beristirahat sejenak di antara jam pelajaran agar tetap fokus!
                 </p>
@@ -653,13 +700,13 @@ export default function ScheduleView() {
           </CardContent>
         </Card>
 
-        {/* FOOTER */}
-        <div className="text-center pt-4">
-          <Separator className="mb-4" />
-          <p className="text-xs text-slate-400">
+        {/* ---------------------------- FOOTER ---------------------------- */}
+        <div className="text-center pt-3 sm:pt-4">
+          <Separator className="mb-3 sm:mb-4" />
+          <p className="text-[10px] sm:text-xs text-slate-400">
             © {new Date().getFullYear()} Jadwal Pelajaran - Sistem Informasi Akademik
           </p>
-          <p className="text-[10px] text-slate-300 mt-1">
+          <p className="text-[8px] sm:text-[10px] text-slate-300 mt-1">
             Terakhir diperbarui: {currentTime.toLocaleTimeString("id-ID")}
           </p>
         </div>
