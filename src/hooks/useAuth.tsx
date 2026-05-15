@@ -8,7 +8,7 @@ import * as bcrypt from 'bcryptjs';
 interface AkunData {
   id_akun: string;
   nama: string;
-  email: string | null;
+  username: string | null;
   peran: string | null;
   aktif: boolean | null;
   id_guru: number | null;
@@ -19,7 +19,7 @@ interface AkunData {
 interface User {
   id_akun: string;
   nama: string;
-  email: string;
+  username: string;
   peran: string;
   aktif: boolean;
   id_guru?: number | null;
@@ -29,7 +29,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signIn: (username: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -54,19 +54,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (username: string, password: string) => {
     try {
-      if (!email || !password) {
-        return { error: 'Email dan password harus diisi' };
+      if (!username || !password) {
+        return { error: 'username dan password harus diisi' };
       }
 
-      console.log('Mencoba login dengan:', email);
+      console.log('Mencoba login dengan:', username);
 
-      // Cari akun berdasarkan email
+      // Cari akun berdasarkan username
       const { data: akun, error: queryError } = await supabase
         .from('akun')
-        .select('id_akun, nama, email, peran, aktif, id_guru, id_siswa, kata_sandi')
-        .eq('email', email.toLowerCase().trim())
+        .select('id_akun, nama, username, peran, aktif, id_guru, id_siswa, kata_sandi')
+        .eq('username', username.toLowerCase().trim())
         .maybeSingle() as { data: AkunData | null; error: any };
 
       console.log('Data dari database:', akun);
@@ -78,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (!akun) {
-        return { error: 'Email tidak ditemukan' };
+        return { error: 'username tidak ditemukan' };
       }
 
       // Cek status aktif
@@ -101,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const userData: User = {
         id_akun: akun.id_akun,
         nama: akun.nama,
-        email: akun.email || email,
+        username: akun.username || username,
         peran: akun.peran || 'siswa',
         aktif: akun.aktif || false,
         id_guru: akun.id_guru,

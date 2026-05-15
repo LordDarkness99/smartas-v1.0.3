@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { UserCheck } from "lucide-react";
 
 export default function Login() {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const { signIn } = useAuth();
@@ -20,13 +20,13 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!email || !password) {
-      toast.error("Email dan password harus diisi");
+    if (!username || !password) {
+      toast.error("Username dan password harus diisi");
       return;
     }
 
     setLoading(true);
-    const { error } = await signIn(email, password);
+    const { error } = await signIn(username, password);
     if (error) {
       toast.error(error);
     } else {
@@ -62,16 +62,16 @@ export default function Login() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-semibold">
-                Alamat Email
+              <Label htmlFor="username" className="text-sm font-semibold">
+                Nama Pengguna
               </Label>
               <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
-                placeholder="contoh: nama@sekolah.com"
+                placeholder="contoh: nama_pengguna"
                 className="h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                 disabled={loading}
               />

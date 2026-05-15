@@ -180,7 +180,7 @@ export default function UserManagement() {
   const [editingUser, setEditingUser] = useState<any>(null);
   const [editForm, setEditForm] = useState({
     nama: "",
-    email: "",
+    username: "",
     gender: "",
     nik: "",
     nis: "",
@@ -257,7 +257,7 @@ export default function UserManagement() {
       return (
         guru.nama.toLowerCase().includes(q) ||
         guru.nik.toLowerCase().includes(q) ||
-        guru.email.toLowerCase().includes(q) ||
+        guru.username.toLowerCase().includes(q) ||
         guru.id_guru.toString().includes(q)
       );
     })
@@ -270,7 +270,7 @@ export default function UserManagement() {
       return (
         siswa.nama.toLowerCase().includes(q) ||
         siswa.nis.toLowerCase().includes(q) ||
-        siswa.email.toLowerCase().includes(q) ||
+        siswa.username.toLowerCase().includes(q) ||
         siswa.id_siswa.toString().includes(q) ||
         (siswa.nama_kelas && siswa.nama_kelas.toLowerCase().includes(q))
       );
@@ -366,18 +366,18 @@ export default function UserManagement() {
       const guruIds = guruData?.map(g => g.id_guru) || [];
       const { data: akunData, error: akunError } = await supabase
         .from("akun")
-        .select("id_guru, email")
+        .select("id_guru, username")
         .in("id_guru", guruIds);
       if (akunError) throw akunError;
 
-      const emailMap = new Map();
-      akunData?.forEach(akun => emailMap.set(akun.id_guru, akun.email));
+      const usernameMap = new Map();
+      akunData?.forEach(akun => usernameMap.set(akun.id_guru, akun.username));
 
       const combined: GuruData[] = (guruData || []).map(guru => ({
         id_guru: guru.id_guru,
         nama: guru.nama,
         nik: guru.nik?.toString() || "",
-        email: emailMap.get(guru.id_guru) || "",
+        username: usernameMap.get(guru.id_guru) || "",
         gender: guru.gender,
         aktif: guru.aktif,
       }));
@@ -417,12 +417,12 @@ export default function UserManagement() {
       const siswaIds = siswaData?.map(s => s.id_siswa) || [];
       const { data: akunData, error: akunError } = await supabase
         .from("akun")
-        .select("id_siswa, email")
+        .select("id_siswa, username")
         .in("id_siswa", siswaIds);
       if (akunError) throw akunError;
 
-      const emailMap = new Map();
-      akunData?.forEach(akun => emailMap.set(akun.id_siswa, akun.email));
+      const usernameMap = new Map();
+      akunData?.forEach(akun => usernameMap.set(akun.id_siswa, akun.username));
 
       const kelasIds = siswaData?.map(s => s.id_kelas).filter(Boolean) || [];
       let kelasMap = new Map();
@@ -440,7 +440,7 @@ export default function UserManagement() {
         id_siswa: siswa.id_siswa,
         nama: siswa.nama,
         nis: siswa.nis?.toString() || "",
-        email: emailMap.get(siswa.id_siswa) || "",
+        username: usernameMap.get(siswa.id_siswa) || "",
         gender: siswa.gender,
         aktif: siswa.aktif,
         id_kelas: siswa.id_kelas,
@@ -491,13 +491,13 @@ export default function UserManagement() {
     let headers: string[];
     let data: any[][];
     if (type === "guru") {
-      headers = ["nama", "nik", "email", "gender", "password"];
+      headers = ["nama", "nik", "username", "gender", "password"];
       data = [
         ["Ahmad Santoso", "198512342021011001", "ahmad.santoso@school.com", "L", "password123"],
         ["Siti Aminah", "198709152021012002", "siti.aminah@school.com", "P", "password123"],
       ];
     } else {
-      headers = ["nama", "nis", "email", "gender", "kelas", "password"];
+      headers = ["nama", "nis", "username", "gender", "kelas", "password"];
       data = [
         ["Budi Raharjo", "1234567890", "budi.raharjo@student.com", "L", "XII RPL 1", "password123"],
         ["Anisa Fitri", "1234567891", "anisa.fitri@student.com", "P", "XII RPL 2", "password123"],
@@ -523,8 +523,8 @@ export default function UserManagement() {
       if (jsonData.length === 0) throw new Error("File kosong");
       
       let requiredColumns: string[];
-      if (userType === "guru") requiredColumns = ["nama", "nik", "email", "gender"];
-      else requiredColumns = ["nama", "nis", "email", "gender", "kelas"];
+      if (userType === "guru") requiredColumns = ["nama", "nik", "username", "gender"];
+      else requiredColumns = ["nama", "nis", "username", "gender", "kelas"];
       
       const firstRow = jsonData[0] as any;
       const missingColumns = requiredColumns.filter(col => !(col in firstRow));
@@ -558,13 +558,13 @@ export default function UserManagement() {
   };
 
   const checkExistingData = async (type: "guru" | "siswa", data: any[]) => {
-    const emails = data.map(item => item.email).filter(Boolean);
+    const usernames = data.map(item => item.username).filter(Boolean);
     const nikNisValues = data.map(item => type === "guru" ? item.nik : item.nis).filter(Boolean);
     
     const { data: existingAccounts } = await supabase
       .from("akun")
-      .select("email")
-      .in("email", emails);
+      .select("username")
+      .in("username", usernames);
     const existingEmails = existingAccounts?.map(acc => acc.email) || [];
     
     const field = type === "guru" ? "nik" : "nis";
