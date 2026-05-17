@@ -8,8 +8,8 @@ import NotFound from "@/pages/NotFound";
 
 // Student pages
 import StudentDashboard from "@/pages/student/Dashboard";
-import StudentMyGrades from "@/pages/student/MyGrades";
-import StudentNotifications from "@/pages/student/Notifications";
+//import StudentMyGrades from "@/pages/student/MyGrades";
+//import StudentNotifications from "@/pages/student/Notifications";
 import StudentAttendance from "@/pages/student/StudentAttendance";
 
 // Admin pages
@@ -76,7 +76,7 @@ function App() {
             <Route path="dashboard" element={<StudentDashboard />} />
             <Route path="schedule" element={<ScheduleView />} />
             <Route path="attendance" element={<StudentAttendance />} />
-            <Route path="notifications" element={<StudentNotifications />} />
+            {/* <Route path="notifications" element={<StudentNotifications />} /> */}
           </Route>
 
           {/* Guru Routes */}
