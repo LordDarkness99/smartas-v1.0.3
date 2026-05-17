@@ -30,7 +30,7 @@ export default function Login() {
     e.preventDefault();
 
     if (!username || !password) {
-      toast.error("Username dan password harus diisi");
+      toast.error("Nama Pengguna dan Sandi harus diisi");
       return;
     }
 
@@ -39,7 +39,7 @@ export default function Login() {
     if (error) {
       toast.error(error);
     } else {
-      toast.success("Login berhasil! Mengalihkan...");
+      toast.success("Masuk berhasil! Mengalihkan...");
       setTimeout(() => {
         navigate("/dashboard");
       }, 1000);
@@ -56,12 +56,12 @@ export default function Login() {
     }
 
     if (newPassword !== confirmNewPassword) {
-      toast.error("Password baru tidak cocok");
+      toast.error("Sandi baru tidak cocok");
       return;
     }
 
     if (newPassword.length < 6) {
-      toast.error("Password minimal 6 karakter");
+      toast.error("Sandi minimal 6 karakter");
       return;
     }
 
@@ -75,14 +75,14 @@ export default function Login() {
         .single();
 
       if (fetchError || !akun) {
-        toast.error("Username tidak ditemukan");
+        toast.error("Nama Pengguna tidak ditemukan");
         return;
       }
 
       // 2. Verifikasi password lama dengan bcrypt
       const isPasswordValid = await bcrypt.compare(oldPassword, akun.kata_sandi);
       if (!isPasswordValid) {
-        toast.error("Password lama salah");
+        toast.error("Sandi lama salah");
         return;
       }
 
@@ -97,7 +97,7 @@ export default function Login() {
 
       if (updateError) throw updateError;
 
-      toast.success("Password berhasil diubah! Silakan login dengan password baru.");
+      toast.success("Sandi berhasil diubah! Silakan login dengan sandi baru.");
       // Reset form dan kembali ke mode login
       setShowChangePassword(false);
       setChangeUsername("");
@@ -106,7 +106,7 @@ export default function Login() {
       setConfirmNewPassword("");
     } catch (error: unknown) {
       const err = error as Error;
-      toast.error(err.message || "Terjadi kesalahan saat mengganti password");
+      toast.error(err.message || "Terjadi kesalahan saat mengganti sandi");
     } finally {
       setChangingPassword(false);
     }
@@ -128,7 +128,7 @@ export default function Login() {
               SMARTAS
             </CardTitle>
             <CardDescription className="text-base mt-2">
-              {showChangePassword ? "Ganti Password" : "Sistem Manajemen Akademik Terpadu"}
+              {showChangePassword ? "Ganti Sandi" : "Sistem Manajemen Akademik Terpadu"}
             </CardDescription>
           </div>
         </CardHeader>
@@ -153,12 +153,12 @@ export default function Login() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-semibold">
+                <Label htmlFor="Sandi" className="text-sm font-semibold">
                   Kata Sandi
                 </Label>
                 <Input
-                  id="password"
-                  type="password"
+                  id="Password"
+                  type="Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -192,7 +192,7 @@ export default function Login() {
                   onClick={() => setShowChangePassword(true)}
                   className="text-sm text-blue-600 hover:text-blue-800 hover:underline focus:outline-none"
                 >
-                  Lupa / Ganti Password?
+                  Lupa / Ganti Sandi?
                 </button>
               </div>
 
@@ -206,7 +206,7 @@ export default function Login() {
             <form onSubmit={handleChangePassword} className="space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="changeUsername" className="text-sm font-semibold">
-                  Username
+                  Nama Pengguna
                 </Label>
                 <Input
                   id="changeUsername"
@@ -214,7 +214,7 @@ export default function Login() {
                   value={changeUsername}
                   onChange={(e) => setChangeUsername(e.target.value)}
                   required
-                  placeholder="Masukkan username Anda"
+                  placeholder="Masukkan nama pengguna Anda"
                   className="h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                   disabled={changingPassword}
                 />
@@ -222,7 +222,7 @@ export default function Login() {
 
               <div className="space-y-2">
                 <Label htmlFor="oldPassword" className="text-sm font-semibold">
-                  Password Lama
+                  Sandi Lama
                 </Label>
                 <Input
                   id="oldPassword"
@@ -230,7 +230,7 @@ export default function Login() {
                   value={oldPassword}
                   onChange={(e) => setOldPassword(e.target.value)}
                   required
-                  placeholder="Masukkan password lama"
+                  placeholder="Masukkan sandi lama"
                   className="h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                   disabled={changingPassword}
                 />
@@ -238,7 +238,7 @@ export default function Login() {
 
               <div className="space-y-2">
                 <Label htmlFor="newPassword" className="text-sm font-semibold">
-                  Password Baru (min. 6 karakter)
+                  Sandi Baru (min. 6 karakter)
                 </Label>
                 <Input
                   id="newPassword"
@@ -246,7 +246,7 @@ export default function Login() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
-                  placeholder="Masukkan password baru"
+                  placeholder="Masukkan sandi baru"
                   className="h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                   disabled={changingPassword}
                 />
@@ -254,7 +254,7 @@ export default function Login() {
 
               <div className="space-y-2">
                 <Label htmlFor="confirmNewPassword" className="text-sm font-semibold">
-                  Konfirmasi Password Baru
+                  Konfirmasi Sandi Baru
                 </Label>
                 <Input
                   id="confirmNewPassword"
@@ -262,7 +262,7 @@ export default function Login() {
                   value={confirmNewPassword}
                   onChange={(e) => setConfirmNewPassword(e.target.value)}
                   required
-                  placeholder="Ulangi password baru"
+                  placeholder="Ulangi sandi baru"
                   className="h-11 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                   disabled={changingPassword}
                 />
@@ -298,14 +298,14 @@ export default function Login() {
                   ) : (
                     <div className="flex items-center gap-2">
                       <KeyRound className="h-4 w-4" />
-                      Ganti Password
+                      Ganti Sandi
                     </div>
                   )}
                 </Button>
               </div>
 
               <div className="text-center text-xs text-gray-500 border-t pt-4 mt-2">
-                <p>Pastikan Anda mengingat password baru setelah mengganti.</p>
+                <p>Pastikan Anda mengingat sandi baru setelah mengganti.</p>
               </div>
             </form>
           )}

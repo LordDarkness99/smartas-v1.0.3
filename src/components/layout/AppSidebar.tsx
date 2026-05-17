@@ -93,7 +93,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
     if (newPassword !== confirmPassword) {
       toast({
         title: "Error",
-        description: "Password baru tidak cocok",
+        description: "Sandi baru tidak cocok",
         variant: "destructive",
       });
       return;
@@ -101,7 +101,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
     if (newPassword.length < 6) {
       toast({
         title: "Error",
-        description: "Password minimal 6 karakter",
+        description: "Sandi minimal 6 karakter",
         variant: "destructive",
       });
       return;
@@ -122,7 +122,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
 
       toast({
         title: "Berhasil",
-        description: "Password telah diubah",
+        description: "Sandi telah diubah",
       });
       setIsChangingPassword(false);
       setNewPassword("");
@@ -232,7 +232,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Akun Saya</DialogTitle>
-            <DialogDescription>Informasi akun dan pengaturan password</DialogDescription>
+            <DialogDescription>Informasi akun dan pengaturan sandi</DialogDescription>
           </DialogHeader>
 
           {!isChangingPassword ? (
@@ -247,14 +247,14 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
               </div>
               {username && (
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-slate-500">Username</p>
+                  <p className="text-sm font-medium text-slate-500">Nama Pengguna</p>
                   <p className="text-base font-semibold">{username}</p>
                 </div>
               )}
               <div className="flex gap-3 pt-4">
                 <Button variant="outline" className="flex-1 gap-2" onClick={() => setIsChangingPassword(true)}>
                   <KeyRound className="h-4 w-4" />
-                  Ganti Password
+                  Ganti Sandi
                 </Button>
                 <Button variant="destructive" className="flex-1 gap-2" onClick={handleLogout}>
                   <LogOut className="h-4 w-4" />
@@ -265,7 +265,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
           ) : (
             <form onSubmit={handleChangePassword} className="space-y-4 py-2">
               <div className="space-y-2">
-                <Label htmlFor="newPassword">Password Baru (min. 6 karakter)</Label>
+                <Label htmlFor="newPassword">Sandi Baru (min. 6 karakter)</Label>
                 <Input
                   id="newPassword"
                   type="password"
@@ -276,7 +276,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Konfirmasi Password Baru</Label>
+                <Label htmlFor="confirmPassword">Konfirmasi Sandi Baru</Label>
                 <Input
                   id="confirmPassword"
                   type="password"
@@ -290,7 +290,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
                   Batal
                 </Button>
                 <Button type="submit" disabled={isLoading}>
-                  {isLoading ? "Menyimpan..." : "Simpan Password"}
+                  {isLoading ? "Menyimpan..." : "Simpan Sandi"}
                 </Button>
               </div>
             </form>
