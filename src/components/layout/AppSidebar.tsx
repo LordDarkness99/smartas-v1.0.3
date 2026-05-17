@@ -14,6 +14,7 @@ import {
   School,
   UserCircle,
   KeyRound,
+  Camera,
 } from "lucide-react";
 import {
   Sidebar,
@@ -63,6 +64,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
         { title: "Dashboard", icon: LayoutDashboard, path: "/student/dashboard" },
         { title: "Jadwal", icon: Calendar, path: "/student/schedule" },
         { title: "Presensi", icon: Calendar, path: "/student/attendance" },
+        { title: "Registrasi Wajah", icon: Camera, path: "/face-registration" },
         // { title: "Notifikasi", icon: Bell, path: "/student/notifications" },
       ];
     } else if (userRole === "guru") {
@@ -70,6 +72,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
         { title: "Dashboard", icon: LayoutDashboard, path: "/guru/dashboard" },
         { title: "Jadwal", icon: Calendar, path: "/guru/schedule" },
         { title: "Presensi", icon: Calendar, path: "/guru/attendance" },
+        { title: "Registrasi Wajah", icon: Camera, path: "/face-registration" },
       ];
     } else if (userRole === "admin") {
       return [
@@ -79,6 +82,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
         { title: "Program PKL", icon: MapPin, path: "/admin/pkl" },
         { title: "Presensi Sekolah", icon: School, path: "/admin/attendance" },
         { title: "Laporan Data", icon: FileText, path: "/admin/reports" },
+        { title: "Registrasi Wajah", icon: Camera, path: "/face-registration" },
       ];
     }
     return [];

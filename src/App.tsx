@@ -5,6 +5,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Toaster } from "@/components/ui/toaster";
 import Login from "@/pages/Login";
 import NotFound from "@/pages/NotFound";
+import FaceRegistration from "./pages/FaceRegistration";
 
 // Student pages
 import StudentDashboard from "@/pages/student/Dashboard";
@@ -62,6 +63,8 @@ function App() {
         <Routes>
           <Route path="/" element={<RootRouter />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/face-registration" element={<FaceRegistration />} />
+
 
           {/* Student Routes */}
           <Route

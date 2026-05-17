@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import * as bcrypt from 'bcryptjs';
+import type { PostgrestError } from '@supabase/supabase-js'; // <-- import tipe
 
 // Definisikan tipe untuk data akun
 interface AkunData {
@@ -31,6 +32,7 @@ interface AuthContextType {
   loading: boolean;
   signIn: (username: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  faceSignIn: (username: string) => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -60,17 +62,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: 'username dan password harus diisi' };
       }
 
-      console.log('Mencoba login dengan:', username);
-
-      // Cari akun berdasarkan username
       const { data: akun, error: queryError } = await supabase
         .from('akun')
         .select('id_akun, nama, username, peran, aktif, id_guru, id_siswa, kata_sandi')
         .eq('username', username.toLowerCase().trim())
-        .maybeSingle() as { data: AkunData | null; error: any };
-
-      console.log('Data dari database:', akun);
-      console.log('Query error:', queryError);
+        .maybeSingle() as { data: AkunData | null; error: PostgrestError | null }; // <-- ganti any dengan PostgrestError
 
       if (queryError) {
         console.error('Query error:', queryError);
@@ -81,23 +77,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: 'username tidak ditemukan' };
       }
 
-      // Cek status aktif
       if (akun.aktif === false) {
         return { error: 'Akun Anda tidak aktif. Hubungi administrator.' };
       }
 
-      // Verifikasi password dengan bcrypt
       if (!akun.kata_sandi) {
         return { error: 'Akun tidak memiliki password. Hubungi administrator.' };
       }
 
       const isPasswordValid = await bcrypt.compare(password, akun.kata_sandi);
-      
       if (!isPasswordValid) {
         return { error: 'Password salah' };
       }
 
-      // Simpan user ke localStorage
       const userData: User = {
         id_akun: akun.id_akun,
         nama: akun.nama,
@@ -108,15 +100,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id_siswa: akun.id_siswa,
       };
       
-      console.log('Login berhasil, user data:', userData);
-      
       localStorage.setItem('smartas_user', JSON.stringify(userData));
       setUser(userData);
-      
       return { error: null };
     } catch (err) {
       console.error('Login error:', err);
       return { error: 'Terjadi kesalahan saat login: ' + (err as Error).message };
+    }
+  };
+
+  const faceSignIn = async (username: string) => {
+    try {
+      if (!username) {
+        return { error: 'Username tidak ditemukan' };
+      }
+
+      const { data: akun, error: queryError } = await supabase
+        .from('akun')
+        .select('id_akun, nama, username, peran, aktif, id_guru, id_siswa')
+        .eq('username', username.toLowerCase().trim())
+        .maybeSingle();
+
+      if (queryError || !akun) {
+        return { error: 'Username tidak ditemukan' };
+      }
+
+      if (akun.aktif === false) {
+        return { error: 'Akun Anda tidak aktif. Hubungi administrator.' };
+      }
+
+      const userData: User = {
+        id_akun: akun.id_akun,
+        nama: akun.nama,
+        username: akun.username || username,
+        peran: akun.peran || 'siswa',
+        aktif: akun.aktif || false,
+        id_guru: akun.id_guru,
+        id_siswa: akun.id_siswa,
+      };
+      
+      localStorage.setItem('smartas_user', JSON.stringify(userData));
+      setUser(userData);
+      return { error: null };
+    } catch (err) {
+      console.error('Face sign in error:', err);
+      return { error: 'Terjadi kesalahan saat login dengan wajah' };
     }
   };
 
@@ -127,12 +155,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signOut, faceSignIn }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
