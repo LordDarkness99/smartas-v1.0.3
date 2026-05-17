@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, SVGProps } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -81,36 +81,8 @@ export default function AdminDashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // ==================== FETCH STATS ====================
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const [siswaRes, guruRes, kelasRes, mapelRes] = await Promise.all([
-          supabase.from("siswa").select("*", { count: "exact", head: true }).eq("aktif", true),
-          supabase.from("guru").select("*", { count: "exact", head: true }).eq("aktif", true),
-          supabase.from("kelas").select("*", { count: "exact", head: true }).eq("aktif", true),
-          supabase.from("mata_pelajaran").select("*", { count: "exact", head: true }).eq("aktif", true),
-        ]);
-
-        setStats({
-          siswa: siswaRes.count || 0,
-          guru: guruRes.count || 0,
-          kelas: kelasRes.count || 0,
-          mapel: mapelRes.count || 0,
-        });
-      } catch (error) {
-        console.error("Error fetching dashboard stats:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStats();
-    fetchPresensiData();
-  }, [periode]);
-
-  // ==================== FETCH PRESENSI DATA ====================
-  const fetchPresensiData = async () => {
+  // ==================== FETCH PRESENSI DATA (didefinisikan lebih awal) ====================
+  const fetchPresensiData = useCallback(async () => {
     try {
       const now = new Date();
       let startDate: Date;
@@ -165,7 +137,35 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error("Error fetching presensi data:", error);
     }
-  };
+  }, [periode]);
+
+  // ==================== FETCH STATS ====================
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const [siswaRes, guruRes, kelasRes, mapelRes] = await Promise.all([
+          supabase.from("siswa").select("*", { count: "exact", head: true }).eq("aktif", true),
+          supabase.from("guru").select("*", { count: "exact", head: true }).eq("aktif", true),
+          supabase.from("kelas").select("*", { count: "exact", head: true }).eq("aktif", true),
+          supabase.from("mata_pelajaran").select("*", { count: "exact", head: true }).eq("aktif", true),
+        ]);
+
+        setStats({
+          siswa: siswaRes.count || 0,
+          guru: guruRes.count || 0,
+          kelas: kelasRes.count || 0,
+          mapel: mapelRes.count || 0,
+        });
+      } catch (error) {
+        console.error("Error fetching dashboard stats:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+    fetchPresensiData();
+  }, [periode, fetchPresensiData]); // ✅ dependency sudah benar
 
   // ==================== HANDLE REFRESH ====================
   const handleRefresh = () => {
@@ -550,8 +550,8 @@ export default function AdminDashboard() {
   );
 }
 
-// Missing FileText component
-const FileText = (props: any) => (
+// Komponen FileText dengan tipe props yang benar
+const FileText = (props: SVGProps<SVGSVGElement>) => (
   <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
     <polyline points="14 2 14 8 20 8" />

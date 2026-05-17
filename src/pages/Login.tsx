@@ -35,9 +35,10 @@ export default function Login() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Load model face-api (sama dengan FaceRegistration)
+  // Load model face-api
   useEffect(() => {
     if (showFaceLogin) {
+      toast.info("Memuat model pengenalan wajah...");
       const loadModels = async () => {
         try {
           const MODEL_URL = "/models";
@@ -45,17 +46,17 @@ export default function Login() {
           await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
           await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
           setModelsLoaded(true);
-          toast.success("Model wajah siap");
+          toast.success("Model wajah siap digunakan");
         } catch (error) {
           console.error(error);
-          toast.error("Gagal load model wajah");
+          toast.error("Gagal memuat model wajah. Periksa folder /models");
         }
       };
       loadModels();
     }
   }, [showFaceLogin]);
 
-  // Mulai kamera (sama persis dengan FaceRegistration)
+  // Mulai kamera
   const startWebcam = useCallback(async () => {
     setCameraError(null);
     if (videoRef.current?.srcObject) {
@@ -70,6 +71,7 @@ export default function Login() {
         videoRef.current.srcObject = mediaStream;
         videoRef.current.muted = true;
         await videoRef.current.play();
+        toast.success("Kamera berhasil diaktifkan");
       }
     } catch (err) {
       console.error(err);
@@ -104,6 +106,7 @@ export default function Login() {
       return;
     }
     setDetecting(true);
+    toast.info("Memverifikasi wajah...");
     try {
       const detection = await faceapi
         .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions())
@@ -111,7 +114,7 @@ export default function Login() {
         .withFaceDescriptor();
 
       if (!detection) {
-        toast.error("Tidak ada wajah terdeteksi");
+        toast.error("Tidak ada wajah terdeteksi. Pastikan wajah Anda terlihat jelas.");
         setDetecting(false);
         return;
       }
@@ -124,8 +127,14 @@ export default function Login() {
         .select("username, nama, muka")
         .not("muka", "is", null);
 
-      if (error || !users || users.length === 0) {
-        toast.error("Tidak ada pengguna terdaftar dengan wajah");
+      if (error) {
+        toast.error("Gagal mengambil data pengguna");
+        setDetecting(false);
+        return;
+      }
+
+      if (!users || users.length === 0) {
+        toast.error("Belum ada pengguna yang mendaftarkan wajah. Silakan registrasi wajah terlebih dahulu.");
         setDetecting(false);
         return;
       }
@@ -144,19 +153,20 @@ export default function Login() {
       }
 
       if (bestMatch) {
-        toast.success(`Halo ${bestMatch.username}, login berhasil!`);
+        toast.success(`Halo ${bestMatch.username}, wajah dikenali! Login...`);
         const { error: loginError } = await faceSignIn(bestMatch.username);
         if (loginError) {
           toast.error(loginError);
         } else {
+          toast.success("Login berhasil! Mengalihkan...");
           setTimeout(() => navigate("/dashboard"), 1000);
         }
       } else {
-        toast.error("Wajah tidak dikenali");
+        toast.error("Wajah tidak dikenali. Pastikan Anda sudah registrasi wajah atau coba lagi.");
       }
     } catch (err) {
       console.error(err);
-      toast.error("Error deteksi wajah");
+      toast.error("Terjadi kesalahan saat verifikasi wajah");
     } finally {
       setDetecting(false);
     }
@@ -164,6 +174,7 @@ export default function Login() {
 
   // Reset kamera
   const resetCamera = () => {
+    toast.info("Merestart kamera...");
     startWebcam();
     if (canvasRef.current) {
       canvasRef.current.getContext("2d")?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -178,16 +189,18 @@ export default function Login() {
       return;
     }
     setLoading(true);
+    toast.info("Memproses login...");
     const { error } = await signIn(username, password);
-    if (error) toast.error(error);
-    else {
+    if (error) {
+      toast.error(error);
+    } else {
       toast.success("Login berhasil! Mengalihkan...");
       setTimeout(() => navigate("/dashboard"), 1000);
     }
     setLoading(false);
   };
 
-  // Ganti password (tidak berubah)
+  // Ganti password
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!changeUsername || !oldPassword || !newPassword || !confirmNewPassword) {
@@ -203,6 +216,7 @@ export default function Login() {
       return;
     }
     setChangingPassword(true);
+    toast.info("Mengganti password...");
     try {
       const { data: akun, error: fetchError } = await supabase
         .from("akun")
@@ -231,7 +245,7 @@ export default function Login() {
       setNewPassword("");
       setConfirmNewPassword("");
     } catch (error: unknown) {
-      toast.error((error as Error).message || "Terjadi kesalahan");
+      toast.error((error as Error).message || "Terjadi kesalahan saat mengganti password");
     } finally {
       setChangingPassword(false);
     }
@@ -255,7 +269,7 @@ export default function Login() {
         </CardHeader>
         <CardContent>
           {showFaceLogin ? (
-            // Face Login UI (mirip FaceRegistration)
+            // Face Login UI
             <div className="space-y-4">
               {!modelsLoaded ? (
                 <div className="flex justify-center items-center h-64">
@@ -302,6 +316,7 @@ export default function Login() {
                           (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
                           videoRef.current.srcObject = null;
                         }
+                        toast.info("Kembali ke login manual");
                       }}
                       variant="ghost"
                     >
@@ -327,10 +342,24 @@ export default function Login() {
                 {loading ? "Memproses..." : "Masuk"}
               </Button>
               <div className="flex justify-between">
-                <button type="button" onClick={() => setShowFaceLogin(true)} className="text-sm text-blue-600 hover:underline">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowFaceLogin(true);
+                    toast.info("Beralih ke login wajah");
+                  }}
+                  className="text-sm text-blue-600 hover:underline"
+                >
                   Login dengan Wajah
                 </button>
-                <button type="button" onClick={() => setShowChangePassword(true)} className="text-sm text-blue-600 hover:underline">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowChangePassword(true);
+                    toast.info("Buka form ganti password");
+                  }}
+                  className="text-sm text-blue-600 hover:underline"
+                >
                   Lupa / Ganti Password?
                 </button>
               </div>
@@ -358,7 +387,10 @@ export default function Login() {
                 <Input id="confirmNewPassword" type="password" value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} required disabled={changingPassword} />
               </div>
               <div className="flex gap-3">
-                <Button type="button" variant="outline" className="flex-1" onClick={() => setShowChangePassword(false)} disabled={changingPassword}>
+                <Button type="button" variant="outline" className="flex-1" onClick={() => {
+                  setShowChangePassword(false);
+                  toast.info("Batal ganti password");
+                }} disabled={changingPassword}>
                   <ArrowLeft className="mr-2 h-4 w-4" /> Batal
                 </Button>
                 <Button type="submit" className="flex-1" disabled={changingPassword}>

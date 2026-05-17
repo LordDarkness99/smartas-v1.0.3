@@ -9,7 +9,7 @@ import { Camera, RefreshCw, Save, AlertCircle } from "lucide-react";
 
 interface UserWithUsername {
   username?: string;
-  email?: string;
+  //email?: string;
   id?: string;
 }
 
