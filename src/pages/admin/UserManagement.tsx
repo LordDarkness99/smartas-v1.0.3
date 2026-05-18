@@ -600,7 +600,8 @@ export default function UserManagement() {
     return currentMax + 1;
   };
 
-  const checkExistingData = async (type: "guru" | "siswa", data: ExcelRow[]) => {
+  // PERBAIKAN: gunakan any[] untuk memutus rekursi tipe dan cast supabase query ke any
+  const checkExistingData = async (type: "guru" | "siswa", data: any[]) => {
     const usernames = data.map(item => item.username as string).filter(Boolean);
     const nikNisValues = data.map(item => type === "guru" ? item.nik as string : item.nis as string).filter(Boolean);
     
@@ -611,12 +612,12 @@ export default function UserManagement() {
     const existingusernames = existingAccounts?.map(acc => acc.username) || [];
     
     const field = type === "guru" ? "nik" : "nis";
-    const { data: existingRecords } = await supabase
-      .from(type)
+    // Cast query builder ke any untuk menghindari deep type instantiation
+    const { data: existingRecords } = await (supabase.from(type) as any)
       .select(field)
       .in(field, nikNisValues);
-    // Gunakan casting untuk menghindari error type instantiation
-    const existingnikNis = (existingRecords as unknown as Record<string, number | string>[])?.map(record => record[field]) || [];
+    
+    const existingnikNis = (existingRecords as any[])?.map((record: any) => record[field]) || [];
     
     return { existingusernames, existingnikNis };
   };
@@ -632,7 +633,7 @@ export default function UserManagement() {
   };
 
   const importGuru = async (data: GuruImportData[]) => {
-    const { existingusernames, existingnikNis } = await checkExistingData("guru", data as unknown as ExcelRow[]);
+    const { existingusernames, existingnikNis } = await checkExistingData("guru", data);
     const filteredData = data.filter(item =>
       !existingusernames.includes(item.username) &&
       !existingnikNis.includes(item.nik)
@@ -693,7 +694,7 @@ export default function UserManagement() {
       if (!id) throw new Error(`Kelas "${nama}" tidak ditemukan.`);
       kelasMap.set(nama, id);
     }
-    const { existingusernames, existingnikNis } = await checkExistingData("siswa", data as unknown as ExcelRow[]);
+    const { existingusernames, existingnikNis } = await checkExistingData("siswa", data);
     const filteredData = data.filter(item =>
       !existingusernames.includes(item.username) &&
       !existingnikNis.includes(item.nis)
@@ -1086,8 +1087,7 @@ export default function UserManagement() {
     const tableName = isGuru ? "guru" : "siswa";
     const idField = isGuru ? "id_guru" : "id_siswa";
 
-    const { error: updateError } = await supabase
-      .from(tableName)
+    const { error: updateError } = await (supabase.from(tableName) as any) 
       .update({ aktif: true })
       .eq(idField, userId);
     if (updateError) throw updateError;
@@ -1133,8 +1133,7 @@ export default function UserManagement() {
       const tableName = isGuru ? "guru" : "siswa";
       const idField = isGuru ? "id_guru" : "id_siswa";
       try {
-        const { error: updateError } = await supabase
-          .from(tableName)
+        const { error: updateError } = await (supabase.from(tableName) as any)
           .update({ aktif: false })
           .eq(idField, userId);
         if (updateError) throw updateError;
@@ -1241,13 +1240,11 @@ export default function UserManagement() {
 
     for (const id of canProcessIds) {
       try {
-        const { error: updateError } = await supabase
-          .from(tableName)
+        const { error: updateError } = await (supabase.from(tableName) as any)
           .update({ aktif: newActiveStatus })
           .eq(idField, id);
         if (updateError) throw updateError;
-        const { error: akunError } = await supabase
-          .from("akun")
+        const { error: akunError } = await (supabase.from("akun") as any)
           .update({ aktif: newActiveStatus })
           .eq(isGuru ? "id_guru" : "id_siswa", id);
         if (akunError) throw akunError;

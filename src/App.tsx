@@ -9,8 +9,6 @@ import FaceRegistration from "./pages/FaceRegistration";
 
 // Student pages
 import StudentDashboard from "@/pages/student/Dashboard";
-//import StudentMyGrades from "@/pages/student/MyGrades";
-//import StudentNotifications from "@/pages/student/Notifications";
 import StudentAttendance from "@/pages/student/StudentAttendance";
 
 // Admin pages
@@ -24,7 +22,6 @@ import AttendanceReport from "@/pages/report/AttendanceReport";
 // Guru pages
 import GuruDashboard from "@/pages/guru/Dashboard";
 import ScheduleView from "@/pages/schedule/ScheduleView";
-
 
 // Komponen untuk merender dashboard berdasarkan role (tanpa redirect)
 function DashboardRenderer() {
@@ -63,8 +60,9 @@ function App() {
         <Routes>
           <Route path="/" element={<RootRouter />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/face-registration" element={<FaceRegistration />} />
 
+          {/* Redirect from old /face-registration to the one with sidebar */}
+          <Route path="/face-registration" element={<Navigate to="/dashboard/face-registration" replace />} />
 
           {/* Student Routes */}
           <Route
@@ -79,7 +77,7 @@ function App() {
             <Route path="dashboard" element={<StudentDashboard />} />
             <Route path="schedule" element={<ScheduleView />} />
             <Route path="attendance" element={<StudentAttendance />} />
-            {/* <Route path="notifications" element={<StudentNotifications />} /> */}
+            <Route path="face-registration" element={<FaceRegistration />} />
           </Route>
 
           {/* Guru Routes */}
@@ -95,6 +93,7 @@ function App() {
             <Route path="dashboard" element={<GuruDashboard />} />
             <Route path="attendance" element={<AttendanceManagement />} />
             <Route path="schedule" element={<ScheduleView />} />
+            <Route path="face-registration" element={<FaceRegistration />} />
           </Route>
 
           {/* Admin Routes */}
@@ -113,9 +112,11 @@ function App() {
             <Route path="pkl" element={<PKLManagement />} />
             <Route path="attendance" element={<AttendanceManagement />} />
             <Route path="reports" element={<AttendanceReport />} />
+            <Route path="face-registration" element={<FaceRegistration />} />
           </Route>
 
-          {/* Dashboard redirect - sekarang langsung render dashboard sesuai role */}
+          {/* Dashboard redirect - langsung render dashboard sesuai role, 
+              dan juga menyediakan halaman face registration dengan layout */}
           <Route
             path="/dashboard"
             element={
@@ -125,6 +126,7 @@ function App() {
             }
           >
             <Route index element={<DashboardRenderer />} />
+            <Route path="face-registration" element={<FaceRegistration />} />
           </Route>
 
           <Route path="*" element={<NotFound />} />
