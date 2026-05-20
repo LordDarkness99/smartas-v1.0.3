@@ -70,6 +70,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
         { title: "Dashboard", icon: LayoutDashboard, path: "/guru/dashboard" },
         { title: "Jadwal", icon: Calendar, path: "/guru/schedule" },
         { title: "Presensi", icon: Calendar, path: "/guru/attendance" },
+        { title: "Laporan Data", icon: FileText, path: "/guru/reports" },
         { title: "Registrasi Wajah", icon: Camera, path: "/face-registration" },
       ];
     } else if (userRole === "admin") {

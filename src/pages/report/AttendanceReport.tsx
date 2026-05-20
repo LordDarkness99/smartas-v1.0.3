@@ -34,14 +34,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Loader2, CalendarRange, Printer, Sun, Moon, Cloud, Sparkles, School, BookOpen, Calendar, Activity, TrendingUp, FileText, Users, Search, X, ChevronDown } from "lucide-react";
-
-interface Siswa {
-  id_siswa: number;
-  nama: string;
-  nis: string;
-  kelas_nama: string;
-}
+import { Loader2, CalendarRange, Printer, Sun, Moon, Cloud, Sparkles, School, BookOpen, Calendar, Activity, TrendingUp, FileText, Search, X, ChevronDown, AlertCircle } from "lucide-react";
 
 interface RekapHarian {
   id_siswa: number;
@@ -65,7 +58,6 @@ interface RekapMapel {
   alfa: number;
 }
 
-// Konfigurasi sekolah
 const SCHOOL_NAME = "SMK NEGERI 1 CONTOH";
 const SCHOOL_ADDRESS = "Jl. Pendidikan No. 123, Kota Contoh, Provinsi Contoh";
 const SCHOOL_PHONE = "(021) 1234567";
@@ -79,48 +71,105 @@ export default function AttendanceReport() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
   
-  const [kelasList, setKelasList] = useState<{ id_kelas: number; nama: string }[]>([]);
-  const [selectedKelas, setSelectedKelas] = useState<string>("");
+  // Daftar kelas untuk presensi mapel (guru bisa lihat kelas yang diampu/wali)
+  const [kelasListMapel, setKelasListMapel] = useState<{ id_kelas: number; nama: string }[]>([]);
+  // Daftar kelas untuk presensi harian (hanya admin dan wali kelas)
+  const [kelasListHarian, setKelasListHarian] = useState<{ id_kelas: number; nama: string }[]>([]);
+  
+  const [selectedKelasHarian, setSelectedKelasHarian] = useState<string>("");
+  const [selectedKelasMapel, setSelectedKelasMapel] = useState<string>("");
+  
   const [startDate, setStartDate] = useState<string>(
     new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split("T")[0]
   );
   const [endDate, setEndDate] = useState<string>(new Date().toISOString().split("T")[0]);
   
-  const [jadwalList, setJadwalList] = useState<{ id_jadwal: number; nama: string; kelas_nama: string }[]>([]);
+  const [jadwalList, setJadwalList] = useState<{ id_jadwal: number; nama: string; kelas_nama: string; id_guru: number }[]>([]);
+  const [jadwalListFiltered, setJadwalListFiltered] = useState<{ id_jadwal: number; nama: string; kelas_nama: string }[]>([]);
   const [selectedJadwal, setSelectedJadwal] = useState<string>("");
   
   const [rekapHarian, setRekapHarian] = useState<RekapHarian[]>([]);
   const [rekapMapel, setRekapMapel] = useState<RekapMapel[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // State untuk popover filter kelas (harian & mapel)
+  // State untuk popover filter kelas (digunakan untuk kedua tab)
   const [popoverKelasOpen, setPopoverKelasOpen] = useState(false);
   const [kelasSearchQuery, setKelasSearchQuery] = useState("");
   const [kelasJenjangFilter, setKelasJenjangFilter] = useState<string>("all");
 
-  const filteredKelasOptions = kelasList.filter((kelas) => {
-    if (kelasJenjangFilter !== "all") {
-      const pattern = new RegExp(`^${kelasJenjangFilter}(\\s|$)`);
-      if (!pattern.test(kelas.nama)) return false;
-    }
-    if (kelasSearchQuery) {
-      return kelas.nama.toLowerCase().includes(kelasSearchQuery.toLowerCase());
-    }
-    return true;
-  });
+  // State untuk menyimpan ID kelas tempat guru menjadi wali
+  const [waliKelasIds, setWaliKelasIds] = useState<number[]>([]);
 
-  // ==================== GREETING EFFECT ====================
+  // Helper: filter kelas berdasarkan jenjang dan pencarian
+  const filterKelasOptions = (kelasList: { id_kelas: number; nama: string }[]) => {
+    return kelasList.filter((kelas) => {
+      if (kelasJenjangFilter !== "all") {
+        const pattern = new RegExp(`^${kelasJenjangFilter}(\\s|$)`);
+        if (!pattern.test(kelas.nama)) return false;
+      }
+      if (kelasSearchQuery) {
+        return kelas.nama.toLowerCase().includes(kelasSearchQuery.toLowerCase());
+      }
+      return true;
+    });
+  };
+
+  const filteredKelasOptionsHarian = filterKelasOptions(kelasListHarian);
+  const filteredKelasOptionsMapel = filterKelasOptions(kelasListMapel);
+
+  const getKelasNameById = (id_kelas: number, list: { id_kelas: number; nama: string }[]) => {
+    const kelas = list.find(k => k.id_kelas === id_kelas);
+    return kelas?.nama || "";
+  };
+
+  // Filter jadwal untuk presensi mapel berdasarkan kelas yang dipilih
+  useEffect(() => {
+    if (!selectedKelasMapel) {
+      setJadwalListFiltered([]);
+      return;
+    }
+
+    const kelasNama = getKelasNameById(parseInt(selectedKelasMapel), kelasListMapel);
+    const isAdmin = user?.peran === 'admin';
+    const isGuru = user?.peran === 'guru';
+    const isWali = waliKelasIds.includes(parseInt(selectedKelasMapel));
+
+    let filtered: typeof jadwalList = [];
+
+    if (isAdmin) {
+      filtered = jadwalList.filter(j => j.kelas_nama === kelasNama);
+    } else if (isGuru && isWali) {
+      filtered = jadwalList.filter(j => j.kelas_nama === kelasNama);
+    } else if (isGuru && user?.id_guru) {
+      filtered = jadwalList.filter(j => j.kelas_nama === kelasNama && j.id_guru === user.id_guru);
+    }
+
+    setJadwalListFiltered(filtered.map(({ id_jadwal, nama, kelas_nama }) => ({ id_jadwal, nama, kelas_nama })));
+
+    // Untuk guru biasa (bukan wali), auto pilih mapel pertama
+    if (isGuru && !isWali && filtered.length > 0) {
+      const isValid = selectedJadwal && selectedJadwal !== "all" && filtered.some(j => j.id_jadwal.toString() === selectedJadwal);
+      if (!isValid) {
+        setSelectedJadwal(filtered[0].id_jadwal.toString());
+      }
+    } else {
+      if (selectedJadwal && selectedJadwal !== "all") {
+        const exists = filtered.some(j => j.id_jadwal.toString() === selectedJadwal);
+        if (!exists) setSelectedJadwal("");
+      }
+    }
+  }, [selectedKelasMapel, jadwalList, user, waliKelasIds, kelasListMapel]);
+
+  // Greeting effect
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour < 12) setGreeting("Selamat Pagi");
     else if (hour < 18) setGreeting("Selamat Siang");
     else setGreeting("Selamat Malam");
-
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // ==================== FORMAT DATE ====================
   const formatDateHeader = (date: Date) => {
     return date.toLocaleDateString("id-ID", { 
       weekday: 'long', 
@@ -130,21 +179,105 @@ export default function AttendanceReport() {
     });
   };
 
+  // Fetch data kelas dan wali berdasarkan role
   const fetchKelas = async () => {
-    const { data, error } = await supabase
-      .from("kelas")
-      .select("id_kelas, nama")
-      .eq("aktif", true)
-      .order("nama");
-    if (error) console.error(error);
-    else setKelasList(data || []);
+    if (!user) return;
+    if (!user.id_akun) {
+      console.error("User tidak memiliki id_akun");
+      return;
+    }
+
+    const userRole = user.peran;
+
+    if (userRole === 'guru') {
+      if (!user.id_guru) {
+        console.error("Guru tidak memiliki id_guru");
+        setKelasListMapel([]);
+        setKelasListHarian([]);
+        return;
+      }
+
+      const id_guru = user.id_guru;
+
+      // 1. Kelas sebagai wali kelas
+      const { data: waliKelas, error: waliError } = await supabase
+        .from("kelas")
+        .select("id_kelas, nama")
+        .eq("id_guru", id_guru)
+        .eq("aktif", true);
+
+      if (waliError) console.error(waliError);
+      const waliIds = waliKelas?.map(k => k.id_kelas) || [];
+      setWaliKelasIds(waliIds);
+
+      // 2. Kelas yang diampu melalui jadwal
+      const { data: jadwalKelas, error: jadwalError } = await supabase
+        .from("jadwal")
+        .select("kelas:id_kelas(id_kelas, nama)")
+        .eq("id_guru", id_guru)
+        .eq("aktif", true);
+
+      if (jadwalError) console.error(jadwalError);
+
+      const kelasMap = new Map();
+      if (waliKelas) {
+        waliKelas.forEach(k => kelasMap.set(k.id_kelas, k));
+      }
+      if (jadwalKelas) {
+        jadwalKelas.forEach((item: any) => {
+          if (item.kelas) {
+            kelasMap.set(item.kelas.id_kelas, {
+              id_kelas: item.kelas.id_kelas,
+              nama: item.kelas.nama,
+            });
+          }
+        });
+      }
+
+      const kelasListUnik = Array.from(kelasMap.values()).sort((a, b) =>
+        a.nama.localeCompare(b.nama)
+      );
+      // Kelas untuk presensi mapel: semua kelas yang diampu (termasuk wali)
+      setKelasListMapel(kelasListUnik);
+      // Kelas untuk presensi harian: hanya kelas wali
+      setKelasListHarian(waliKelas || []);
+    } else {
+      // Admin: ambil semua kelas aktif
+      const { data, error } = await supabase
+        .from("kelas")
+        .select("id_kelas, nama")
+        .eq("aktif", true)
+        .order("nama");
+      if (error) console.error(error);
+      else {
+        setKelasListMapel(data || []);
+        setKelasListHarian(data || []);
+      }
+      setWaliKelasIds([]);
+    }
   };
+
+  // Reset selected kelas jika tidak valid setelah fetch
+  useEffect(() => {
+    if (selectedKelasHarian && kelasListHarian.length > 0) {
+      const isValid = kelasListHarian.some(k => k.id_kelas.toString() === selectedKelasHarian);
+      if (!isValid) setSelectedKelasHarian("");
+    }
+  }, [kelasListHarian, selectedKelasHarian]);
+
+  useEffect(() => {
+    if (selectedKelasMapel && kelasListMapel.length > 0) {
+      const isValid = kelasListMapel.some(k => k.id_kelas.toString() === selectedKelasMapel);
+      if (!isValid) setSelectedKelasMapel("");
+    }
+  }, [kelasListMapel, selectedKelasMapel]);
 
   const fetchJadwal = async () => {
     const { data, error } = await supabase
       .from("jadwal")
       .select(`
         id_jadwal,
+        id_guru,
         mapel:mata_pelajaran (nama),
         kelas:kelas (nama)
       `)
@@ -153,6 +286,7 @@ export default function AttendanceReport() {
     else {
       const formatted = data.map((item: any) => ({
         id_jadwal: item.id_jadwal,
+        id_guru: item.id_guru,
         nama: item.mapel?.nama || "-",
         kelas_nama: item.kelas?.nama || "-",
       }));
@@ -161,12 +295,14 @@ export default function AttendanceReport() {
   };
 
   useEffect(() => {
-    fetchKelas();
-    fetchJadwal();
-  }, []);
+    if (user) {
+      fetchKelas();
+      fetchJadwal();
+    }
+  }, [user]);
 
   const generateLaporanHarian = async () => {
-    if (!selectedKelas) {
+    if (!selectedKelasHarian) {
       toast({ title: "Error", description: "Pilih kelas terlebih dahulu", variant: "destructive" });
       return;
     }
@@ -174,8 +310,8 @@ export default function AttendanceReport() {
     try {
       const { data: siswaData, error: siswaError } = await supabase
         .from("siswa")
-        .select("id_siswa, nama, nis, kelas:kelas(nama)")
-        .eq("id_kelas", parseInt(selectedKelas))
+        .select("id_siswa, nama, nis")
+        .eq("id_kelas", parseInt(selectedKelasHarian))
         .eq("aktif", true);
       if (siswaError) throw siswaError;
 
@@ -210,16 +346,21 @@ export default function AttendanceReport() {
   };
 
   const generateLaporanMapel = async () => {
-    if (!selectedKelas) {
+    if (!selectedKelasMapel) {
       toast({ title: "Error", description: "Pilih kelas terlebih dahulu", variant: "destructive" });
+      return;
+    }
+    const isGuruBiasa = user?.peran === 'guru' && !waliKelasIds.includes(parseInt(selectedKelasMapel));
+    if (isGuruBiasa && !selectedJadwal) {
+      toast({ title: "Error", description: "Pilih mata pelajaran terlebih dahulu", variant: "destructive" });
       return;
     }
     setIsLoading(true);
     try {
       const { data: siswaData, error: siswaError } = await supabase
         .from("siswa")
-        .select("id_siswa, nama, nis, kelas:kelas(nama)")
-        .eq("id_kelas", parseInt(selectedKelas))
+        .select("id_siswa, nama, nis")
+        .eq("id_kelas", parseInt(selectedKelasMapel))
         .eq("aktif", true);
       if (siswaError) throw siswaError;
 
@@ -299,21 +440,30 @@ export default function AttendanceReport() {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const handlePrint = () => window.print();
 
   const formatDate = (date: string) => {
     const d = new Date(date);
     return d.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
   };
 
-  const getKelasName = () => {
-    const kelas = kelasList.find(k => k.id_kelas.toString() === selectedKelas);
+  const getKelasNameHarian = () => {
+    const kelas = kelasListHarian.find(k => k.id_kelas.toString() === selectedKelasHarian);
     return kelas?.nama || "";
   };
 
-  // Hitung total keseluruhan untuk tampilan layar
+  const getKelasNameMapel = () => {
+    const kelas = kelasListMapel.find(k => k.id_kelas.toString() === selectedKelasMapel);
+    return kelas?.nama || "";
+  };
+
+  const showAllMapelOption = () => {
+    if (!selectedKelasMapel) return false;
+    const isAdmin = user?.peran === 'admin';
+    const isWali = waliKelasIds.includes(parseInt(selectedKelasMapel));
+    return isAdmin || isWali;
+  };
+
   const totalHadir = rekapHarian.reduce((sum, s) => sum + s.hadir, 0);
   const totalTerlambat = rekapHarian.reduce((sum, s) => sum + s.terlambat, 0);
   const totalIzin = rekapHarian.reduce((sum, s) => sum + s.izin, 0);
@@ -324,8 +474,7 @@ export default function AttendanceReport() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 overflow-x-hidden">
-      
-      {/* HEADER SECTION - Responsif Mobile */}
+      {/* Header */}
       <div className="print:hidden bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
         <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -346,7 +495,6 @@ export default function AttendanceReport() {
                 </p>
               </div>
             </div>
-            
             <div className="flex items-center gap-3">
               <div className="bg-white/10 rounded-xl px-3 py-1 sm:px-4 sm:py-2 backdrop-blur-sm text-center">
                 <p className="text-[10px] sm:text-xs text-blue-100">{formatDateHeader(currentTime)}</p>
@@ -357,229 +505,126 @@ export default function AttendanceReport() {
         </div>
       </div>
 
-      {/* MAIN CONTENT */}
       <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8 print:px-0 print:py-0">
         
-        {/* STATS CARDS - Responsif grid 2 kolom di HP */}
+        {/* Stats Cards */}
         <div className="print:hidden grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] sm:text-xs text-blue-600 font-medium">Total Kelas</p>
-                  <p className="text-lg sm:text-2xl font-bold text-blue-900">{kelasList.length}</p>
-                </div>
+                <div><p className="text-[10px] sm:text-xs text-blue-600 font-medium">Total Kelas (Mapel)</p><p className="text-lg sm:text-2xl font-bold text-blue-900">{kelasListMapel.length}</p></div>
                 <School className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
-          
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
+          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Total Mapel</p>
-                  <p className="text-lg sm:text-2xl font-bold text-emerald-900">{jadwalList.length}</p>
-                </div>
+                <div><p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Total Mapel</p><p className="text-lg sm:text-2xl font-bold text-emerald-900">{jadwalList.length}</p></div>
                 <BookOpen className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />
               </div>
             </CardContent>
           </Card>
-          
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] sm:text-xs text-purple-600 font-medium">Periode</p>
-                  <p className="text-[10px] sm:text-xs font-bold text-purple-900">
-                    {formatDate(startDate)}<br />s.d.<br />{formatDate(endDate)}
-                  </p>
-                </div>
+                <div><p className="text-[10px] sm:text-xs text-purple-600 font-medium">Periode</p><p className="text-[10px] sm:text-xs font-bold text-purple-900">{formatDate(startDate)}<br />s.d.<br />{formatDate(endDate)}</p></div>
                 <Calendar className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" />
               </div>
             </CardContent>
           </Card>
-          
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
+          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] sm:text-xs text-amber-600 font-medium">Total Presensi</p>
-                  <p className="text-lg sm:text-2xl font-bold text-amber-900">{totalPresensi}</p>
-                </div>
+                <div><p className="text-[10px] sm:text-xs text-amber-600 font-medium">Total Presensi</p><p className="text-lg sm:text-2xl font-bold text-amber-900">{totalPresensi}</p></div>
                 <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" />
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* FILTER CARD - Responsif Mobile dengan Popover untuk Kelas */}
+        {/* Filter Card */}
         <div className="print:hidden">
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
+          <Card className="rounded-xl border-0 shadow-xl overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-6">
               <div className="flex items-center gap-2 sm:gap-3">
-                <div className="bg-white/10 p-1.5 sm:p-2 rounded-xl">
-                  <CalendarRange className="h-5 w-5 sm:h-6 sm:w-6" />
-                </div>
-                <div>
-                  <CardTitle className="text-base sm:text-xl">Filter Laporan</CardTitle>
-                  <CardDescription className="text-slate-300 text-[10px] sm:text-sm">
-                    Pilih kriteria untuk menampilkan laporan presensi
-                  </CardDescription>
-                </div>
+                <div className="bg-white/10 p-1.5 sm:p-2 rounded-xl"><CalendarRange className="h-5 w-5 sm:h-6 sm:w-6" /></div>
+                <div><CardTitle className="text-base sm:text-xl">Filter Laporan</CardTitle><CardDescription className="text-slate-300 text-[10px] sm:text-sm">Pilih kriteria untuk menampilkan laporan presensi</CardDescription></div>
               </div>
             </CardHeader>
-            
             <CardContent className="p-4 sm:p-6">
               <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "harian" | "mapel")} className="space-y-4 sm:space-y-6">
                 <div className="flex justify-center">
                   <TabsList className="bg-slate-100 p-1 rounded-xl w-auto inline-flex">
-                    <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2 px-3 sm:px-4 py-1 text-xs sm:text-sm">
-                      <Calendar className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                      Presensi Harian
-                    </TabsTrigger>
-                    <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2 px-3 sm:px-4 py-1 text-xs sm:text-sm">
-                      <BookOpen className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                      Presensi Mapel
-                    </TabsTrigger>
+                    <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2 px-3 sm:px-4 py-1 text-xs sm:text-sm"><Calendar className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Presensi Harian</TabsTrigger>
+                    <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2 px-3 sm:px-4 py-1 text-xs sm:text-sm"><BookOpen className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Presensi Mapel</TabsTrigger>
                   </TabsList>
                 </div>
 
+                {/* Tab Presensi Harian */}
                 <TabsContent value="harian" className="space-y-4 sm:space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-3 items-end">
-                    {/* Popover untuk pilih kelas */}
-                    <div className="w-full sm:w-48">
-                      <Label className="text-slate-700 text-xs sm:text-sm font-medium">Kelas</Label>
-                      <Popover open={popoverKelasOpen} onOpenChange={setPopoverKelasOpen}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className="w-full justify-between rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm font-normal mt-1"
-                          >
-                            {selectedKelas
-                              ? kelasList.find(k => k.id_kelas.toString() === selectedKelas)?.nama || "Pilih Kelas"
-                              : "Pilih Kelas"}
-                            <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-64 p-0" align="start" sideOffset={5}>
-                          <div className="p-2 border-b bg-slate-50">
-                            <div className="flex gap-1 mb-2">
-                              {["all", "X", "XI", "XII"].map(jenjang => (
-                                <Button
-                                  key={jenjang}
-                                  variant={kelasJenjangFilter === jenjang ? "default" : "ghost"}
-                                  size="sm"
-                                  className={`h-7 px-2 text-xs rounded-md ${
-                                    kelasJenjangFilter === jenjang
-                                      ? "bg-blue-600 text-white"
-                                      : "text-slate-600 hover:bg-slate-100"
-                                  }`}
-                                  onClick={() => setKelasJenjangFilter(jenjang)}
-                                >
-                                  {jenjang === "all" ? "Semua" : jenjang}
-                                </Button>
-                              ))}
+                  {user?.peran === 'guru' && kelasListHarian.length === 0 ? (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3">
+                      <AlertCircle className="h-5 w-5 text-amber-600" />
+                      <p className="text-sm text-amber-700">Anda tidak memiliki akses ke laporan presensi harian karena hanya wali kelas yang dapat melihatnya.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-3 items-end">
+                      <div className="w-full sm:w-48">
+                        <Label className="text-slate-700 text-xs sm:text-sm font-medium">Kelas</Label>
+                        <Popover open={popoverKelasOpen} onOpenChange={setPopoverKelasOpen}>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-between rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm font-normal mt-1">
+                              {selectedKelasHarian ? getKelasNameHarian() || "Pilih Kelas" : "Pilih Kelas"}
+                              <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64 p-0" align="start" sideOffset={5}>
+                            <div className="p-2 border-b bg-slate-50">
+                              <div className="flex gap-1 mb-2">
+                                {["all", "X", "XI", "XII"].map(jenjang => (
+                                  <Button key={jenjang} variant={kelasJenjangFilter === jenjang ? "default" : "ghost"} size="sm" className={`h-7 px-2 text-xs rounded-md ${kelasJenjangFilter === jenjang ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"}`} onClick={() => setKelasJenjangFilter(jenjang)}>
+                                    {jenjang === "all" ? "Semua" : jenjang}
+                                  </Button>
+                                ))}
+                              </div>
+                              <div className="relative">
+                                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                <Input placeholder="Cari kelas..." value={kelasSearchQuery} onChange={(e) => setKelasSearchQuery(e.target.value)} className="pl-7 h-8 text-sm rounded-lg" onClick={(e) => e.stopPropagation()} />
+                                {kelasSearchQuery && <button onClick={() => setKelasSearchQuery("")} className="absolute right-2 top-1/2 transform -translate-y-1/2"><X className="h-3.5 w-3.5 text-slate-400" /></button>}
+                              </div>
                             </div>
-                            <div className="relative">
-                              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                              <Input
-                                placeholder="Cari kelas..."
-                                value={kelasSearchQuery}
-                                onChange={(e) => setKelasSearchQuery(e.target.value)}
-                                className="pl-7 h-8 text-sm rounded-lg"
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                              {kelasSearchQuery && (
-                                <button
-                                  onClick={() => setKelasSearchQuery("")}
-                                  className="absolute right-2 top-1/2 transform -translate-y-1/2"
-                                >
-                                  <X className="h-3.5 w-3.5 text-slate-400" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          <div className="max-h-60 overflow-y-auto">
-                            {filteredKelasOptions.length === 0 ? (
-                              <div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada kelas yang cocok</div>
-                            ) : (
-                              filteredKelasOptions.map(kelas => (
-                                <button
-                                  key={kelas.id_kelas}
-                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${
-                                    selectedKelas === kelas.id_kelas.toString()
-                                      ? "bg-blue-50 text-blue-700 font-medium"
-                                      : "text-slate-700"
-                                  }`}
-                                  onClick={() => {
-                                    setSelectedKelas(kelas.id_kelas.toString());
-                                    setPopoverKelasOpen(false);
-                                    setKelasSearchQuery("");
-                                    setKelasJenjangFilter("all");
-                                  }}
-                                >
+                            <div className="max-h-60 overflow-y-auto">
+                              {filteredKelasOptionsHarian.length === 0 ? <div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada kelas yang cocok</div> : filteredKelasOptionsHarian.map(kelas => (
+                                <button key={kelas.id_kelas} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${selectedKelasHarian === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-700"}`} onClick={() => { setSelectedKelasHarian(kelas.id_kelas.toString()); setPopoverKelasOpen(false); setKelasSearchQuery(""); setKelasJenjangFilter("all"); }}>
                                   {kelas.nama}
                                 </button>
-                              ))
-                            )}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
+                              ))}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div className="w-full sm:w-40"><Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Awal</Label><Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm" /></div>
+                      <div className="w-full sm:w-40"><Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Akhir</Label><Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm" /></div>
+                      <div className="flex gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
+                        <Button onClick={generateLaporanHarian} disabled={isLoading || !selectedKelasHarian} className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600 flex-1 sm:flex-initial">
+                          {isLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <CalendarRange className="mr-1.5 h-3.5 w-3.5" />} Tampilkan
+                        </Button>
+                        <Button variant="outline" onClick={handlePrint} disabled={rekapHarian.length === 0} className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-initial"><Printer className="mr-1.5 h-3.5 w-3.5" /> Cetak</Button>
+                      </div>
                     </div>
-                    <div className="w-full sm:w-40">
-                      <Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Awal</Label>
-                      <Input 
-                        type="date" 
-                        value={startDate} 
-                        onChange={e => setStartDate(e.target.value)}
-                        className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm"
-                      />
-                    </div>
-                    <div className="w-full sm:w-40">
-                      <Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Akhir</Label>
-                      <Input 
-                        type="date" 
-                        value={endDate} 
-                        onChange={e => setEndDate(e.target.value)}
-                        className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm"
-                      />
-                    </div>
-                    <div className="flex gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
-                      <Button 
-                        onClick={generateLaporanHarian} 
-                        disabled={isLoading}
-                        className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600 flex-1 sm:flex-initial"
-                      >
-                        {isLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <CalendarRange className="mr-1.5 h-3.5 w-3.5" />}
-                        Tampilkan
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        onClick={handlePrint} 
-                        disabled={rekapHarian.length === 0}
-                        className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-initial"
-                      >
-                        <Printer className="mr-1.5 h-3.5 w-3.5" /> Cetak
-                      </Button>
-                    </div>
-                  </div>
+                  )}
                 </TabsContent>
 
+                {/* Tab Presensi Mapel */}
                 <TabsContent value="mapel" className="space-y-4 sm:space-y-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-3 items-end">
-                    {/* Popover untuk pilih kelas (sama seperti di atas) */}
                     <div className="w-full sm:w-48">
                       <Label className="text-slate-700 text-xs sm:text-sm font-medium">Kelas</Label>
                       <Popover open={popoverKelasOpen} onOpenChange={setPopoverKelasOpen}>
                         <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className="w-full justify-between rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm font-normal mt-1"
-                          >
-                            {selectedKelas
-                              ? kelasList.find(k => k.id_kelas.toString() === selectedKelas)?.nama || "Pilih Kelas"
-                              : "Pilih Kelas"}
+                          <Button variant="outline" className="w-full justify-between rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm font-normal mt-1">
+                            {selectedKelasMapel ? getKelasNameMapel() || "Pilih Kelas" : "Pilih Kelas"}
                             <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 opacity-50" />
                           </Button>
                         </PopoverTrigger>
@@ -587,63 +632,23 @@ export default function AttendanceReport() {
                           <div className="p-2 border-b bg-slate-50">
                             <div className="flex gap-1 mb-2">
                               {["all", "X", "XI", "XII"].map(jenjang => (
-                                <Button
-                                  key={jenjang}
-                                  variant={kelasJenjangFilter === jenjang ? "default" : "ghost"}
-                                  size="sm"
-                                  className={`h-7 px-2 text-xs rounded-md ${
-                                    kelasJenjangFilter === jenjang
-                                      ? "bg-blue-600 text-white"
-                                      : "text-slate-600 hover:bg-slate-100"
-                                  }`}
-                                  onClick={() => setKelasJenjangFilter(jenjang)}
-                                >
+                                <Button key={jenjang} variant={kelasJenjangFilter === jenjang ? "default" : "ghost"} size="sm" className={`h-7 px-2 text-xs rounded-md ${kelasJenjangFilter === jenjang ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"}`} onClick={() => setKelasJenjangFilter(jenjang)}>
                                   {jenjang === "all" ? "Semua" : jenjang}
                                 </Button>
                               ))}
                             </div>
                             <div className="relative">
                               <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                              <Input
-                                placeholder="Cari kelas..."
-                                value={kelasSearchQuery}
-                                onChange={(e) => setKelasSearchQuery(e.target.value)}
-                                className="pl-7 h-8 text-sm rounded-lg"
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                              {kelasSearchQuery && (
-                                <button
-                                  onClick={() => setKelasSearchQuery("")}
-                                  className="absolute right-2 top-1/2 transform -translate-y-1/2"
-                                >
-                                  <X className="h-3.5 w-3.5 text-slate-400" />
-                                </button>
-                              )}
+                              <Input placeholder="Cari kelas..." value={kelasSearchQuery} onChange={(e) => setKelasSearchQuery(e.target.value)} className="pl-7 h-8 text-sm rounded-lg" onClick={(e) => e.stopPropagation()} />
+                              {kelasSearchQuery && <button onClick={() => setKelasSearchQuery("")} className="absolute right-2 top-1/2 transform -translate-y-1/2"><X className="h-3.5 w-3.5 text-slate-400" /></button>}
                             </div>
                           </div>
                           <div className="max-h-60 overflow-y-auto">
-                            {filteredKelasOptions.length === 0 ? (
-                              <div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada kelas yang cocok</div>
-                            ) : (
-                              filteredKelasOptions.map(kelas => (
-                                <button
-                                  key={kelas.id_kelas}
-                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${
-                                    selectedKelas === kelas.id_kelas.toString()
-                                      ? "bg-blue-50 text-blue-700 font-medium"
-                                      : "text-slate-700"
-                                  }`}
-                                  onClick={() => {
-                                    setSelectedKelas(kelas.id_kelas.toString());
-                                    setPopoverKelasOpen(false);
-                                    setKelasSearchQuery("");
-                                    setKelasJenjangFilter("all");
-                                  }}
-                                >
-                                  {kelas.nama}
-                                </button>
-                              ))
-                            )}
+                            {filteredKelasOptionsMapel.length === 0 ? <div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada kelas yang cocok</div> : filteredKelasOptionsMapel.map(kelas => (
+                              <button key={kelas.id_kelas} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${selectedKelasMapel === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-700"}`} onClick={() => { setSelectedKelasMapel(kelas.id_kelas.toString()); setPopoverKelasOpen(false); setKelasSearchQuery(""); setKelasJenjangFilter("all"); }}>
+                                {kelas.nama}
+                              </button>
+                            ))}
                           </div>
                         </PopoverContent>
                       </Popover>
@@ -652,53 +657,23 @@ export default function AttendanceReport() {
                       <Label className="text-slate-700 text-xs sm:text-sm font-medium">Mata Pelajaran (Opsional)</Label>
                       <Select value={selectedJadwal} onValueChange={setSelectedJadwal}>
                         <SelectTrigger className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm">
-                          <SelectValue placeholder="Semua Mapel" />
+                          <SelectValue placeholder="Pilih Mata Pelajaran" />
                         </SelectTrigger>
                         <SelectContent className="rounded-lg">
-                          <SelectItem value="all">Semua Mata Pelajaran</SelectItem>
-                          {jadwalList.map(j => (
-                            <SelectItem key={j.id_jadwal} value={j.id_jadwal.toString()}>
-                              {j.nama} - {j.kelas_nama}
-                            </SelectItem>
+                          {showAllMapelOption() && <SelectItem value="all">Semua Mata Pelajaran</SelectItem>}
+                          {jadwalListFiltered.map(j => (
+                            <SelectItem key={j.id_jadwal} value={j.id_jadwal.toString()}>{j.nama} - {j.kelas_nama}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="w-full sm:w-40">
-                      <Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Awal</Label>
-                      <Input 
-                        type="date" 
-                        value={startDate} 
-                        onChange={e => setStartDate(e.target.value)}
-                        className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm"
-                      />
-                    </div>
-                    <div className="w-full sm:w-40">
-                      <Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Akhir</Label>
-                      <Input 
-                        type="date" 
-                        value={endDate} 
-                        onChange={e => setEndDate(e.target.value)}
-                        className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm"
-                      />
-                    </div>
+                    <div className="w-full sm:w-40"><Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Awal</Label><Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm" /></div>
+                    <div className="w-full sm:w-40"><Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Akhir</Label><Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm" /></div>
                     <div className="flex gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
-                      <Button 
-                        onClick={generateLaporanMapel} 
-                        disabled={isLoading}
-                        className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600 flex-1 sm:flex-initial"
-                      >
-                        {isLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <CalendarRange className="mr-1.5 h-3.5 w-3.5" />}
-                        Tampilkan
+                      <Button onClick={generateLaporanMapel} disabled={isLoading || !selectedKelasMapel} className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600 flex-1 sm:flex-initial">
+                        {isLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <CalendarRange className="mr-1.5 h-3.5 w-3.5" />} Tampilkan
                       </Button>
-                      <Button 
-                        variant="outline" 
-                        onClick={handlePrint} 
-                        disabled={rekapMapel.length === 0}
-                        className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-initial"
-                      >
-                        <Printer className="mr-1.5 h-3.5 w-3.5" /> Cetak
-                      </Button>
+                      <Button variant="outline" onClick={handlePrint} disabled={rekapMapel.length === 0} className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-initial"><Printer className="mr-1.5 h-3.5 w-3.5" /> Cetak</Button>
                     </div>
                   </div>
                 </TabsContent>
@@ -707,77 +682,48 @@ export default function AttendanceReport() {
           </Card>
         </div>
 
-        {/* SUMMARY CARD - Responsif */}
+        {/* Summary Card */}
         {(rekapHarian.length > 0 || rekapMapel.length > 0) && (
           <div className="print:hidden">
-            <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-r from-slate-700 to-slate-800 text-white">
+            <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-r from-slate-700 to-slate-800 text-white">
               <CardContent className="p-4 sm:p-5">
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
-                  <div className="text-center">
-                    <p className="text-[10px] sm:text-xs text-slate-300">Hadir</p>
-                    <p className="text-lg sm:text-2xl font-bold text-emerald-300">{totalHadir}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] sm:text-xs text-slate-300">Terlambat</p>
-                    <p className="text-lg sm:text-2xl font-bold text-amber-300">{totalTerlambat}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] sm:text-xs text-slate-300">Izin</p>
-                    <p className="text-lg sm:text-2xl font-bold text-sky-300">{totalIzin}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] sm:text-xs text-slate-300">Sakit</p>
-                    <p className="text-lg sm:text-2xl font-bold text-violet-300">{totalSakit}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] sm:text-xs text-slate-300">Alfa</p>
-                    <p className="text-lg sm:text-2xl font-bold text-rose-300">{totalAlfa}</p>
-                  </div>
+                  <div className="text-center"><p className="text-[10px] sm:text-xs text-slate-300">Hadir</p><p className="text-lg sm:text-2xl font-bold text-emerald-300">{totalHadir}</p></div>
+                  <div className="text-center"><p className="text-[10px] sm:text-xs text-slate-300">Terlambat</p><p className="text-lg sm:text-2xl font-bold text-amber-300">{totalTerlambat}</p></div>
+                  <div className="text-center"><p className="text-[10px] sm:text-xs text-slate-300">Izin</p><p className="text-lg sm:text-2xl font-bold text-sky-300">{totalIzin}</p></div>
+                  <div className="text-center"><p className="text-[10px] sm:text-xs text-slate-300">Sakit</p><p className="text-lg sm:text-2xl font-bold text-violet-300">{totalSakit}</p></div>
+                  <div className="text-center"><p className="text-[10px] sm:text-xs text-slate-300">Alfa</p><p className="text-lg sm:text-2xl font-bold text-rose-300">{totalAlfa}</p></div>
                 </div>
                 <hr className="my-3 sm:my-4 border-slate-600" />
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-slate-300" />
-                    <span className="text-xs sm:text-sm text-slate-300">Total Kehadiran</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg sm:text-2xl font-bold text-emerald-300">{persenHadir}%</span>
-                    <span className="text-[10px] sm:text-xs text-slate-400">dari {totalPresensi} presensi</span>
-                  </div>
+                  <div className="flex items-center gap-2"><TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-slate-300" /><span className="text-xs sm:text-sm text-slate-300">Total Kehadiran</span></div>
+                  <div className="flex items-center gap-2"><span className="text-lg sm:text-2xl font-bold text-emerald-300">{persenHadir}%</span><span className="text-[10px] sm:text-xs text-slate-400">dari {totalPresensi} presensi</span></div>
                 </div>
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* AREA LAPORAN - Tabel dengan overflow-x-auto */}
+        {/* Tabel Laporan */}
         {(rekapHarian.length > 0 || rekapMapel.length > 0) && (
           <div className="print:mt-0 print:p-0">
-            {/* Header Sekolah untuk cetak */}
             <div className="hidden print:block text-center mb-6" style={{ pageBreakInside: 'avoid' }}>
               <h1 className="text-2xl font-bold uppercase">{SCHOOL_NAME}</h1>
               <p className="text-sm">{SCHOOL_ADDRESS}</p>
               <p className="text-sm">Telp. {SCHOOL_PHONE} | Email: {SCHOOL_EMAIL} | NPSN: {SCHOOL_NPSN}</p>
-              <div className="border-t-2 border-black mt-3"></div>
-              <div className="border-b border-black"></div>
+              <div className="border-t-2 border-black mt-3"></div><div className="border-b border-black"></div>
             </div>
-
-            {/* Judul Laporan - Responsif */}
             <div className="text-center mb-4 print:mb-3">
-              <h2 className="text-base sm:text-xl font-bold uppercase">
-                {activeTab === "harian" ? "LAPORAN PRESENSI HARIAN" : "LAPORAN PRESENSI MATA PELAJARAN"}
-              </h2>
-              <p className="text-xs sm:text-sm mt-1">
-                Kelas: {getKelasName()} | Periode: {formatDate(startDate)} s.d. {formatDate(endDate)}
-              </p>
-              {activeTab === "mapel" && selectedJadwal && selectedJadwal !== "all" && (
-                <p className="text-xs sm:text-sm">
-                  Mata Pelajaran: {jadwalList.find(j => j.id_jadwal.toString() === selectedJadwal)?.nama || "-"}
-                </p>
+              <h2 className="text-base sm:text-xl font-bold uppercase">{activeTab === "harian" ? "LAPORAN PRESENSI HARIAN" : "LAPORAN PRESENSI MATA PELAJARAN"}</h2>
+              {activeTab === "harian" ? (
+                <p className="text-xs sm:text-sm mt-1">Kelas: {getKelasNameHarian()} | Periode: {formatDate(startDate)} s.d. {formatDate(endDate)}</p>
+              ) : (
+                <>
+                  <p className="text-xs sm:text-sm mt-1">Kelas: {getKelasNameMapel()} | Periode: {formatDate(startDate)} s.d. {formatDate(endDate)}</p>
+                  {selectedJadwal && selectedJadwal !== "all" && <p className="text-xs sm:text-sm">Mata Pelajaran: {jadwalListFiltered.find(j => j.id_jadwal.toString() === selectedJadwal)?.nama || "-"}</p>}
+                </>
               )}
             </div>
-
-            {/* Tabel Laporan - overflow-x-auto untuk mobile */}
             <div className="border rounded-lg overflow-x-auto print:border-0 print:overflow-visible">
               <Table className="min-w-[700px] print:min-w-full print:w-full print:border-collapse">
                 <TableHeader>
@@ -823,7 +769,6 @@ export default function AttendanceReport() {
                       </TableRow>
                     );
                   })}
-                  
                   {activeTab === "mapel" && rekapMapel.map((item, index) => {
                     const total = item.hadir + item.izin + item.sakit + item.alfa;
                     return (
@@ -843,161 +788,51 @@ export default function AttendanceReport() {
                 </TableBody>
               </Table>
             </div>
-
-            {/* Footer untuk cetak - DENGAN NAMA USER */}
             <div className="hidden print:block mt-8">
               <div className="flex justify-between mt-12">
-                <div className="text-center w-1/2">
-                  <p>Mengetahui,</p>
-                  <p className="mt-6 font-semibold">Kepala Sekolah</p>
-                  <div className="mt-8">
-                    <p className="mt-8">_________________________</p>
-                    <p className="text-sm">NIP. 196912311997021001</p>
-                  </div>
-                </div>
-                <div className="text-center w-1/2">
-                  <p>Petugas,</p>
-                  <p className="mt-6 font-semibold">{user?.nama || "Admin / Guru"}</p>
-                  <div className="mt-8">
-                    <p className="mt-8">_________________________</p>
-                    <p className="text-sm">NIP. 197501012005012001</p>
-                  </div>
-                </div>
+                <div className="text-center w-1/2"><p>Mengetahui,</p><p className="mt-6 font-semibold">Kepala Sekolah</p><div className="mt-8"><p className="mt-8">_________________________</p><p className="text-sm">NIP. 196912311997021001</p></div></div>
+                <div className="text-center w-1/2"><p>Petugas,</p><p className="mt-6 font-semibold">{user?.nama || "Admin / Guru"}</p><div className="mt-8"><p className="mt-8">_________________________</p><p className="text-sm">NIP. 197501012005012001</p></div></div>
               </div>
-              <div className="text-center text-xs mt-8">
-                <p>Dicetak pada: {new Date().toLocaleString("id-ID")}</p>
-              </div>
+              <div className="text-center text-xs mt-8"><p>Dicetak pada: {new Date().toLocaleString("id-ID")}</p></div>
             </div>
           </div>
         )}
 
-        {/* TIPS SECTION - Responsif */}
+        {/* Tips */}
         <div className="print:hidden">
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50 max-w-3xl mx-auto">
+          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50 max-w-3xl mx-auto">
             <CardContent className="p-4 sm:p-5">
               <div className="flex items-start gap-3 sm:gap-4">
-                <div className="bg-indigo-100 p-2 sm:p-3 rounded-xl flex-shrink-0">
-                  <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-slate-800 text-sm sm:text-base mb-1">Tips Laporan Presensi</h3>
-                  <p className="text-xs sm:text-sm text-slate-600">
-                    Pilih kelas dan rentang waktu yang diinginkan, lalu klik tombol "Tampilkan" untuk melihat laporan.
-                    Gunakan tombol "Cetak" untuk mencetak laporan dalam format yang rapi.
-                  </p>
-                </div>
+                <div className="bg-indigo-100 p-2 sm:p-3 rounded-xl flex-shrink-0"><Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" /></div>
+                <div><h3 className="font-semibold text-slate-800 text-sm sm:text-base mb-1">Tips Laporan Presensi</h3><p className="text-xs sm:text-sm text-slate-600">Pilih kelas dan rentang waktu yang diinginkan, lalu klik tombol "Tampilkan" untuk melihat laporan. Gunakan tombol "Cetak" untuk mencetak laporan dalam format yang rapi.</p></div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* FOOTER - HANYA UNTUK LAYAR */}
-        <div className="print:hidden text-center pt-4">
-          <hr className="mb-4" />
-          <p className="text-xs text-slate-400">
-            © {new Date().getFullYear()} Laporan Presensi - SmartAS
-          </p>
-          <p className="text-[10px] text-slate-300 mt-1">
-            Sistem Informasi Akademik
-          </p>
-        </div>
+        <div className="print:hidden text-center pt-4"><hr className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Laporan Presensi - SmartAS</p><p className="text-[10px] text-slate-300 mt-1">Sistem Informasi Akademik</p></div>
       </div>
 
-      {/* CSS untuk print - PROFESIONAL TANPA SCROLL */}
       <style>{`
         @media print {
-          /* Reset semua margin dan padding */
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-          
-          html, body {
-            margin: 0 !important;
-            padding: 0 !important;
-            background: white;
-            font-size: 11pt;
-            font-family: 'Times New Roman', Times, serif;
-            overflow: visible !important;
-          }
-          
-          /* Sembunyikan semua elemen yang tidak diperlukan saat print */
-          .print\\:hidden {
-            display: none !important;
-          }
-          
-          .print\\:block {
-            display: block !important;
-          }
-          
-          .print\\:mt-0 {
-            margin-top: 0 !important;
-          }
-          
-          .print\\:p-0 {
-            padding: 0 !important;
-          }
-          
-          .print\\:border-0 {
-            border: 0 !important;
-          }
-          
-          .print\\:overflow-visible {
-            overflow: visible !important;
-          }
-          
-          /* Hilangkan semua scrollbar */
-          ::-webkit-scrollbar {
-            display: none !important;
-          }
-          
-          body {
-            overflow-y: visible !important;
-          }
-          
-          /* Style tabel untuk cetak profesional */
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 0 auto;
-            font-size: 10pt;
-          }
-          
-          th, td {
-            border: 1px solid #000;
-            padding: 6px 8px;
-            vertical-align: top;
-          }
-          
-          th {
-            background-color: #f2f2f2;
-            font-weight: bold;
-            text-align: center;
-          }
-          
-          td {
-            text-align: left;
-          }
-          
-          td.text-center {
-            text-align: center;
-          }
-          
-          /* Page break handling */
-          thead {
-            display: table-header-group;
-          }
-          
-          tr {
-            page-break-inside: avoid;
-          }
-          
-          /* Ukuran halaman A4 dengan margin standar dokumen */
-          @page {
-            size: A4;
-            margin: 2cm;
-          }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          html, body { margin: 0 !important; padding: 0 !important; background: white; font-size: 11pt; font-family: 'Times New Roman', Times, serif; overflow: visible !important; }
+          .print\\:hidden { display: none !important; }
+          .print\\:block { display: block !important; }
+          .print\\:mt-0 { margin-top: 0 !important; }
+          .print\\:p-0 { padding: 0 !important; }
+          .print\\:border-0 { border: 0 !important; }
+          .print\\:overflow-visible { overflow: visible !important; }
+          ::-webkit-scrollbar { display: none !important; }
+          body { overflow-y: visible !important; }
+          table { width: 100%; border-collapse: collapse; margin: 0 auto; font-size: 10pt; }
+          th, td { border: 1px solid #000; padding: 6px 8px; vertical-align: top; }
+          th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
+          td { text-align: left; }
+          td.text-center { text-align: center; }
+          thead { display: table-header-group; }
+          tr { page-break-inside: avoid; }
+          @page { size: A4; margin: 2cm; }
         }
       `}</style>
     </div>

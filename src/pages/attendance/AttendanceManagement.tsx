@@ -58,7 +58,6 @@ import {
 } from "lucide-react";
 import QRCode from "qrcode";
 
-// Tipe data (sama seperti sebelumnya)
 interface Siswa {
   id_siswa: number;
   nama: string;
@@ -82,6 +81,7 @@ interface Jadwal {
   jam: string;
   mata_pelajaran: string;
   guru: string;
+  id_guru: number; // tambahan
   id_kelas: number;
   kelas_nama: string;
 }
@@ -116,9 +116,13 @@ export default function AttendanceManagement() {
   const [greeting, setGreeting] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // State Presensi Harian
-  const [kelasList, setKelasList] = useState<{ id_kelas: number; nama: string }[]>([]);
-  const [selectedKelas, setSelectedKelas] = useState<string>("");
+  // State untuk daftar kelas (dipisah antara harian dan mapel)
+  const [kelasListHarian, setKelasListHarian] = useState<{ id_kelas: number; nama: string }[]>([]);
+  const [kelasListMapel, setKelasListMapel] = useState<{ id_kelas: number; nama: string }[]>([]);
+  const [selectedKelasHarian, setSelectedKelasHarian] = useState<string>("");
+  const [selectedKelasMapel, setSelectedKelasMapel] = useState<string>("");
+  const [waliKelasIds, setWaliKelasIds] = useState<number[]>([]);
+
   const [selectedTanggal, setSelectedTanggal] = useState<string>(
     new Date().toISOString().split("T")[0]
   );
@@ -133,7 +137,7 @@ export default function AttendanceManagement() {
   const [kelasHarianSearchQuery, setKelasHarianSearchQuery] = useState("");
   const [kelasHarianJenjangFilter, setKelasHarianJenjangFilter] = useState<string>("all");
 
-  const filteredKelasHarianOptions = kelasList.filter((kelas) => {
+  const filteredKelasHarianOptions = kelasListHarian.filter((kelas) => {
     if (kelasHarianJenjangFilter !== "all") {
       const pattern = new RegExp(`^${kelasHarianJenjangFilter}(\\s|$)`);
       if (!pattern.test(kelas.nama)) return false;
@@ -146,7 +150,6 @@ export default function AttendanceManagement() {
 
   // State Presensi Mapel
   const [jadwalList, setJadwalList] = useState<Jadwal[]>([]);
-  const [selectedKelasMapel, setSelectedKelasMapel] = useState<string>("");
   const [filteredJadwalList, setFilteredJadwalList] = useState<Jadwal[]>([]);
   const [selectedJadwal, setSelectedJadwal] = useState<Jadwal | null>(null);
   const [presensiMapel, setPresensiMapel] = useState<PresensiMapel[]>([]);
@@ -166,7 +169,7 @@ export default function AttendanceManagement() {
   const [kelasMapelSearchQuery, setKelasMapelSearchQuery] = useState("");
   const [kelasMapelJenjangFilter, setKelasMapelJenjangFilter] = useState<string>("all");
 
-  const filteredKelasMapelOptions = kelasList.filter((kelas) => {
+  const filteredKelasMapelOptions = kelasListMapel.filter((kelas) => {
     if (kelasMapelJenjangFilter !== "all") {
       const pattern = new RegExp(`^${kelasMapelJenjangFilter}(\\s|$)`);
       if (!pattern.test(kelas.nama)) return false;
@@ -196,17 +199,97 @@ export default function AttendanceManagement() {
     });
   };
 
-  // Fetch data awal
+  // Fetch kelas berdasarkan role (untuk kedua tab)
   const fetchKelas = async () => {
-    const { data, error } = await supabase
-      .from("kelas")
-      .select("id_kelas, nama")
-      .eq("aktif", true)
-      .order("nama");
-    if (error) console.error(error);
-    else setKelasList(data || []);
+    if (!user) return;
+    if (!user.id_akun) {
+      console.error("User tidak memiliki id_akun");
+      return;
+    }
+
+    const userRole = user.peran;
+
+    if (userRole === 'guru') {
+      if (!user.id_guru) {
+        console.error("Guru tidak memiliki id_guru");
+        setKelasListHarian([]);
+        setKelasListMapel([]);
+        setWaliKelasIds([]);
+        return;
+      }
+
+      const id_guru = user.id_guru;
+
+      // 1. Kelas sebagai wali kelas
+      const { data: waliKelas, error: waliError } = await supabase
+        .from("kelas")
+        .select("id_kelas, nama")
+        .eq("id_guru", id_guru)
+        .eq("aktif", true);
+      if (waliError) console.error(waliError);
+      const waliIds = waliKelas?.map(k => k.id_kelas) || [];
+      setWaliKelasIds(waliIds);
+
+      // 2. Kelas yang diampu melalui jadwal
+      const { data: jadwalKelas, error: jadwalError } = await supabase
+        .from("jadwal")
+        .select("kelas:id_kelas(id_kelas, nama)")
+        .eq("id_guru", id_guru)
+        .eq("aktif", true);
+      if (jadwalError) console.error(jadwalError);
+
+      const kelasMap = new Map();
+      if (waliKelas) {
+        waliKelas.forEach(k => kelasMap.set(k.id_kelas, k));
+      }
+      if (jadwalKelas) {
+        jadwalKelas.forEach((item: any) => {
+          if (item.kelas) {
+            kelasMap.set(item.kelas.id_kelas, {
+              id_kelas: item.kelas.id_kelas,
+              nama: item.kelas.nama,
+            });
+          }
+        });
+      }
+
+      const kelasListUnik = Array.from(kelasMap.values()).sort((a, b) =>
+        a.nama.localeCompare(b.nama)
+      );
+      setKelasListMapel(kelasListUnik);
+      setKelasListHarian(waliKelas || []);
+    } else {
+      // Admin: ambil semua kelas aktif
+      const { data, error } = await supabase
+        .from("kelas")
+        .select("id_kelas, nama")
+        .eq("aktif", true)
+        .order("nama");
+      if (error) console.error(error);
+      else {
+        setKelasListMapel(data || []);
+        setKelasListHarian(data || []);
+      }
+      setWaliKelasIds([]);
+    }
   };
 
+  // Reset pilihan kelas jika tidak valid
+  useEffect(() => {
+    if (selectedKelasHarian && kelasListHarian.length > 0) {
+      const isValid = kelasListHarian.some(k => k.id_kelas.toString() === selectedKelasHarian);
+      if (!isValid) setSelectedKelasHarian("");
+    }
+  }, [kelasListHarian, selectedKelasHarian]);
+
+  useEffect(() => {
+    if (selectedKelasMapel && kelasListMapel.length > 0) {
+      const isValid = kelasListMapel.some(k => k.id_kelas.toString() === selectedKelasMapel);
+      if (!isValid) setSelectedKelasMapel("");
+    }
+  }, [kelasListMapel, selectedKelasMapel]);
+
+  // Fetch jadwal dengan akses wali kelas
   const fetchJadwal = async () => {
     if (!user) return;
     try {
@@ -214,6 +297,7 @@ export default function AttendanceManagement() {
         .from("jadwal")
         .select(`
           id_jadwal,
+          id_guru,
           hari,
           jam,
           id_kelas,
@@ -222,13 +306,38 @@ export default function AttendanceManagement() {
           guru:guru (nama)
         `)
         .eq("aktif", true);
+
       if (user.peran === "guru" && user.id_guru) {
-        query = query.eq("id_guru", user.id_guru);
+        // Ambil id_kelas yang menjadi wali
+        const { data: waliKelas, error: waliError } = await supabase
+          .from("kelas")
+          .select("id_kelas")
+          .eq("id_guru", user.id_guru)
+          .eq("aktif", true);
+        const waliIds = waliKelas?.map(k => k.id_kelas) || [];
+
+        // Ambil id_kelas yang diampu (dari jadwal yang id_guru-nya sama)
+        const { data: diampuKelas, error: diampuError } = await supabase
+          .from("jadwal")
+          .select("id_kelas")
+          .eq("id_guru", user.id_guru)
+          .eq("aktif", true);
+        const diampuIds = diampuKelas?.map(j => j.id_kelas) || [];
+
+        const allowedKelasIds = [...new Set([...waliIds, ...diampuIds])];
+        if (allowedKelasIds.length > 0) {
+          query = query.in("id_kelas", allowedKelasIds);
+        } else {
+          setJadwalList([]);
+          return;
+        }
       }
+
       const { data, error } = await query.order("hari").order("jam");
       if (error) throw error;
       const formatted: Jadwal[] = data.map((item: any) => ({
         id_jadwal: item.id_jadwal,
+        id_guru: item.id_guru,
         hari: item.hari,
         jam: item.jam,
         mata_pelajaran: item.mapel?.nama || "-",
@@ -242,18 +351,27 @@ export default function AttendanceManagement() {
     }
   };
 
+  // Filter jadwal berdasarkan kelas dan role
   useEffect(() => {
-    if (selectedKelasMapel && selectedKelasMapel !== "all") {
-      const filtered = jadwalList.filter((j) => j.id_kelas.toString() === selectedKelasMapel);
-      setFilteredJadwalList(filtered);
-      setSelectedJadwal(null);
-      setSelectedDay("");
-    } else {
+    if (!selectedKelasMapel) {
       setFilteredJadwalList([]);
       setSelectedJadwal(null);
       setSelectedDay("");
+      return;
     }
-  }, [selectedKelasMapel, jadwalList]);
+
+    const kelasId = parseInt(selectedKelasMapel);
+    let filtered = jadwalList.filter(j => j.id_kelas === kelasId);
+
+    // Jika guru dan bukan wali kelas untuk kelas ini, hanya tampilkan mapel yang diampu
+    if (user?.peran === 'guru' && !waliKelasIds.includes(kelasId)) {
+      filtered = filtered.filter(j => j.id_guru === user.id_guru);
+    }
+
+    setFilteredJadwalList(filtered);
+    setSelectedJadwal(null);
+    setSelectedDay("");
+  }, [selectedKelasMapel, jadwalList, user, waliKelasIds]);
 
   const uniqueDays = Array.from(new Set(filteredJadwalList.map((j) => j.hari))).sort((a, b) => {
     const dayOrder: Record<string, number> = {
@@ -264,16 +382,27 @@ export default function AttendanceManagement() {
 
   const jadwalByDay = selectedDay ? filteredJadwalList.filter((j) => j.hari === selectedDay) : [];
 
+  // Initial fetch
+  useEffect(() => {
+    const init = async () => {
+      setLoading(true);
+      await fetchKelas();
+      await fetchJadwal();
+      setLoading(false);
+    };
+    init();
+  }, []);
+
   // Presensi Harian
   const fetchPresensiHarian = async (skipAutoAlfa = false) => {
-    if (!selectedKelas) return;
+    if (!selectedKelasHarian) return;
     setIsFetchingHarian(true);
     setSelectedBulkStatus(null);
     try {
       const { data: siswaData, error: siswaError } = await supabase
         .from("siswa")
         .select("id_siswa, nama, nis, id_kelas, id_pkl, kelas:kelas(nama)")
-        .eq("id_kelas", parseInt(selectedKelas))
+        .eq("id_kelas", parseInt(selectedKelasHarian))
         .eq("aktif", true);
       if (siswaError) throw siswaError;
 
@@ -609,22 +738,13 @@ export default function AttendanceManagement() {
     };
   }, [qrRefreshInterval]);
 
-  // Initial fetch
+  // Auto-fetch ketika kelas/tanggal/jadwal berubah
   useEffect(() => {
-    const init = async () => {
-      setLoading(true);
-      await Promise.all([fetchKelas(), fetchJadwal()]);
-      setLoading(false);
-    };
-    init();
-  }, []);
-
-  useEffect(() => {
-    if (activeTab === "harian" && selectedKelas) {
+    if (activeTab === "harian" && selectedKelasHarian) {
       setAutoAlfaProcessedHarian(false);
       fetchPresensiHarian();
     }
-  }, [selectedKelas, selectedTanggal, activeTab]);
+  }, [selectedKelasHarian, selectedTanggal, activeTab]);
 
   useEffect(() => {
     if (activeTab === "mapel" && selectedJadwal) {
@@ -646,7 +766,7 @@ export default function AttendanceManagement() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* HEADER - Responsive */}
+      {/* HEADER */}
       <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
         <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -675,7 +795,7 @@ export default function AttendanceManagement() {
         {/* STATS CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-            <CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-blue-600 font-medium">Total Kelas</p><p className="text-lg sm:text-2xl font-bold text-blue-900">{kelasList.length}</p></div><School className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" /></div></CardContent>
+            <CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-blue-600 font-medium">Total Kelas (Mapel)</p><p className="text-lg sm:text-2xl font-bold text-blue-900">{kelasListMapel.length}</p></div><School className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" /></div></CardContent>
           </Card>
           <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
             <CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Total Jadwal</p><p className="text-lg sm:text-2xl font-bold text-emerald-900">{jadwalList.length}</p></div><BookOpen className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" /></div></CardContent>
@@ -702,127 +822,135 @@ export default function AttendanceManagement() {
                 </TabsList>
               </div>
 
-              {/* TAB PRESENSI HARIAN - REFRESH DI SAMPING TANGGAL */}
+              {/* TAB PRESENSI HARIAN */}
               <TabsContent value="harian" className="space-y-4 sm:space-y-5">
-                <div className="flex flex-col gap-3">
-                  {/* Baris 1: Kelas - full width di mobile, lebar normal di desktop */}
-                  <div className="w-full sm:w-56">
-                    <Label className="text-slate-700 text-xs sm:text-sm font-medium">Kelas</Label>
-                    <Popover open={popoverHarianOpen} onOpenChange={setPopoverHarianOpen}>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full justify-between rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm font-normal mt-1">
-                          {selectedKelas ? kelasList.find(k => k.id_kelas.toString() === selectedKelas)?.nama || "Pilih Kelas" : "Pilih Kelas"}
-                          <ChevronDown className="h-3.5 w-3.5 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-64 p-0" align="start" sideOffset={5}>
-                        <div className="p-2 border-b bg-slate-50">
-                          <div className="flex gap-1 mb-2 flex-wrap">
-                            {["all", "X", "XI", "XII"].map(jenjang => (
-                              <Button key={jenjang} variant={kelasHarianJenjangFilter === jenjang ? "default" : "ghost"} size="sm" className={`h-7 px-2 text-xs rounded-md ${kelasHarianJenjangFilter === jenjang ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"}`} onClick={() => setKelasHarianJenjangFilter(jenjang)}>
-                                {jenjang === "all" ? "Semua" : jenjang}
-                              </Button>
-                            ))}
-                          </div>
-                          <div className="relative">
-                            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                            <Input placeholder="Cari kelas..." value={kelasHarianSearchQuery} onChange={(e) => setKelasHarianSearchQuery(e.target.value)} className="pl-7 h-8 text-sm rounded-lg" onClick={(e) => e.stopPropagation()} />
-                            {kelasHarianSearchQuery && <button onClick={() => setKelasHarianSearchQuery("")} className="absolute right-2 top-1/2"><X className="h-3.5 w-3.5 text-slate-400" /></button>}
-                          </div>
-                        </div>
-                        <div className="max-h-60 overflow-y-auto">
-                          {filteredKelasHarianOptions.length === 0 ? (
-                            <div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada kelas yang cocok</div>
-                          ) : (
-                            filteredKelasHarianOptions.map(kelas => (
-                              <button key={kelas.id_kelas} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${selectedKelas === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-700"}`} onClick={() => { setSelectedKelas(kelas.id_kelas.toString()); setPopoverHarianOpen(false); setKelasHarianSearchQuery(""); setKelasHarianJenjangFilter("all"); }}>
-                                {kelas.nama}
-                              </button>
-                            ))
-                          )}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-
-                  {/* Baris 2: Tanggal dan Refresh - inline side by side */}
-                  <div className="flex gap-3 items-end">
-                    <div className="flex-1 sm:w-40">
-                      <Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal</Label>
-                      <Input type="date" value={selectedTanggal} onChange={(e) => setSelectedTanggal(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm w-full" />
-                    </div>
-                    <Button variant="outline" onClick={() => fetchPresensiHarian()} disabled={!selectedKelas || isFetchingHarian} className="rounded-lg h-8 sm:h-9 px-3 text-xs sm:text-sm shrink-0">
-                      <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingHarian ? "animate-spin" : ""}`} /> Refresh
-                    </Button>
-                  </div>
-                </div>
-
-                {!selectedKelas && (
+                {user?.peran === 'guru' && kelasListHarian.length === 0 ? (
                   <Alert className="rounded-lg bg-amber-50 border-amber-200">
                     <AlertCircle className="h-4 w-4 text-amber-600" />
-                    <AlertDescription className="text-amber-700 text-xs sm:text-sm">Silakan pilih kelas terlebih dahulu</AlertDescription>
+                    <AlertDescription className="text-amber-700 text-xs sm:text-sm">
+                      Anda tidak memiliki akses ke presensi harian karena hanya wali kelas yang dapat mengelola presensi harian.
+                    </AlertDescription>
                   </Alert>
-                )}
-
-                {selectedKelas && (
-                  <div className="border rounded-lg overflow-hidden shadow-sm">
-                    <div className="overflow-x-auto">
-                      <Table className="w-full">
-                        <TableHeader>
-                          <TableRow className="bg-slate-50">
-                            <TableHead className="font-semibold text-center text-xs sm:text-sm w-24">NIS</TableHead>
-                            <TableHead className="font-semibold text-center text-xs sm:text-sm min-w-[140px]">Nama Siswa</TableHead>
-                            <TableHead className="font-semibold text-center text-xs sm:text-sm w-28">Status PKL</TableHead>
-                            {STATUS_HARIAN_SEKOLAH.map(status => (
-                              <TableHead key={status} className="text-center font-semibold text-xs sm:text-sm min-w-[80px]">
-                                <div className="flex flex-col items-center gap-1">
-                                  <span>{status}</span>
-                                  <Checkbox checked={selectedBulkStatus === status} onCheckedChange={() => handleBulkCheckbox(status)} disabled={isBulkUpdating} className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                </div>
-                              </TableHead>
-                            ))}
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {isFetchingHarian ? (
-                            <TableRow><TableCell colSpan={3 + STATUS_HARIAN_SEKOLAH.length} className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-500" /></TableCell></TableRow>
-                          ) : presensiHarian.length === 0 ? (
-                            <TableRow><TableCell colSpan={3 + STATUS_HARIAN_SEKOLAH.length} className="text-center py-10 text-slate-500 text-xs sm:text-sm">Tidak ada data siswa</TableCell></TableRow>
-                          ) : (
-                            presensiHarian.map((item) => {
-                              const isPKL = item.siswa?.id_pkl !== null;
-                              const availableStatus = isPKL ? STATUS_HARIAN_PKL : STATUS_HARIAN_SEKOLAH;
-                              return (
-                                <TableRow key={item.id_siswa} className="hover:bg-slate-50 transition-colors">
-                                  <TableCell className="text-center font-mono text-xs sm:text-sm">{item.siswa?.nis}</TableCell>
-                                  <TableCell className="text-center text-xs sm:text-sm font-medium">{item.siswa?.nama}</TableCell>
-                                  <TableCell className="text-center">
-                                    {isPKL ? <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs bg-blue-100 text-blue-700">PKL</span> : <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs bg-green-100 text-green-700">Sekolah</span>}
-                                  </TableCell>
-                                  {STATUS_HARIAN_SEKOLAH.map(status => {
-                                    if (!availableStatus.includes(status)) return <TableCell key={status} className="text-center bg-slate-50/30"></TableCell>;
-                                    return (
-                                      <TableCell key={status} className="text-center align-middle">
-                                        <div className="flex justify-center items-center">
-                                          <RadioGroup value={item.status_presensi || ""} onValueChange={(val) => updatePresensiHarian(item.id_siswa, item, val)} disabled={updatingStatus?.id === item.id_siswa && updatingStatus?.type === "harian"} className="flex justify-center">
-                                            <RadioGroupItem value={status} id={`harian-${item.id_siswa}-${status}`} className="data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600 h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                          </RadioGroup>
-                                        </div>
-                                      </TableCell>
-                                    );
-                                  })}
-                                </TableRow>
-                              );
-                            })
-                          )}
-                        </TableBody>
-                      </Table>
+                ) : (
+                  <>
+                    <div className="flex flex-col gap-3">
+                      <div className="w-full sm:w-56">
+                        <Label className="text-slate-700 text-xs sm:text-sm font-medium">Kelas</Label>
+                        <Popover open={popoverHarianOpen} onOpenChange={setPopoverHarianOpen}>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-between rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm font-normal mt-1">
+                              {selectedKelasHarian ? kelasListHarian.find(k => k.id_kelas.toString() === selectedKelasHarian)?.nama || "Pilih Kelas" : "Pilih Kelas"}
+                              <ChevronDown className="h-3.5 w-3.5 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64 p-0" align="start" sideOffset={5}>
+                            <div className="p-2 border-b bg-slate-50">
+                              <div className="flex gap-1 mb-2 flex-wrap">
+                                {["all", "X", "XI", "XII"].map(jenjang => (
+                                  <Button key={jenjang} variant={kelasHarianJenjangFilter === jenjang ? "default" : "ghost"} size="sm" className={`h-7 px-2 text-xs rounded-md ${kelasHarianJenjangFilter === jenjang ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"}`} onClick={() => setKelasHarianJenjangFilter(jenjang)}>
+                                    {jenjang === "all" ? "Semua" : jenjang}
+                                  </Button>
+                                ))}
+                              </div>
+                              <div className="relative">
+                                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                <Input placeholder="Cari kelas..." value={kelasHarianSearchQuery} onChange={(e) => setKelasHarianSearchQuery(e.target.value)} className="pl-7 h-8 text-sm rounded-lg" onClick={(e) => e.stopPropagation()} />
+                                {kelasHarianSearchQuery && <button onClick={() => setKelasHarianSearchQuery("")} className="absolute right-2 top-1/2"><X className="h-3.5 w-3.5 text-slate-400" /></button>}
+                              </div>
+                            </div>
+                            <div className="max-h-60 overflow-y-auto">
+                              {filteredKelasHarianOptions.length === 0 ? (
+                                <div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada kelas yang cocok</div>
+                              ) : (
+                                filteredKelasHarianOptions.map(kelas => (
+                                  <button key={kelas.id_kelas} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${selectedKelasHarian === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-700"}`} onClick={() => { setSelectedKelasHarian(kelas.id_kelas.toString()); setPopoverHarianOpen(false); setKelasHarianSearchQuery(""); setKelasHarianJenjangFilter("all"); }}>
+                                    {kelas.nama}
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div className="flex gap-3 items-end">
+                        <div className="flex-1 sm:w-40">
+                          <Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal</Label>
+                          <Input type="date" value={selectedTanggal} onChange={(e) => setSelectedTanggal(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm w-full" />
+                        </div>
+                        <Button variant="outline" onClick={() => fetchPresensiHarian()} disabled={!selectedKelasHarian || isFetchingHarian} className="rounded-lg h-8 sm:h-9 px-3 text-xs sm:text-sm shrink-0">
+                          <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingHarian ? "animate-spin" : ""}`} /> Refresh
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+
+                    {!selectedKelasHarian && (
+                      <Alert className="rounded-lg bg-amber-50 border-amber-200">
+                        <AlertCircle className="h-4 w-4 text-amber-600" />
+                        <AlertDescription className="text-amber-700 text-xs sm:text-sm">Silakan pilih kelas terlebih dahulu</AlertDescription>
+                      </Alert>
+                    )}
+
+                    {selectedKelasHarian && (
+                      <div className="border rounded-lg overflow-hidden shadow-sm">
+                        <div className="overflow-x-auto">
+                          <Table className="w-full">
+                            <TableHeader>
+                              <TableRow className="bg-slate-50">
+                                <TableHead className="font-semibold text-center text-xs sm:text-sm w-24">NIS</TableHead>
+                                <TableHead className="font-semibold text-center text-xs sm:text-sm min-w-[140px]">Nama Siswa</TableHead>
+                                <TableHead className="font-semibold text-center text-xs sm:text-sm w-28">Status PKL</TableHead>
+                                {STATUS_HARIAN_SEKOLAH.map(status => (
+                                  <TableHead key={status} className="text-center font-semibold text-xs sm:text-sm min-w-[80px]">
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span>{status}</span>
+                                      <Checkbox checked={selectedBulkStatus === status} onCheckedChange={() => handleBulkCheckbox(status)} disabled={isBulkUpdating} className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                    </div>
+                                  </TableHead>
+                                ))}
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {isFetchingHarian ? (
+                                <TableRow><TableCell colSpan={3 + STATUS_HARIAN_SEKOLAH.length} className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-500" /></TableCell></TableRow>
+                              ) : presensiHarian.length === 0 ? (
+                                <TableRow><TableCell colSpan={3 + STATUS_HARIAN_SEKOLAH.length} className="text-center py-10 text-slate-500 text-xs sm:text-sm">Tidak ada data siswa</TableCell></TableRow>
+                              ) : (
+                                presensiHarian.map((item) => {
+                                  const isPKL = item.siswa?.id_pkl !== null;
+                                  const availableStatus = isPKL ? STATUS_HARIAN_PKL : STATUS_HARIAN_SEKOLAH;
+                                  return (
+                                    <TableRow key={item.id_siswa} className="hover:bg-slate-50 transition-colors">
+                                      <TableCell className="text-center font-mono text-xs sm:text-sm">{item.siswa?.nis}</TableCell>
+                                      <TableCell className="text-center text-xs sm:text-sm font-medium">{item.siswa?.nama}</TableCell>
+                                      <TableCell className="text-center">
+                                        {isPKL ? <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs bg-blue-100 text-blue-700">PKL</span> : <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs bg-green-100 text-green-700">Sekolah</span>}
+                                      </TableCell>
+                                      {STATUS_HARIAN_SEKOLAH.map(status => {
+                                        if (!availableStatus.includes(status)) return <TableCell key={status} className="text-center bg-slate-50/30"></TableCell>;
+                                        return (
+                                          <TableCell key={status} className="text-center align-middle">
+                                            <div className="flex justify-center items-center">
+                                              <RadioGroup value={item.status_presensi || ""} onValueChange={(val) => updatePresensiHarian(item.id_siswa, item, val)} disabled={updatingStatus?.id === item.id_siswa && updatingStatus?.type === "harian"} className="flex justify-center">
+                                                <RadioGroupItem value={status} id={`harian-${item.id_siswa}-${status}`} className="data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                              </RadioGroup>
+                                            </div>
+                                          </TableCell>
+                                        );
+                                      })}
+                                    </TableRow>
+                                  );
+                                })
+                              )}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </TabsContent>
 
-              {/* TAB PRESENSI MAPEL (tidak diubah strukturnya, tetap responsif) */}
+              {/* TAB PRESENSI MAPEL */}
               <TabsContent value="mapel" className="space-y-4 sm:space-y-5">
                 <div className="flex flex-col sm:flex-row gap-4 items-start">
                   <div className="w-full sm:w-64 flex-shrink-0">
@@ -830,7 +958,7 @@ export default function AttendanceManagement() {
                     <Popover open={popoverMapelOpen} onOpenChange={setPopoverMapelOpen}>
                       <PopoverTrigger asChild>
                         <Button variant="outline" className="w-full justify-between rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm font-normal mt-1">
-                          {selectedKelasMapel ? kelasList.find(k => k.id_kelas.toString() === selectedKelasMapel)?.nama || "Pilih Kelas" : "Pilih Kelas"}
+                          {selectedKelasMapel ? kelasListMapel.find(k => k.id_kelas.toString() === selectedKelasMapel)?.nama || "Pilih Kelas" : "Pilih Kelas"}
                           <ChevronDown className="h-3.5 w-3.5 opacity-50" />
                         </Button>
                       </PopoverTrigger>
@@ -874,7 +1002,7 @@ export default function AttendanceManagement() {
                     {selectedKelasMapel && filteredJadwalList.length === 0 && (
                       <Alert className="rounded-lg bg-amber-50 border-amber-200">
                         <BookOpen className="h-4 w-4 text-amber-600" />
-                        <AlertDescription className="text-amber-700 text-xs sm:text-sm">Tidak ada jadwal untuk kelas yang dipilih</AlertDescription>
+                        <AlertDescription className="text-amber-700 text-xs sm:text-sm">Tidak ada jadwal yang dapat diakses untuk kelas ini</AlertDescription>
                       </Alert>
                     )}
                     {selectedKelasMapel && filteredJadwalList.length > 0 && (

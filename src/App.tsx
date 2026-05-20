@@ -93,6 +93,7 @@ function App() {
             <Route path="dashboard" element={<GuruDashboard />} />
             <Route path="attendance" element={<AttendanceManagement />} />
             <Route path="schedule" element={<ScheduleView />} />
+            <Route path="reports" element={<AttendanceReport />} />
             <Route path="face-registration" element={<FaceRegistration />} />
           </Route>
 
