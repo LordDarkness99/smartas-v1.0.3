@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { UserCheck, KeyRound, ArrowLeft, Camera, RefreshCw, Loader2, AlertCircle } from "lucide-react";
+import { detectTurnHead } from "@/utils/liveness";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -31,6 +32,7 @@ export default function Login() {
   const [showFaceLogin, setShowFaceLogin] = useState(false);
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [detecting, setDetecting] = useState(false);
+  const [verifyingLiveness, setVerifyingLiveness] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -88,17 +90,15 @@ export default function Login() {
     if (showFaceLogin && modelsLoaded) {
       startWebcam();
     }
-    // Cleanup
-    const video = videoRef.current;
     return () => {
-      if (video?.srcObject) {
-        (video.srcObject as MediaStream).getTracks().forEach(track => track.stop());
-        video.srcObject = null;
+      if (videoRef.current?.srcObject) {
+        (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+        videoRef.current.srcObject = null;
       }
     };
   }, [showFaceLogin, modelsLoaded, startWebcam]);
 
-  // Fungsi deteksi dan cocokkan wajah
+  // Fungsi deteksi dan cocokkan wajah + liveness kedip
   const detectAndMatchFace = async () => {
     if (!videoRef.current || !canvasRef.current) return;
     if (videoRef.current.readyState !== 4) {
@@ -152,27 +152,44 @@ export default function Login() {
         }
       }
 
-      if (bestMatch) {
-        toast.success(`Halo ${bestMatch.username}, wajah dikenali! Login...`);
-        const { error: loginError } = await faceSignIn(bestMatch.username);
-        if (loginError) {
-          toast.error(loginError);
-        } else {
-          toast.success("Login berhasil! Mengalihkan...");
-          setTimeout(() => navigate("/dashboard"), 1000);
-        }
-      } else {
+      if (!bestMatch) {
         toast.error("Wajah tidak dikenali. Pastikan Anda sudah registrasi wajah atau coba lagi.");
+        setDetecting(false);
+        return;
+      }
+
+      // ========== LIVENESS CHECK (KEDIP) ==========
+      setVerifyingLiveness(true);
+      // Pilih arah secara acak
+      const randomDir = Math.random() < 0.5 ? 'kiri' : 'kanan';
+      toast.info(`Silakan tengok ke ${randomDir.toUpperCase()} secara perlahan...`);
+      const isAlive = await detectTurnHead(videoRef.current, randomDir, 7000);
+      setVerifyingLiveness(false);
+
+      if (!isAlive) {
+        toast.error(`Verifikasi gagal: wajah tidak menoleh ke ${randomDir}. Coba lagi.`);
+        setDetecting(false);
+        return;
+      }
+      // ==========================================
+
+      toast.success(`Halo ${bestMatch.username}, wajah dikenali dan liveness terverifikasi! Login...`);
+      const { error: loginError } = await faceSignIn(bestMatch.username);
+      if (loginError) {
+        toast.error(loginError);
+      } else {
+        toast.success("Login berhasil! Mengalihkan...");
+        setTimeout(() => navigate("/dashboard"), 1000);
       }
     } catch (err) {
       console.error(err);
       toast.error("Terjadi kesalahan saat verifikasi wajah");
     } finally {
       setDetecting(false);
+      setVerifyingLiveness(false);
     }
   };
 
-  // Reset kamera
   const resetCamera = () => {
     toast.info("Merestart kamera...");
     startWebcam();
@@ -181,7 +198,6 @@ export default function Login() {
     }
   };
 
-  // Login manual dengan password
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username || !password) {
@@ -200,7 +216,6 @@ export default function Login() {
     setLoading(false);
   };
 
-  // Ganti password
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!changeUsername || !oldPassword || !newPassword || !confirmNewPassword) {
@@ -300,13 +315,23 @@ export default function Login() {
                       height="240"
                       className="absolute top-0 left-0"
                     />
+                    {/* Overlay saat menunggu kedip */}
+                    {verifyingLiveness && (
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-lg">
+                        <div className="text-white text-center">
+                          <Loader2 className="animate-spin h-8 w-8 mx-auto mb-2" />
+                          <p className="font-medium">Tengok ke kanan atau kiri</p>
+                          <p className="text-xs mt-1">Deteksi liveness...</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-4 justify-center">
-                    <Button onClick={detectAndMatchFace} disabled={detecting}>
+                    <Button onClick={detectAndMatchFace} disabled={detecting || verifyingLiveness}>
                       <Camera className="mr-2 h-4 w-4" />
                       {detecting ? "Memverifikasi..." : "Verifikasi Wajah"}
                     </Button>
-                    <Button onClick={resetCamera} variant="outline">
+                    <Button onClick={resetCamera} variant="outline" disabled={detecting || verifyingLiveness}>
                       <RefreshCw className="mr-2 h-4 w-4" /> Reset Kamera
                     </Button>
                     <Button
@@ -319,6 +344,7 @@ export default function Login() {
                         toast.info("Kembali ke login manual");
                       }}
                       variant="ghost"
+                      disabled={detecting || verifyingLiveness}
                     >
                       <ArrowLeft className="mr-2 h-4 w-4" /> Kembali
                     </Button>

@@ -84,7 +84,8 @@ export default function StudentAttendance() {
   const scannerContainerId = "qr-reader";
 
   // Koordinat sekolah
-  const SCHOOL_COORD = { lat: -7.25826733665077, lng: 112.72468705518851 };
+  // const SCHOOL_COORD = { lat: -7.25826733665077, lng: 112.72468705518851 };
+  const SCHOOL_COORD = { lat: -7.3163041, lng: 112.725464 };
 
   // ==================== GREETING EFFECT ====================
   useEffect(() => {
