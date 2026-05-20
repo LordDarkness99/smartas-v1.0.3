@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import * as XLSX from "xlsx";
 import {
   Card,
@@ -66,13 +67,15 @@ import {
   Download,
   X,
   ChevronDown,
+  Eye,
 } from "lucide-react";
+import { isBK, isAdminJurusan, isAdmin } from "@/lib/utils";
 
-// Tipe data
 interface Kelas {
   id_kelas: number;
   nama: string;
   aktif: boolean;
+  id_jurusan: number | null;
 }
 
 interface MataPelajaran {
@@ -143,12 +146,18 @@ const ListIcon = (props: any) => (
 
 export default function ScheduleManagement() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"jadwal" | "mapel">("jadwal");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<"table" | "card">("table");
+
+  const userRole = user?.peran;
+  const isRoleBK = isBK(user);
+  const isRoleAdminJurusan = isAdminJurusan(user);
+  const canWrite = !isRoleBK;
 
   const [jadwalList, setJadwalList] = useState<Jadwal[]>([]);
   const [kelasList, setKelasList] = useState<Kelas[]>([]);
@@ -233,7 +242,6 @@ export default function ScheduleManagement() {
   const [mapelCurrentPage, setMapelCurrentPage] = useState(1);
   const mapelItemsPerPage = 10;
 
-  // GREETING
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour < 4) setGreeting("Selamat Malam");
@@ -265,14 +273,27 @@ export default function ScheduleManagement() {
     return colors[hari] || "bg-slate-100 text-slate-700";
   };
 
-  // FETCH DATA
+  // FETCH DATA (with role filter)
   const fetchKelas = async () => {
-    const { data, error } = await supabase.from("kelas").select("id_kelas, nama, aktif").eq("aktif", true).order("nama");
+    let query = supabase
+      .from("kelas")
+      .select("id_kelas, nama, aktif, id_jurusan")
+      .eq("aktif", true)
+      .order("nama");
+    if (isRoleAdminJurusan && user?.id_jurusan) {
+      query = query.eq("id_jurusan", user.id_jurusan);
+    }
+    const { data, error } = await query;
     if (!error) setKelasList(data || []);
   };
 
   const fetchGuru = async () => {
-    const { data, error } = await supabase.from("guru").select("id_guru, nama, nik, aktif").eq("aktif", true).order("nama");
+    let query = supabase
+      .from("guru")
+      .select("id_guru, nama, nik, aktif")
+      .eq("aktif", true)
+      .order("nama");
+    const { data, error } = await query;
     if (!error) setGuruList(data || []);
   };
 
@@ -287,7 +308,7 @@ export default function ScheduleManagement() {
     if (!selectedKelas) return;
     setIsFetchingJadwal(true);
     try {
-      let query = supabase
+      const query = supabase
         .from("jadwal")
         .select(`
           id_jadwal, id_kelas, id_mapel, id_guru, hari, jam, aktif,
@@ -297,19 +318,19 @@ export default function ScheduleManagement() {
         `)
         .eq("id_kelas", parseInt(selectedKelas))
         .eq("hari", selectedHari);
-
-      const { data, error } = await query.order("jam");
+      // Use "as any" to avoid deep type inference issue
+      const { data, error } = await (query as any);
       if (error) throw error;
       setJadwalList(data || []);
       
-      const activeJadwal = data?.filter(j => j.aktif === true) || [];
-      const totalKelas = new Set(activeJadwal.map(j => j.id_kelas)).size;
-      const totalMapel = new Set(activeJadwal.map(j => j.id_mapel)).size;
-      const totalGuru = new Set(activeJadwal.map(j => j.id_guru)).size;
+      const activeJadwal = data?.filter((j: any) => j.aktif === true) || [];
+      const totalKelas = new Set(activeJadwal.map((j: any) => j.id_kelas)).size;
+      const totalMapel = new Set(activeJadwal.map((j: any) => j.id_mapel)).size;
+      const totalGuru = new Set(activeJadwal.map((j: any) => j.id_guru)).size;
       const hariCount: Record<string, number> = {};
       const jamCount: Record<string, number> = {};
       const guruCount: Record<string, number> = {};
-      activeJadwal.forEach(j => {
+      activeJadwal.forEach((j: any) => {
         hariCount[j.hari] = (hariCount[j.hari] || 0) + 1;
         const jamMulai = j.jam.split(" - ")[0];
         jamCount[jamMulai] = (jamCount[jamMulai] || 0) + 1;
@@ -342,7 +363,7 @@ export default function ScheduleManagement() {
     if (activeTab === "jadwal" && selectedKelas) fetchJadwal();
   }, [selectedKelas, selectedHari, activeTab]);
 
-  // VALIDASI OVERLAP
+  // OVERLAP CHECKS
   const checkOverlapJadwal = async (kelasId: number, mapelId: number, hari: string, jam: string, excludeId?: number): Promise<boolean> => {
     let query = supabase
       .from("jadwal")
@@ -370,6 +391,7 @@ export default function ScheduleManagement() {
 
   // CRUD JADWAL
   const openAddJadwal = () => {
+    if (!canWrite) return;
     setEditingJadwal(null);
     setFormErrors({});
     setJadwalForm({ id_kelas: selectedKelas || "", id_mapel: "", id_guru: "", hari: selectedHari, jam: "" });
@@ -377,6 +399,7 @@ export default function ScheduleManagement() {
   };
 
   const openEditJadwal = (jadwal: Jadwal) => {
+    if (!canWrite) return;
     setEditingJadwal(jadwal);
     setFormErrors({});
     setJadwalForm({
@@ -401,6 +424,7 @@ export default function ScheduleManagement() {
   };
 
   const handleSaveJadwal = async () => {
+    if (!canWrite) return;
     if (!validateJadwalForm()) return;
     const kelasId = parseInt(jadwalForm.id_kelas), mapelId = parseInt(jadwalForm.id_mapel), guruId = parseInt(jadwalForm.id_guru);
     const hari = jadwalForm.hari, jam = jadwalForm.jam, excludeId = editingJadwal?.id_jadwal;
@@ -432,13 +456,14 @@ export default function ScheduleManagement() {
   };
 
   const confirmToggleJadwal = (jadwal: Jadwal, isActivating: boolean) => {
+    if (!canWrite) return;
     setTogglingJadwal(jadwal);
     setIsActivatingJadwalMode(isActivating);
     setToggleJadwalDialogOpen(true);
   };
 
   const executeToggleJadwal = async () => {
-    if (!togglingJadwal) return;
+    if (!canWrite || !togglingJadwal) return;
     setIsSavingJadwal(true);
     setToggleJadwalDialogOpen(false);
     try {
@@ -478,10 +503,21 @@ export default function ScheduleManagement() {
   };
 
   // CRUD MAPEL
-  const openAddMapel = () => { setEditingMapel(null); setMapelForm({ nama: "" }); setMapelDialogOpen(true); };
-  const openEditMapel = (mapel: MataPelajaran) => { setEditingMapel(mapel); setMapelForm({ nama: mapel.nama }); setMapelDialogOpen(true); };
+  const openAddMapel = () => {
+    if (!canWrite) return;
+    setEditingMapel(null);
+    setMapelForm({ nama: "" });
+    setMapelDialogOpen(true);
+  };
+  const openEditMapel = (mapel: MataPelajaran) => {
+    if (!canWrite) return;
+    setEditingMapel(mapel);
+    setMapelForm({ nama: mapel.nama });
+    setMapelDialogOpen(true);
+  };
 
   const handleSaveMapel = async () => {
+    if (!canWrite) return;
     if (!mapelForm.nama.trim()) {
       toast({ title: "Error", description: "Nama mata pelajaran tidak boleh kosong", variant: "destructive" });
       return;
@@ -505,6 +541,7 @@ export default function ScheduleManagement() {
   };
 
   const confirmToggleMapel = (mapel: MataPelajaran, isActivating: boolean) => {
+    if (!canWrite) return;
     if (!isActivating) {
       const isUsed = jadwalList.some(j => j.id_mapel === mapel.id_mapel && j.aktif === true);
       if (isUsed) {
@@ -518,7 +555,7 @@ export default function ScheduleManagement() {
   };
 
   const executeToggleMapel = async () => {
-    if (!togglingMapel) return;
+    if (!canWrite || !togglingMapel) return;
     setIsSavingMapel(true);
     setToggleMapelDialogOpen(false);
     try {
@@ -535,7 +572,7 @@ export default function ScheduleManagement() {
     }
   };
 
-  // IMPORT EXCEL MAPEL
+  // IMPORT MAPEL
   const downloadTemplateMapel = () => {
     const headers = ["nama"];
     const data = [["Matematika"], ["Fisika"], ["Kimia"], ["Biologi"], ["Bahasa Indonesia"]];
@@ -546,6 +583,7 @@ export default function ScheduleManagement() {
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canWrite) return;
     const file = event.target.files?.[0];
     if (!file) return;
     setUploadError(null);
@@ -571,7 +609,7 @@ export default function ScheduleManagement() {
   };
 
   const handleImportMapel = async () => {
-    if (!previewData.length) return;
+    if (!canWrite || !previewData.length) return;
     setIsImporting(true);
     try {
       let successCount = 0;
@@ -599,7 +637,7 @@ export default function ScheduleManagement() {
     }
   };
 
-  // ========== IMPORT EXCEL JADWAL (MENGGUNAKAN nik) ==========
+  // IMPORT JADWAL
   const downloadJadwalTemplate = () => {
     const headers = ["kelas", "mapel", "nik_guru", "hari", "jam"];
     const data = [
@@ -613,7 +651,6 @@ export default function ScheduleManagement() {
     XLSX.writeFile(wb, "template_impor_jadwal.xlsx");
   };
 
-  // Helper untuk mengkonversi nilai menjadi string dan trim
   const toStringTrim = (value: any): string => {
     if (value === null || value === undefined) return "";
     return String(value).trim();
@@ -621,51 +658,40 @@ export default function ScheduleManagement() {
 
   const validateJadwalImportRow = (row: any, index: number) => {
     const errors: string[] = [];
-    
     const kelas = toStringTrim(row.kelas);
     const mapel = toStringTrim(row.mapel);
     const nikGuru = toStringTrim(row.nik_guru);
     const hari = toStringTrim(row.hari);
     const jam = toStringTrim(row.jam);
-    
     if (!kelas) errors.push("Kelas tidak boleh kosong");
     if (!mapel) errors.push("Mata pelajaran tidak boleh kosong");
     if (!nikGuru) errors.push("nik guru tidak boleh kosong");
     if (!hari) errors.push("Hari tidak boleh kosong");
     if (!jam) errors.push("Jam tidak boleh kosong");
-    
     if (jam && !/^\d{2}:\d{2} - \d{2}:\d{2}$/.test(jam)) {
       errors.push("Format jam harus HH:MM - HH:MM");
     }
-    
     if (hari && !HARI.includes(hari)) {
       errors.push(`Hari harus salah satu dari: ${HARI.join(", ")}`);
     }
-    
     return errors;
   };
 
   const processJadwalPreview = async (rawData: any[]) => {
     const missingMapelsSet = new Set<string>();
     const previewWithValidation = [];
-    
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];
       const validationErrors = validateJadwalImportRow(row, i);
-      
       const kelasNama = toStringTrim(row.kelas);
       const kelas = kelasList.find(k => k.nama.toLowerCase() === kelasNama.toLowerCase());
-      
       const nikGuru = toStringTrim(row.nik_guru);
       const guru = guruList.find(g => g.nik && g.nik.toString() === nikGuru);
-      
       const mapelNama = toStringTrim(row.mapel);
       const mapel = mapelData.find(m => m.nama.toLowerCase() === mapelNama.toLowerCase());
-      
       if (!mapel && mapelNama) {
         missingMapelsSet.add(mapelNama);
       }
-      
       previewWithValidation.push({
         kelas: row.kelas,
         mapel: row.mapel,
@@ -683,38 +709,32 @@ export default function ScheduleManagement() {
         isValid: validationErrors.length === 0 && !!kelas && !!guru && !!mapel,
       });
     }
-    
     setImportJadwalMissingMapels(Array.from(missingMapelsSet));
     return previewWithValidation;
   };
 
   const handleJadwalFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canWrite) return;
     const file = event.target.files?.[0];
     if (!file) return;
     setImportJadwalUploadError(null);
     setIsImportingJadwal(true);
     setImportJadwalStep("upload");
-    
     try {
       const arrayBuffer = await file.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(worksheet);
-      
       if (jsonData.length === 0) throw new Error("File kosong");
-      
       const firstRow = jsonData[0] as any;
       const requiredColumns = ["kelas", "mapel", "nik_guru", "hari", "jam"];
       const missingColumns = requiredColumns.filter(col => !(col in firstRow));
-      
       if (missingColumns.length > 0) {
         throw new Error(`Kolom tidak ditemukan: ${missingColumns.join(", ")}. Pastikan file memiliki kolom: kelas, mapel, nik_guru, hari, jam`);
       }
-      
       setImportJadwalRawData(jsonData);
       const preview = await processJadwalPreview(jsonData);
       setImportJadwalPreviewRows(preview);
-      
       if (preview.some(p => !p.mapelValid)) {
         setMissingMapelDialogOpen(true);
       } else {
@@ -729,16 +749,15 @@ export default function ScheduleManagement() {
       event.target.value = "";
     }
   };
-  
+
   const handleAddMissingMapelsAndContinue = async () => {
+    if (!canWrite) return;
     if (importJadwalMissingMapels.length === 0) {
       setMissingMapelDialogOpen(false);
       return;
     }
-    
     setIsAddingMissingMapels(true);
     let addedCount = 0;
-    
     try {
       for (const mapelNama of importJadwalMissingMapels) {
         const { data: existing } = await supabase
@@ -746,24 +765,19 @@ export default function ScheduleManagement() {
           .select("id_mapel")
           .eq("nama", mapelNama)
           .maybeSingle();
-        
         if (!existing) {
           const { error } = await supabase
             .from("mata_pelajaran")
             .insert({ nama: mapelNama, aktif: true, dibuat_pada: new Date().toISOString() });
-          
           if (error) throw error;
           addedCount++;
         }
       }
-      
       await fetchMapel();
-      
       toast({ 
         title: "Berhasil", 
         description: `${addedCount} mata pelajaran berhasil ditambahkan.` 
       });
-      
       const updatedPreview = await processJadwalPreview(importJadwalRawData);
       setImportJadwalPreviewRows(updatedPreview);
       setMissingMapelDialogOpen(false);
@@ -779,10 +793,10 @@ export default function ScheduleManagement() {
       setIsAddingMissingMapels(false);
     }
   };
-  
+
   const confirmImportJadwal = async () => {
+    if (!canWrite) return;
     const validRows = importJadwalPreviewRows.filter(row => row.isValid);
-    
     if (validRows.length === 0) {
       toast({ 
         title: "Tidak Ada Data Valid", 
@@ -791,12 +805,10 @@ export default function ScheduleManagement() {
       });
       return;
     }
-    
     setIsImportingJadwal(true);
     let successCount = 0;
     let failCount = 0;
     const failures: { row: number; error: string }[] = [];
-    
     for (const row of validRows) {
       try {
         const isOverlapMapel = await checkOverlapJadwal(
@@ -805,7 +817,6 @@ export default function ScheduleManagement() {
           row.hari,
           row.jam
         );
-        
         if (isOverlapMapel) {
           failures.push({ 
             row: row.rowIndex, 
@@ -814,13 +825,11 @@ export default function ScheduleManagement() {
           failCount++;
           continue;
         }
-        
         const isGuruOverlap = await checkGuruOverlap(
           row.guruId,
           row.hari,
           row.jam
         );
-        
         if (isGuruOverlap) {
           failures.push({ 
             row: row.rowIndex, 
@@ -829,7 +838,6 @@ export default function ScheduleManagement() {
           failCount++;
           continue;
         }
-        
         const { error } = await supabase.from("jadwal").insert({
           id_kelas: row.kelasId,
           id_mapel: row.mapelId,
@@ -839,16 +847,13 @@ export default function ScheduleManagement() {
           aktif: true,
           dibuat_pada: new Date().toISOString(),
         });
-        
         if (error) throw error;
         successCount++;
-        
       } catch (error: any) {
         failures.push({ row: row.rowIndex, error: error.message });
         failCount++;
       }
     }
-    
     if (successCount > 0) {
       toast({ 
         title: "Import Selesai", 
@@ -858,7 +863,6 @@ export default function ScheduleManagement() {
         fetchJadwal();
       }
     }
-    
     if (failures.length > 0) {
       console.error("Import failures:", failures);
       toast({ 
@@ -867,7 +871,6 @@ export default function ScheduleManagement() {
         variant: "destructive" 
       });
     }
-    
     setImportJadwalDialogOpen(false);
     setImportJadwalRawData([]);
     setImportJadwalPreviewRows([]);
@@ -887,6 +890,7 @@ export default function ScheduleManagement() {
   };
 
   const handleBulkAction = (action: "aktifkan" | "nonaktifkan") => {
+    if (!canWrite) return;
     if (selectedMapelIds.length === 0) {
       toast({ title: "Tidak ada data dipilih", variant: "destructive" });
       return;
@@ -896,6 +900,7 @@ export default function ScheduleManagement() {
   };
 
   const executeBulkAction = async () => {
+    if (!canWrite) return;
     setIsProcessingBulk(true);
     setBulkActionDialogOpen(false);
     let successCount = 0;
@@ -954,7 +959,7 @@ export default function ScheduleManagement() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* HEADER - Responsive */}
+      {/* HEADER */}
       <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
         <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -979,9 +984,8 @@ export default function ScheduleManagement() {
         </div>
       </div>
 
-      {/* MAIN CONTENT */}
       <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8">
-        {/* STATS CARDS - responsive grid */}
+        {/* STATS CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
             <CardContent className="p-3 sm:p-4"><div className="flex justify-between"><div><p className="text-[10px] sm:text-xs text-blue-600 font-medium">Total Kelas</p><p className="text-lg sm:text-2xl font-bold text-blue-900">{kelasList.length}</p></div><School className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" /></div></CardContent>
@@ -1009,11 +1013,14 @@ export default function ScheduleManagement() {
           <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div className="flex items-center gap-2 sm:gap-3"><div className="bg-white/10 p-1.5 sm:p-2 rounded-xl"><Calendar className="h-5 w-5 sm:h-6 sm:w-6" /></div><div><CardTitle className="text-base sm:text-xl">Manajemen Jadwal &amp; Mata Pelajaran</CardTitle><CardDescription className="text-slate-300 text-xs sm:text-sm">Atur jadwal pelajaran per kelas dan kelola daftar mata pelajaran</CardDescription></div></div>
-              {activeTab === "jadwal" && (
+              {activeTab === "jadwal" && canWrite && (
                 <div className="flex gap-1 bg-white/10 p-1 rounded-xl self-start md:self-auto">
                   <Button variant="ghost" size="sm" className={`rounded-lg text-white text-xs sm:text-sm ${viewMode === "table" ? "bg-white/20" : ""}`} onClick={() => setViewMode("table")}><LayoutGrid className="h-3.5 w-3.5 mr-1" />Tabel</Button>
                   <Button variant="ghost" size="sm" className={`rounded-lg text-white text-xs sm:text-sm ${viewMode === "card" ? "bg-white/20" : ""}`} onClick={() => setViewMode("card")}><ListIcon className="h-3.5 w-3.5 mr-1" />Kartu</Button>
                 </div>
+              )}
+              {activeTab === "jadwal" && !canWrite && (
+                <div className="bg-white/10 p-1 rounded-xl flex items-center gap-1 text-white text-xs"><Eye className="h-3.5 w-3.5" /> Mode Baca Saja</div>
               )}
             </div>
           </CardHeader>
@@ -1026,7 +1033,7 @@ export default function ScheduleManagement() {
                 </TabsList>
               </div>
 
-              {/* TAB JADWAL - fully responsive */}
+              {/* TAB JADWAL */}
               <TabsContent value="jadwal" className="space-y-4 sm:space-y-6">
                 <div className="flex flex-col sm:flex-row gap-3 items-end justify-center">
                   <div className="w-full sm:w-64">
@@ -1081,12 +1088,16 @@ export default function ScheduleManagement() {
                   </div>
 
                   <div className="flex flex-wrap gap-2 justify-center sm:justify-start w-full sm:w-auto">
-                    <Button onClick={openAddJadwal} disabled={!selectedKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600">
-                      <Plus className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" /> Tambah Jadwal
-                    </Button>
-                    <Button variant="outline" onClick={() => setImportJadwalDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">
-                      <Upload className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" /> Impor Jadwal
-                    </Button>
+                    {canWrite && (
+                      <>
+                        <Button onClick={openAddJadwal} disabled={!selectedKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600">
+                          <Plus className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" /> Tambah Jadwal
+                        </Button>
+                        <Button variant="outline" onClick={() => setImportJadwalDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">
+                          <Upload className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" /> Impor Jadwal
+                        </Button>
+                      </>
+                    )}
                     <Button variant="outline" onClick={fetchJadwal} disabled={!selectedKelas || isFetchingJadwal} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">
                       <RefreshCw className={`mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5 ${isFetchingJadwal ? "animate-spin" : ""}`} /> Segarkan
                     </Button>
@@ -1111,14 +1122,14 @@ export default function ScheduleManagement() {
                             <TableHead className="text-xs sm:text-sm">Guru</TableHead>
                             <TableHead className="text-center text-xs sm:text-sm">Hari</TableHead>
                             <TableHead className="text-center text-xs sm:text-sm">Status</TableHead>
-                            <TableHead className="text-center w-28 text-xs sm:text-sm">Aksi</TableHead>
+                            {canWrite && <TableHead className="text-center w-28 text-xs sm:text-sm">Aksi</TableHead>}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {isFetchingJadwal ? (
-                            <TableRow><TableCell colSpan={6} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={canWrite ? 6 : 5} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
                           ) : jadwalList.length === 0 ? (
-                            <TableRow><TableCell colSpan={6} className="text-center py-8 text-slate-500"><Calendar className="h-8 w-8 mx-auto mb-2" />Tidak ada jadwal untuk hari {selectedHari}</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={canWrite ? 6 : 5} className="text-center py-8 text-slate-500"><Calendar className="h-8 w-8 mx-auto mb-2" />Tidak ada jadwal untuk hari {selectedHari}</TableCell></TableRow>
                           ) : (
                             jadwalList.map(j => (
                               <TableRow key={j.id_jadwal}>
@@ -1127,7 +1138,9 @@ export default function ScheduleManagement() {
                                 <TableCell><div className="flex items-center gap-2"><div className="bg-purple-100 p-1.5 rounded-lg"><User className="h-4 w-4 text-purple-600" /></div><span className="text-xs sm:text-sm">{j.guru?.nama || "-"}{j.guru?.aktif === false && <span className="ml-1 text-xs text-red-500">(nonaktif)</span>}</span></div></TableCell>
                                 <TableCell className="text-center"><Badge className={`${getHariColor(j.hari)} border-0 rounded-full px-2 sm:px-3 py-0.5 sm:py-1 text-xs`}>{j.hari}</Badge></TableCell>
                                 <TableCell className="text-center"><Badge className={`${getStatusColor(j.aktif)} border-0 rounded-full px-2 sm:px-3 py-0.5 sm:py-1 text-xs`}>{j.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell>
-                                <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditJadwal(j)}><Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" /></Button>{j.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)}><UserMinus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)}><UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500" /></Button>}</div></TableCell>
+                                {canWrite && (
+                                  <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditJadwal(j)}><Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" /></Button>{j.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)}><UserMinus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)}><UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500" /></Button>}</div></TableCell>
+                                )}
                               </TableRow>
                             ))
                           )}
@@ -1152,10 +1165,15 @@ export default function ScheduleManagement() {
                             <div className="flex items-center gap-2"><div className="bg-purple-100 p-1.5 rounded-xl"><User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-600" /></div><span className="text-xs sm:text-sm">{j.guru?.nama || "-"}{j.guru?.aktif === false && <span className="ml-1 text-xs text-red-500">(nonaktif)</span>}</span></div>
                             <div><Badge className={getStatusColor(j.aktif)}>{j.aktif ? "Aktif" : "Nonaktif"}</Badge></div>
                           </div>
-                          <div className="flex gap-2 mt-3 pt-3 border-t">
-                            <Button variant="ghost" size="sm" onClick={() => openEditJadwal(j)} className="flex-1 text-xs sm:text-sm"><Edit className="h-3.5 w-3.5 mr-1" /> Edit</Button>
-                            {j.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)} className="flex-1 text-red-500 text-xs sm:text-sm"><UserMinus className="h-3.5 w-3.5 mr-1" /> Nonaktif</Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)} className="flex-1 text-green-500 text-xs sm:text-sm"><UserPlus className="h-3.5 w-3.5 mr-1" /> Aktif</Button>}
-                          </div>
+                          {canWrite && (
+                            <div className="flex gap-2 mt-3 pt-3 border-t">
+                              <Button variant="ghost" size="sm" onClick={() => openEditJadwal(j)} className="flex-1 text-xs sm:text-sm"><Edit className="h-3.5 w-3.5 mr-1" /> Edit</Button>
+                              {j.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)} className="flex-1 text-red-500 text-xs sm:text-sm"><UserMinus className="h-3.5 w-3.5 mr-1" /> Nonaktif</Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)} className="flex-1 text-green-500 text-xs sm:text-sm"><UserPlus className="h-3.5 w-3.5 mr-1" /> Aktif</Button>}
+                            </div>
+                          )}
+                          {!canWrite && (
+                            <div className="mt-3 pt-3 border-t text-center text-xs text-slate-400 flex items-center justify-center gap-1"><Eye className="h-3 w-3" /> Mode baca saja</div>
+                          )}
                         </CardContent>
                       </Card>
                     ))}
@@ -1163,12 +1181,16 @@ export default function ScheduleManagement() {
                 )}
               </TabsContent>
 
-              {/* TAB MATA PELAJARAN - responsive */}
+              {/* TAB MATA PELAJARAN */}
               <TabsContent value="mapel" className="space-y-4 sm:space-y-6">
                 <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
                   <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                    <Button onClick={openAddMapel} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600"><Plus className="mr-1 h-3 w-3" /> Tambah Mapel</Button>
-                    <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><Upload className="mr-1 h-3 w-3" /> Impor Excel</Button>
+                    {canWrite && (
+                      <>
+                        <Button onClick={openAddMapel} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600"><Plus className="mr-1 h-3 w-3" /> Tambah Mapel</Button>
+                        <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><Upload className="mr-1 h-3 w-3" /> Impor Excel</Button>
+                      </>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2 justify-center sm:justify-end">
                     <div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" /><Input placeholder="Cari mapel..." value={mapelSearchTerm} onChange={(e) => setMapelSearchTerm(e.target.value)} className="pl-8 rounded-xl w-48 sm:w-64 h-8 sm:h-9 text-xs sm:text-sm" /></div>
@@ -1176,24 +1198,25 @@ export default function ScheduleManagement() {
                     <Button variant="outline" onClick={fetchMapel} disabled={isFetchingMapel} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><RefreshCw className={`mr-1 h-3 w-3 ${isFetchingMapel ? "animate-spin" : ""}`} /> Segarkan</Button>
                   </div>
                 </div>
-                <div className="flex flex-col sm:flex-row justify-between items-center gap-2">
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    <Button variant={selectMode ? "default" : "outline"} onClick={() => { setSelectMode(!selectMode); if (!selectMode) setSelectedMapelIds([]); }} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">{selectMode ? "Batalkan Mode Pilih" : "Mode Pilih"}</Button>
-                    {selectMode && <>
-                      <Button variant="default" onClick={() => handleBulkAction("aktifkan")} disabled={selectedMapelIds.length === 0 || isProcessingBulk} className="bg-green-600 hover:bg-green-700 rounded-xl h-8 sm:h-9 text-xs sm:text-sm">Aktifkan ({selectedMapelIds.filter(id => !mapelData.find(m => m.id_mapel === id)?.aktif).length})</Button>
-                      <Button variant="destructive" onClick={() => handleBulkAction("nonaktifkan")} disabled={selectedMapelIds.length === 0 || isProcessingBulk} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">Nonaktifkan ({selectedMapelIds.filter(id => mapelData.find(m => m.id_mapel === id)?.aktif).length})</Button>
-                    </>}
+                {canWrite && (
+                  <div className="flex flex-col sm:flex-row justify-between items-center gap-2">
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      <Button variant={selectMode ? "default" : "outline"} onClick={() => { setSelectMode(!selectMode); if (!selectMode) setSelectedMapelIds([]); }} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">{selectMode ? "Batalkan Mode Pilih" : "Mode Pilih"}</Button>
+                      {selectMode && <>
+                        <Button variant="default" onClick={() => handleBulkAction("aktifkan")} disabled={selectedMapelIds.length === 0 || isProcessingBulk} className="bg-green-600 hover:bg-green-700 rounded-xl h-8 sm:h-9 text-xs sm:text-sm">Aktifkan ({selectedMapelIds.filter(id => !mapelData.find(m => m.id_mapel === id)?.aktif).length})</Button>
+                        <Button variant="destructive" onClick={() => handleBulkAction("nonaktifkan")} disabled={selectedMapelIds.length === 0 || isProcessingBulk} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">Nonaktifkan ({selectedMapelIds.filter(id => mapelData.find(m => m.id_mapel === id)?.aktif).length})</Button>
+                      </>}
+                    </div>
+                    {selectMode && <Button variant="ghost" size="sm" onClick={handleSelectAll} className="text-xs sm:text-sm">Pilih Semua</Button>}
                   </div>
-                  {selectMode && <Button variant="ghost" size="sm" onClick={handleSelectAll} className="text-xs sm:text-sm">Pilih Semua</Button>}
-                </div>
-                <div className="border rounded-xl overflow-hidden shadow-sm"><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-slate-50">{selectMode && <TableHead className="w-10"><Checkbox checked={selectedMapelIds.length === paginatedMapel.length && paginatedMapel.length > 0} onCheckedChange={handleSelectAll} /></TableHead>}<TableHead className="text-xs sm:text-sm">Nama Mata Pelajaran</TableHead><TableHead className="text-center w-24 text-xs sm:text-sm">Status</TableHead><TableHead className="text-center w-28 text-xs sm:text-sm">Aksi</TableHead></TableRow></TableHeader><TableBody>{isFetchingMapel ? <TableRow><TableCell colSpan={selectMode ? 4 : 3} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow> : filteredMapel.length === 0 ? <TableRow><TableCell colSpan={selectMode ? 4 : 3} className="text-center py-8 text-slate-500"><BookOpen className="h-8 w-8 mx-auto mb-2" />{mapelSearchTerm ? "Tidak ada mata pelajaran yang cocok" : "Belum ada mata pelajaran"}</TableCell></TableRow> : paginatedMapel.map(m => (<TableRow key={m.id_mapel}>{selectMode && <TableCell><Checkbox checked={selectedMapelIds.includes(m.id_mapel)} onCheckedChange={() => handleSelectItem(m.id_mapel)} /></TableCell>}<TableCell className="font-medium text-xs sm:text-sm">{m.nama}</TableCell><TableCell className="text-center"><Badge className={`${getStatusColor(m.aktif)} border-0 rounded-full px-2 sm:px-3 py-0.5 sm:py-1 text-xs`}>{m.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell><TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditMapel(m)}><Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" /></Button>{m.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleMapel(m, false)}><UserMinus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleMapel(m, true)}><UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500" /></Button>}</div></TableCell></TableRow>))}</TableBody></Table></div></div>
+                )}
+                <div className="border rounded-xl overflow-hidden shadow-sm"><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-slate-50">{selectMode && canWrite && <TableHead className="w-10"><Checkbox checked={selectedMapelIds.length === paginatedMapel.length && paginatedMapel.length > 0} onCheckedChange={handleSelectAll} /></TableHead>}<TableHead className="text-xs sm:text-sm">Nama Mata Pelajaran</TableHead><TableHead className="text-center w-24 text-xs sm:text-sm">Status</TableHead>{canWrite && <TableHead className="text-center w-28 text-xs sm:text-sm">Aksi</TableHead>}</TableRow></TableHeader><TableBody>{isFetchingMapel ? <TableRow><TableCell colSpan={selectMode && canWrite ? 4 : (canWrite ? 3 : 2)} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow> : filteredMapel.length === 0 ? <TableRow><TableCell colSpan={selectMode && canWrite ? 4 : (canWrite ? 3 : 2)} className="text-center py-8 text-slate-500"><BookOpen className="h-8 w-8 mx-auto mb-2" />{mapelSearchTerm ? "Tidak ada mata pelajaran yang cocok" : "Belum ada mata pelajaran"}</TableCell></TableRow> : paginatedMapel.map(m => (<TableRow key={m.id_mapel}>{selectMode && canWrite && <TableCell><Checkbox checked={selectedMapelIds.includes(m.id_mapel)} onCheckedChange={() => handleSelectItem(m.id_mapel)} /></TableCell>}<TableCell className="font-medium text-xs sm:text-sm">{m.nama}</TableCell><TableCell className="text-center"><Badge className={`${getStatusColor(m.aktif)} border-0 rounded-full px-2 sm:px-3 py-0.5 sm:py-1 text-xs`}>{m.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell>{canWrite && <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditMapel(m)}><Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" /></Button>{m.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleMapel(m, false)}><UserMinus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleMapel(m, true)}><UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500" /></Button>}</div></TableCell>}</TableRow>))}</TableBody></Table></div></div>
                 {filteredMapel.length > 0 && (<div className="flex flex-col sm:flex-row items-center justify-between gap-3"><p className="text-xs sm:text-sm text-slate-600">Menampilkan {((mapelCurrentPage - 1) * mapelItemsPerPage) + 1}-{Math.min(mapelCurrentPage * mapelItemsPerPage, filteredMapel.length)} dari {filteredMapel.length} mata pelajaran</p><div className="flex gap-2"><Button variant="outline" size="sm" onClick={() => setMapelCurrentPage(p => Math.max(1, p - 1))} disabled={mapelCurrentPage === 1} className="rounded-lg h-7 sm:h-8 text-xs">Sebelumnya</Button><div className="flex items-center gap-1">{Array.from({ length: Math.min(mapelTotalPages, 5) }, (_, i) => i + 1).map((page) => (<Button key={page} variant={mapelCurrentPage === page ? "default" : "outline"} size="sm" onClick={() => setMapelCurrentPage(page)} className="rounded-lg h-7 w-7 sm:h-8 sm:w-8 p-0 text-xs">{page}</Button>))}</div><Button variant="outline" size="sm" onClick={() => setMapelCurrentPage(p => Math.min(mapelTotalPages, p + 1))} disabled={mapelCurrentPage === mapelTotalPages} className="rounded-lg h-7 sm:h-8 text-xs">Berikutnya</Button></div></div>)}
               </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
 
-        {/* TIPS & FOOTER */}
         <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50 max-w-3xl mx-auto">
           <CardContent className="p-4 sm:p-5"><div className="flex gap-3 sm:gap-4"><div className="bg-indigo-100 p-2 sm:p-3 rounded-xl"><Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" /></div><div><h3 className="font-semibold text-sm sm:text-base">Tips Mengelola Jadwal</h3><p className="text-xs sm:text-sm text-slate-600">Pastikan tidak ada tumpang tindih jadwal untuk guru yang sama. Sistem akan otomatis memvalidasi overlap jadwal. Gunakan filter kelas dan hari untuk melihat jadwal spesifik. Anda dapat menonaktifkan jadwal atau mata pelajaran tanpa menghapus datanya.</p></div></div></CardContent>
         </Card>

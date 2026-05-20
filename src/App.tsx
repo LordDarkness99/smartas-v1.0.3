@@ -1,3 +1,4 @@
+// File: src/App.tsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -23,18 +24,24 @@ import AttendanceReport from "@/pages/report/AttendanceReport";
 import GuruDashboard from "@/pages/guru/Dashboard";
 import ScheduleView from "@/pages/schedule/ScheduleView";
 
-// Komponen untuk merender dashboard berdasarkan role (tanpa redirect)
+// BK & Admin Jurusan (gunakan komponen yang sama dengan filter role)
+// Dashboard sederhana untuk BK dan Admin Jurusan bisa menggunakan AdminDashboard yang sudah ada,
+// atau buat komponen terpisah. Untuk kemudahan, kita gunakan AdminDashboard dengan conditional render.
+// Untuk BK, hanya tampilkan statistik dan laporan; untuk Admin Jurusan, tampilkan semua fitur tetapi data terfilter.
+
+// Fungsi untuk merender dashboard sesuai role
 function DashboardRenderer() {
   const { user } = useAuth();
+  const role = user?.peran;
 
-  if (user?.peran === "siswa") return <StudentDashboard />;
-  if (user?.peran === "guru") return <GuruDashboard />;
-  if (user?.peran === "admin") return <AdminDashboard />;
-
+  if (role === "siswa") return <StudentDashboard />;
+  if (role === "guru") return <GuruDashboard />;
+  if (role === "admin") return <AdminDashboard />;
+  if (role === "bk") return <AdminDashboard />; // BK bisa menggunakan AdminDashboard dengan modifikasi internal (filter menu)
+  if (role === "admin_jurusan") return <AdminDashboard />;
   return <Navigate to="/login" replace />;
 }
 
-// Root router - cek auth status
 function RootRouter() {
   const { user, loading } = useAuth();
 
@@ -47,6 +54,12 @@ function RootRouter() {
   }
 
   if (user) {
+    // Redirect berdasarkan role ke dashboard yang sesuai
+    if (user.peran === "siswa") return <Navigate to="/student/dashboard" replace />;
+    if (user.peran === "guru") return <Navigate to="/guru/dashboard" replace />;
+    if (user.peran === "admin") return <Navigate to="/admin/dashboard" replace />;
+    if (user.peran === "bk") return <Navigate to="/bk/dashboard" replace />;
+    if (user.peran === "admin_jurusan") return <Navigate to="/admin-jurusan/dashboard" replace />;
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -116,8 +129,41 @@ function App() {
             <Route path="face-registration" element={<FaceRegistration />} />
           </Route>
 
-          {/* Dashboard redirect - langsung render dashboard sesuai role, 
-              dan juga menyediakan halaman face registration dengan layout */}
+          {/* BK Routes (hanya dashboard dan laporan) */}
+          <Route
+            path="/bk"
+            element={
+              <ProtectedRoute allowedRoles={["bk"]}>
+                <AppLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<AdminDashboard />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="reports" element={<AttendanceReport />} />
+            <Route path="face-registration" element={<FaceRegistration />} />
+          </Route>
+
+          {/* Admin Jurusan Routes (akses seperti admin namun data terfilter) */}
+          <Route
+            path="/admin-jurusan"
+            element={
+              <ProtectedRoute allowedRoles={["admin_jurusan"]}>
+                <AppLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<AdminDashboard />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="manage-users" element={<UserManagement />} />
+            <Route path="schedule" element={<ScheduleManagement />} />
+            <Route path="pkl" element={<PKLManagement />} />
+            <Route path="attendance" element={<AttendanceManagement />} />
+            <Route path="reports" element={<AttendanceReport />} />
+            <Route path="face-registration" element={<FaceRegistration />} />
+          </Route>
+
+          {/* Dashboard redirect - langsung render dashboard sesuai role */}
           <Route
             path="/dashboard"
             element={

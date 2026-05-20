@@ -1,3 +1,4 @@
+// File: src/components/layout/AppSidebar.tsx
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -14,6 +15,8 @@ import {
   UserCircle,
   KeyRound,
   Camera,
+  BookOpen,
+  TrendingUp,
 } from "lucide-react";
 import {
   Sidebar,
@@ -58,14 +61,16 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const getMenuItems = () => {
-    if (userRole === "siswa") {
+    const role = userRole || user?.peran;
+
+    if (role === "siswa") {
       return [
         { title: "Dashboard", icon: LayoutDashboard, path: "/student/dashboard" },
         { title: "Jadwal", icon: Calendar, path: "/student/schedule" },
         { title: "Presensi", icon: Calendar, path: "/student/attendance" },
         { title: "Registrasi Wajah", icon: Camera, path: "/face-registration" },
       ];
-    } else if (userRole === "guru") {
+    } else if (role === "guru") {
       return [
         { title: "Dashboard", icon: LayoutDashboard, path: "/guru/dashboard" },
         { title: "Jadwal", icon: Calendar, path: "/guru/schedule" },
@@ -73,7 +78,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
         { title: "Laporan Data", icon: FileText, path: "/guru/reports" },
         { title: "Registrasi Wajah", icon: Camera, path: "/face-registration" },
       ];
-    } else if (userRole === "admin") {
+    } else if (role === "admin") {
       return [
         { title: "Dashboard", icon: LayoutDashboard, path: "/admin/dashboard" },
         { title: "Kelola User", icon: Users, path: "/admin/manage-users" },
@@ -81,6 +86,22 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
         { title: "Program PKL", icon: MapPin, path: "/admin/pkl" },
         { title: "Presensi Sekolah", icon: School, path: "/admin/attendance" },
         { title: "Laporan Data", icon: FileText, path: "/admin/reports" },
+        { title: "Registrasi Wajah", icon: Camera, path: "/face-registration" },
+      ];
+    } else if (role === "bk") {
+      return [
+        { title: "Dashboard", icon: LayoutDashboard, path: "/bk/dashboard" },
+        { title: "Laporan Presensi", icon: FileText, path: "/bk/reports" },
+        { title: "Registrasi Wajah", icon: Camera, path: "/face-registration" },
+      ];
+    } else if (role === "admin_jurusan") {
+      return [
+        { title: "Dashboard", icon: LayoutDashboard, path: "/admin-jurusan/dashboard" },
+        { title: "Kelola User", icon: Users, path: "/admin-jurusan/manage-users" },
+        { title: "Jadwal & Mapel", icon: Calendar, path: "/admin-jurusan/schedule" },
+        { title: "Program PKL", icon: MapPin, path: "/admin-jurusan/pkl" },
+        { title: "Presensi Sekolah", icon: School, path: "/admin-jurusan/attendance" },
+        { title: "Laporan Data", icon: FileText, path: "/admin-jurusan/reports" },
         { title: "Registrasi Wajah", icon: Camera, path: "/face-registration" },
       ];
     }
@@ -103,14 +124,21 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
     setIsLoading(true);
     try {
       const hashedPassword = await bcrypt.hash(newPassword, 10);
-      const { error } = await supabase.from("akun").update({ kata_sandi: hashedPassword }).eq("username", username);
+      const { error } = await supabase
+        .from("akun")
+        .update({ kata_sandi: hashedPassword })
+        .eq("username", username);
       if (error) throw error;
       toast({ title: "Berhasil", description: "Sandi telah diubah" });
       setIsChangingPassword(false);
       setNewPassword("");
       setConfirmPassword("");
     } catch (error: unknown) {
-      toast({ title: "Gagal", description: (error as Error).message || "Terjadi kesalahan", variant: "destructive" });
+      toast({
+        title: "Gagal",
+        description: (error as Error).message || "Terjadi kesalahan",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -134,7 +162,6 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
     hover:-translate-y-[2px] hover:shadow-[0_6px_0_rgba(0,0,0,0.2)]
   `;
 
-  // Texture halus: dot grid dengan warna biru sangat transparan (opacity 0.02)
   const subtleTexture = "bg-[radial-gradient(ellipse_at_center,_rgba(44,94,173,0.02)_1px,_transparent_1px)] bg-[length:24px_24px]";
 
   return (
@@ -145,7 +172,9 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
         className={`bg-white ${subtleTexture} border-r border-[#C4E2F5]/30 shadow-[-8px_0_20px_-8px_rgba(44,94,173,0.15)] z-10 transition-all duration-300`}
       >
         {/* HEADER */}
-        <SidebarHeader className={`py-5 px-6 flex flex-col items-center justify-center bg-white ${subtleTexture} relative after:absolute after:bottom-0 after:left-4 after:right-4 after:h-px after:bg-gradient-to-r after:from-transparent after:via-[#1591DC]/20 after:to-transparent`}>
+        <SidebarHeader
+          className={`py-5 px-6 flex flex-col items-center justify-center bg-white ${subtleTexture} relative after:absolute after:bottom-0 after:left-4 after:right-4 after:h-px after:bg-gradient-to-r after:from-transparent after:via-[#1591DC]/20 after:to-transparent`}
+        >
           <div className="mb-0.5 flex items-center justify-center h-14 w-full text-center">
             <img src="/smartas-logo.png" alt="SMARTAS Logo" className="h-12 w-auto object-contain drop-shadow-md" />
           </div>
@@ -175,18 +204,25 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
                         asChild
                         isActive={isActive}
                         tooltip={item.title}
-                        onClick={() => { if (isMobile) setOpenMobile(false); }}
+                        onClick={() => {
+                          if (isMobile) setOpenMobile(false);
+                        }}
                         className={`group relative mb-2 h-10 px-4 rounded-xl overflow-hidden
                           ${button3D}
-                          ${isActive
-                            ? "bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] text-white shadow-[0_4px_0_rgba(0,0,0,0.25)] hover:shadow-[0_6px_0_rgba(0,0,0,0.25)] active:shadow-[0_2px_0_rgba(0,0,0,0.25)]"
-                            : "bg-white border border-[#C4E2F5] text-[#2C5EAD] shadow-[0_4px_0_rgba(0,0,0,0.1)] hover:shadow-[0_6px_0_rgba(0,0,0,0.1)] active:shadow-[0_2px_0_rgba(0,0,0,0.1)]"
+                          ${
+                            isActive
+                              ? "bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] text-white shadow-[0_4px_0_rgba(0,0,0,0.25)] hover:shadow-[0_6px_0_rgba(0,0,0,0.25)] active:shadow-[0_2px_0_rgba(0,0,0,0.25)]"
+                              : "bg-white border border-[#C4E2F5] text-[#2C5EAD] shadow-[0_4px_0_rgba(0,0,0,0.1)] hover:shadow-[0_6px_0_rgba(0,0,0,0.1)] active:shadow-[0_2px_0_rgba(0,0,0,0.1)]"
                           }`}
                       >
                         <Link to={item.path} className="flex items-center gap-3 w-full">
                           <item.icon
                             className={`h-4.5 w-4.5 transition-all duration-300 group-hover:scale-110
-                              ${isActive ? "text-white drop-shadow-sm" : "text-[#1591DC] group-hover:text-[#2C5EAD]"}`}
+                              ${
+                                isActive
+                                  ? "text-white drop-shadow-sm"
+                                  : "text-[#1591DC] group-hover:text-[#2C5EAD]"
+                              }`}
                           />
                           <span className="font-bold text-sm tracking-tight group-data-[collapsible=icon]:hidden">
                             {item.title}
@@ -233,7 +269,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
         </SidebarFooter>
       </Sidebar>
 
-      {/* Dialog - tetap tanpa texture */}
+      {/* Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-md bg-white border border-[#C4E2F5] shadow-xl">
           <DialogHeader>

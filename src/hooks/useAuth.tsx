@@ -3,9 +3,9 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import * as bcrypt from 'bcryptjs';
-import type { PostgrestError } from '@supabase/supabase-js'; // <-- import tipe
+import type { PostgrestError } from '@supabase/supabase-js';
 
-// Definisikan tipe untuk data akun
+// Definisikan tipe untuk data akun (sesuai struktur tabel akun + id_jurusan)
 interface AkunData {
   id_akun: string;
   nama: string;
@@ -14,17 +14,19 @@ interface AkunData {
   aktif: boolean | null;
   id_guru: number | null;
   id_siswa: number | null;
+  id_jurusan: number | null; // untuk admin_jurusan
   kata_sandi: string | null;
 }
 
-interface User {
+export interface User {
   id_akun: string;
   nama: string;
   username: string;
-  peran: string;
+  peran: string; // 'admin', 'guru', 'siswa', 'bk', 'admin_jurusan'
   aktif: boolean;
   id_guru?: number | null;
   id_siswa?: number | null;
+  id_jurusan?: number | null; // untuk admin_jurusan
 }
 
 interface AuthContextType {
@@ -64,9 +66,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const { data: akun, error: queryError } = await supabase
         .from('akun')
-        .select('id_akun, nama, username, peran, aktif, id_guru, id_siswa, kata_sandi')
+        .select('id_akun, nama, username, peran, aktif, id_guru, id_siswa, id_jurusan, kata_sandi')
         .eq('username', username.toLowerCase().trim())
-        .maybeSingle() as { data: AkunData | null; error: PostgrestError | null }; // <-- ganti any dengan PostgrestError
+        .maybeSingle() as { data: AkunData | null; error: PostgrestError | null };
 
       if (queryError) {
         console.error('Query error:', queryError);
@@ -98,6 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         aktif: akun.aktif || false,
         id_guru: akun.id_guru,
         id_siswa: akun.id_siswa,
+        id_jurusan: akun.id_jurusan,
       };
       
       localStorage.setItem('smartas_user', JSON.stringify(userData));
@@ -117,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const { data: akun, error: queryError } = await supabase
         .from('akun')
-        .select('id_akun, nama, username, peran, aktif, id_guru, id_siswa')
+        .select('id_akun, nama, username, peran, aktif, id_guru, id_siswa, id_jurusan')
         .eq('username', username.toLowerCase().trim())
         .maybeSingle();
 
@@ -137,6 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         aktif: akun.aktif || false,
         id_guru: akun.id_guru,
         id_siswa: akun.id_siswa,
+        id_jurusan: akun.id_jurusan,
       };
       
       localStorage.setItem('smartas_user', JSON.stringify(userData));

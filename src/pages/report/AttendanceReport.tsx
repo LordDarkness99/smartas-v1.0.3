@@ -34,7 +34,26 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Loader2, CalendarRange, Printer, Sun, Moon, Cloud, Sparkles, School, BookOpen, Calendar, Activity, TrendingUp, FileText, Search, X, ChevronDown, AlertCircle } from "lucide-react";
+import {
+  Loader2,
+  CalendarRange,
+  Printer,
+  Sun,
+  Moon,
+  Cloud,
+  Sparkles,
+  School,
+  BookOpen,
+  Calendar,
+  Activity,
+  TrendingUp,
+  FileText,
+  Search,
+  X,
+  ChevronDown,
+  AlertCircle,
+} from "lucide-react";
+import { isAdminJurusan, isBK, isAdmin } from "@/lib/utils";
 
 interface RekapHarian {
   id_siswa: number;
@@ -71,9 +90,9 @@ export default function AttendanceReport() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
   
-  // Daftar kelas untuk presensi mapel (guru bisa lihat kelas yang diampu/wali)
+  // Daftar kelas untuk presensi mapel (guru bisa lihat kelas yang diampu/wali, admin_jurusan lihat kelas jurusannya, admin & bk lihat semua)
   const [kelasListMapel, setKelasListMapel] = useState<{ id_kelas: number; nama: string }[]>([]);
-  // Daftar kelas untuk presensi harian (hanya admin dan wali kelas)
+  // Daftar kelas untuk presensi harian (hanya admin, wali kelas, admin_jurusan, dan bk)
   const [kelasListHarian, setKelasListHarian] = useState<{ id_kelas: number; nama: string }[]>([]);
   
   const [selectedKelasHarian, setSelectedKelasHarian] = useState<string>("");
@@ -130,17 +149,22 @@ export default function AttendanceReport() {
     }
 
     const kelasNama = getKelasNameById(parseInt(selectedKelasMapel), kelasListMapel);
-    const isAdmin = user?.peran === 'admin';
+    const isAdminRole = isAdmin(user);
     const isGuru = user?.peran === 'guru';
     const isWali = waliKelasIds.includes(parseInt(selectedKelasMapel));
+    const isAdminJurusanRole = isAdminJurusan(user);
+    const isBkRole = isBK(user);
 
     let filtered: typeof jadwalList = [];
 
-    if (isAdmin) {
+    if (isAdminRole || isBkRole || isAdminJurusanRole) {
+      // Admin, BK, atau admin jurusan: semua mapel di kelas tersebut
       filtered = jadwalList.filter(j => j.kelas_nama === kelasNama);
     } else if (isGuru && isWali) {
+      // Guru wali: semua mapel di kelas tersebut
       filtered = jadwalList.filter(j => j.kelas_nama === kelasNama);
     } else if (isGuru && user?.id_guru) {
+      // Guru biasa: hanya mapel yang diampu
       filtered = jadwalList.filter(j => j.kelas_nama === kelasNama && j.id_guru === user.id_guru);
     }
 
@@ -188,8 +212,12 @@ export default function AttendanceReport() {
     }
 
     const userRole = user.peran;
+    const isAdminSuper = isAdmin(user);
+    const isAdminJurusanRole = isAdminJurusan(user);
+    const isBkRole = isBK(user);
+    const isGuruRole = userRole === 'guru';
 
-    if (userRole === 'guru') {
+    if (isGuruRole) {
       if (!user.id_guru) {
         console.error("Guru tidak memiliki id_guru");
         setKelasListMapel([]);
@@ -241,8 +269,22 @@ export default function AttendanceReport() {
       setKelasListMapel(kelasListUnik);
       // Kelas untuk presensi harian: hanya kelas wali
       setKelasListHarian(waliKelas || []);
-    } else {
-      // Admin: ambil semua kelas aktif
+    } else if (isAdminJurusanRole) {
+      // Admin jurusan: hanya kelas dengan id_jurusan miliknya
+      const { data, error } = await supabase
+        .from("kelas")
+        .select("id_kelas, nama")
+        .eq("id_jurusan", user.id_jurusan)
+        .eq("aktif", true)
+        .order("nama");
+      if (error) console.error(error);
+      else {
+        setKelasListMapel(data || []);
+        setKelasListHarian(data || []);
+      }
+      setWaliKelasIds([]);
+    } else if (isAdminSuper || isBkRole) {
+      // Admin super atau BK: semua kelas aktif
       const { data, error } = await supabase
         .from("kelas")
         .select("id_kelas, nama")
@@ -254,6 +296,10 @@ export default function AttendanceReport() {
         setKelasListHarian(data || []);
       }
       setWaliKelasIds([]);
+    } else {
+      // Role lain (misal siswa) tidak memiliki akses laporan
+      setKelasListMapel([]);
+      setKelasListHarian([]);
     }
   };
 
@@ -273,15 +319,22 @@ export default function AttendanceReport() {
   }, [kelasListMapel, selectedKelasMapel]);
 
   const fetchJadwal = async () => {
-    const { data, error } = await supabase
+    let query = supabase
       .from("jadwal")
       .select(`
         id_jadwal,
         id_guru,
         mapel:mata_pelajaran (nama),
-        kelas:kelas (nama)
+        kelas:kelas (nama, id_jurusan)
       `)
       .eq("aktif", true);
+
+    // Untuk admin jurusan, filter jadwal hanya untuk kelas dalam jurusannya
+    if (isAdminJurusan(user) && user?.id_jurusan) {
+      query = query.eq("kelas.id_jurusan", user.id_jurusan);
+    }
+
+    const { data, error } = await query;
     if (error) console.error(error);
     else {
       const formatted = data.map((item: any) => ({
@@ -459,9 +512,11 @@ export default function AttendanceReport() {
 
   const showAllMapelOption = () => {
     if (!selectedKelasMapel) return false;
-    const isAdmin = user?.peran === 'admin';
+    const isAdminRole = isAdmin(user);
+    const isBkRole = isBK(user);
+    const isAdminJurusanRole = isAdminJurusan(user);
     const isWali = waliKelasIds.includes(parseInt(selectedKelasMapel));
-    return isAdmin || isWali;
+    return isAdminRole || isBkRole || isAdminJurusanRole || isWali;
   };
 
   const totalHadir = rekapHarian.reduce((sum, s) => sum + s.hadir, 0);
@@ -471,6 +526,14 @@ export default function AttendanceReport() {
   const totalAlfa = rekapHarian.reduce((sum, s) => sum + s.alfa, 0);
   const totalPresensi = totalHadir + totalTerlambat + totalIzin + totalSakit + totalAlfa;
   const persenHadir = totalPresensi > 0 ? ((totalHadir + totalTerlambat) / totalPresensi * 100).toFixed(1) : 0;
+
+  const userRoleDisplay = () => {
+    if (isAdmin(user)) return "Admin";
+    if (isBK(user)) return "BK";
+    if (isAdminJurusan(user)) return "Admin Jurusan";
+    if (user?.peran === "guru") return "Guru";
+    return "Pengguna";
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 overflow-x-hidden">
@@ -563,10 +626,10 @@ export default function AttendanceReport() {
 
                 {/* Tab Presensi Harian */}
                 <TabsContent value="harian" className="space-y-4 sm:space-y-6">
-                  {user?.peran === 'guru' && kelasListHarian.length === 0 ? (
+                  {kelasListHarian.length === 0 ? (
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3">
                       <AlertCircle className="h-5 w-5 text-amber-600" />
-                      <p className="text-sm text-amber-700">Anda tidak memiliki akses ke laporan presensi harian karena hanya wali kelas yang dapat melihatnya.</p>
+                      <p className="text-sm text-amber-700">Anda tidak memiliki akses ke laporan presensi harian.</p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-3 items-end">
@@ -791,7 +854,7 @@ export default function AttendanceReport() {
             <div className="hidden print:block mt-8">
               <div className="flex justify-between mt-12">
                 <div className="text-center w-1/2"><p>Mengetahui,</p><p className="mt-6 font-semibold">Kepala Sekolah</p><div className="mt-8"><p className="mt-8">_________________________</p><p className="text-sm">NIP. 196912311997021001</p></div></div>
-                <div className="text-center w-1/2"><p>Petugas,</p><p className="mt-6 font-semibold">{user?.nama || "Admin / Guru"}</p><div className="mt-8"><p className="mt-8">_________________________</p><p className="text-sm">NIP. 197501012005012001</p></div></div>
+                <div className="text-center w-1/2"><p>Petugas,</p><p className="mt-6 font-semibold">{user?.nama || userRoleDisplay()}</p><div className="mt-8"><p className="mt-8">_________________________</p><p className="text-sm">NIP. 197501012005012001</p></div></div>
               </div>
               <div className="text-center text-xs mt-8"><p>Dicetak pada: {new Date().toLocaleString("id-ID")}</p></div>
             </div>

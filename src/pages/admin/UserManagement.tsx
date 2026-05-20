@@ -2,6 +2,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import * as XLSX from "xlsx";
 import * as bcrypt from 'bcryptjs';
 import {
@@ -69,6 +70,8 @@ import {
   Filter,
   UserMinus,
   UserPlus,
+  Database,
+  Building2,
 } from "lucide-react";
 
 // ==================== TYPES ====================
@@ -89,25 +92,48 @@ interface SiswaImportData {
   password?: string;
 }
 
-interface GuruData {
-  id_guru: number;
+// Data umum untuk semua tipe user
+interface BaseUser {
+  id: string | number;
   nama: string;
-  nik: string;
   username: string;
-  gender: string;
+  peran: string;
   aktif: boolean;
 }
 
-interface SiswaData {
-  id_siswa: number;
-  nama: string;
-  nis: string;
-  username: string;
+// Untuk guru
+interface GuruData extends BaseUser {
+  id: number;
+  nik: string;
   gender: string;
-  aktif: boolean;
+  peran: "guru";
+}
+
+// Untuk siswa
+interface SiswaData extends BaseUser {
+  id: number;
+  nis: string;
+  gender: string;
   id_kelas: number | null;
   nama_kelas: string | null;
+  peran: "siswa";
 }
+
+// Untuk admin_jurusan
+interface AdminJurusanData extends BaseUser {
+  id: string;
+  id_jurusan: number | null;
+  jurusan_nama: string;
+  peran: "admin_jurusan";
+}
+
+// Untuk BK
+interface BKData extends BaseUser {
+  id: string;
+  peran: "bk";
+}
+
+type UserItem = GuruData | SiswaData | AdminJurusanData | BKData;
 
 interface Kelas {
   id_kelas: number;
@@ -124,15 +150,13 @@ interface GuruSimple {
   nik: string;
 }
 
-interface BulkActionData {
-  users: { id: number; nama: string; aktif: boolean }[];
-  cannotProcess: { id: number; nama: string; reasons: string[] }[];
-  canProcessIds: number[];
+interface Jurusan {
+  id_jurusan: number;
+  nama_jurusan: string;
 }
 
 type ExcelRow = Record<string, string | number | boolean | null | undefined>;
 
-// Tipe untuk response kelas dengan relasi guru
 type KelasWithGuru = {
   id_kelas: number;
   nama: string;
@@ -142,7 +166,6 @@ type KelasWithGuru = {
   guru: { nama: string } | null;
 };
 
-// Tipe untuk update data
 interface GuruUpdateData {
   nama: string;
   gender: string;
@@ -160,10 +183,12 @@ interface SiswaUpdateData {
 
 export default function UserManagement() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"list" | "kelas">("list");
-  const [userType, setUserType] = useState<"guru" | "siswa">("guru");
+  const [userType, setUserType] = useState<"guru" | "siswa" | "admin_jurusan" | "bk">("guru");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
+  const isAdminSuper = user?.peran === "admin";
 
   // Search & filter
   const [searchQuery, setSearchQuery] = useState("");
@@ -176,6 +201,8 @@ export default function UserManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [totalData, setTotalData] = useState(0);
+  const [userList, setUserList] = useState<UserItem[]>([]);
+  const [isFetching, setIsFetching] = useState(false);
 
   // Import user
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -190,39 +217,40 @@ export default function UserManagement() {
   const [addForm, setAddForm] = useState({
     nama: "",
     username: "",
+    password: "",
     gender: "",
     nik: "",
     nis: "",
     kelas_id: "",
-    password: "",
+    peran: "guru" as "guru" | "siswa" | "admin_jurusan" | "bk",
+    id_jurusan: "",
   });
 
-  // Data lists
-  const [guruList, setGuruList] = useState<GuruData[]>([]);
-  const [siswaList, setSiswaList] = useState<SiswaData[]>([]);
-  const [isFetching, setIsFetching] = useState(false);
-
+  // Kelas related
   const [kelasList, setKelasList] = useState<Kelas[]>([]);
   const [isFetchingKelas, setIsFetchingKelas] = useState(false);
   const [guruOptions, setGuruOptions] = useState<GuruSimple[]>([]);
+  const [jurusanList, setJurusanList] = useState<Jurusan[]>([]);
 
   // Edit
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<GuruData | SiswaData | null>(null);
+  const [editingUser, setEditingUser] = useState<UserItem | null>(null);
   const [editForm, setEditForm] = useState({
     nama: "",
     username: "",
+    password: "",
     gender: "",
     nik: "",
     nis: "",
     kelas_id: "",
-    password: "",
+    peran: "guru" as "guru" | "siswa" | "admin_jurusan" | "bk",
+    id_jurusan: "",
     aktif: true,
   });
 
   // Deactivate/Activate
   const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
-  const [deactivatingUser, setDeactivatingUser] = useState<GuruData | SiswaData | null>(null);
+  const [deactivatingUser, setDeactivatingUser] = useState<UserItem | null>(null);
   const [deactivateConstraints, setDeactivateConstraints] = useState<string[]>([]);
   const [isActivatingMode, setIsActivatingMode] = useState(false);
 
@@ -247,11 +275,15 @@ export default function UserManagement() {
 
   // Bulk actions
   const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
   const [isProcessingSelected, setIsProcessingSelected] = useState(false);
   const [bulkActionDialogOpen, setBulkActionDialogOpen] = useState(false);
   const [bulkActionType, setBulkActionType] = useState<"activate" | "deactivate">("deactivate");
-  const [bulkActionData, setBulkActionData] = useState<BulkActionData | null>(null);
+  const [bulkActionData, setBulkActionData] = useState<{
+    users: { id: string | number; nama: string; aktif: boolean }[];
+    cannotProcess: { id: string | number; nama: string; reasons: string[] }[];
+    canProcessIds: (string | number)[];
+  } | null>(null);
 
   // ========== GREETING ==========
   useEffect(() => {
@@ -274,74 +306,138 @@ export default function UserManagement() {
 
   const resetPagination = () => setCurrentPage(1);
 
-  useEffect(() => {
-    if (!selectMode) setSelectedIds([]);
-  }, [selectMode]);
+  // ========== FETCH DATA UNIFIED ==========
+  const fetchData = useCallback(async () => {
+    setIsFetching(true);
+    try {
+      let data: UserItem[] = [];
+      let total = 0;
 
-  useEffect(() => {
-    if (selectMode) setSelectedIds([]);
-  }, [currentPage, filterKelas, searchQuery, userType, selectMode]);
+      if (userType === "guru") {
+        // Fetch guru + akun
+        let query = supabase
+          .from("guru")
+          .select("id_guru, nama, nik, gender, aktif", { count: "exact" })
+          .order("nama", { ascending: true })
+          .range((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage - 1);
+        const { data: guruData, count, error } = await query;
+        if (error) throw error;
+        total = count || 0;
+        const guruIds = guruData?.map(g => g.id_guru) || [];
+        const { data: akunData } = await supabase
+          .from("akun")
+          .select("id_guru, username")
+          .in("id_guru", guruIds);
+        const usernameMap = new Map<number, string>();
+        akunData?.forEach(akun => usernameMap.set(akun.id_guru, akun.username));
+        data = (guruData || []).map(g => ({
+          id: g.id_guru,
+          nama: g.nama,
+          username: usernameMap.get(g.id_guru) || "",
+          peran: "guru" as const,
+          aktif: g.aktif,
+          nik: g.nik?.toString() || "",
+          gender: g.gender,
+        }));
+      } else if (userType === "siswa") {
+        // Fetch siswa + akun + kelas
+        let siswaQuery = supabase
+          .from("siswa")
+          .select("id_siswa, nama, nis, gender, aktif, id_kelas", { count: "exact" })
+          .order("nama", { ascending: true })
+          .range((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage - 1);
+        if (filterKelas !== "all") {
+          if (filterKelas === "unassigned") siswaQuery = siswaQuery.is("id_kelas", null);
+          else siswaQuery = siswaQuery.eq("id_kelas", parseInt(filterKelas));
+        }
+        const { data: siswaData, count, error } = await siswaQuery;
+        if (error) throw error;
+        total = count || 0;
+        const siswaIds = siswaData?.map(s => s.id_siswa) || [];
+        const { data: akunData } = await supabase
+          .from("akun")
+          .select("id_siswa, username")
+          .in("id_siswa", siswaIds);
+        const usernameMap = new Map<number, string>();
+        akunData?.forEach(akun => usernameMap.set(akun.id_siswa, akun.username));
+        const kelasIds = siswaData?.map(s => s.id_kelas).filter(Boolean) as number[];
+        const kelasMap = new Map<number, string>();
+        if (kelasIds.length) {
+          const { data: kelasData } = await supabase
+            .from("kelas")
+            .select("id_kelas, nama")
+            .in("id_kelas", kelasIds);
+          kelasData?.forEach(k => kelasMap.set(k.id_kelas, k.nama));
+        }
+        data = (siswaData || []).map(s => ({
+          id: s.id_siswa,
+          nama: s.nama,
+          username: usernameMap.get(s.id_siswa) || "",
+          peran: "siswa" as const,
+          aktif: s.aktif,
+          nis: s.nis?.toString() || "",
+          gender: s.gender,
+          id_kelas: s.id_kelas,
+          nama_kelas: s.id_kelas ? kelasMap.get(s.id_kelas) || null : null,
+        }));
+      } else if (userType === "admin_jurusan") {
+        // Langsung dari akun
+        let query = supabase
+          .from("akun")
+          .select("id_akun, nama, username, peran, aktif, id_jurusan", { count: "exact" })
+          .eq("peran", "admin_jurusan")
+          .order("nama", { ascending: true })
+          .range((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage - 1);
+        const { data: akunData, count, error } = await query;
+        if (error) throw error;
+        total = count || 0;
+        const jurusanIds = akunData?.map(a => a.id_jurusan).filter(Boolean) as number[];
+        const jurusanMap = new Map<number, string>();
+        if (jurusanIds.length) {
+          const { data: jurusanData } = await supabase
+            .from("jurusan")
+            .select("id_jurusan, nama_jurusan")
+            .in("id_jurusan", jurusanIds);
+          jurusanData?.forEach(j => jurusanMap.set(j.id_jurusan, j.nama_jurusan));
+        }
+        data = (akunData || []).map(a => ({
+          id: a.id_akun,
+          nama: a.nama,
+          username: a.username,
+          peran: "admin_jurusan" as const,
+          aktif: a.aktif,
+          id_jurusan: a.id_jurusan,
+          jurusan_nama: a.id_jurusan ? jurusanMap.get(a.id_jurusan) || "-" : "-",
+        }));
+      } else if (userType === "bk") {
+        let query = supabase
+          .from("akun")
+          .select("id_akun, nama, username, peran, aktif", { count: "exact" })
+          .eq("peran", "bk")
+          .order("nama", { ascending: true })
+          .range((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage - 1);
+        const { data: akunData, count, error } = await query;
+        if (error) throw error;
+        total = count || 0;
+        data = (akunData || []).map(a => ({
+          id: a.id_akun,
+          nama: a.nama,
+          username: a.username,
+          peran: "bk" as const,
+          aktif: a.aktif,
+        }));
+      }
 
-  // ========== FILTER & SORT ==========
-  const filteredGuruList = [...guruList]
-    .filter(guru => {
-      if (!searchQuery) return true;
-      const q = searchQuery.toLowerCase();
-      return (
-        guru.nama.toLowerCase().includes(q) ||
-        guru.nik.toLowerCase().includes(q) ||
-        guru.username.toLowerCase().includes(q) ||
-        guru.id_guru.toString().includes(q)
-      );
-    })
-    .sort((a, b) => a.nama.localeCompare(b.nama, 'id-ID', { numeric: true, sensitivity: 'base' }));
+      setUserList(data);
+      setTotalData(total);
+    } catch (error: any) {
+      toast({ title: "Kesalahan", description: error.message, variant: "destructive" });
+    } finally {
+      setIsFetching(false);
+    }
+  }, [userType, currentPage, itemsPerPage, filterKelas, toast]);
 
-  const filteredSiswaList = [...siswaList]
-    .filter(siswa => {
-      if (!searchQuery) return true;
-      const q = searchQuery.toLowerCase();
-      return (
-        siswa.nama.toLowerCase().includes(q) ||
-        siswa.nis.toLowerCase().includes(q) ||
-        siswa.username.toLowerCase().includes(q) ||
-        siswa.id_siswa.toString().includes(q) ||
-        (siswa.nama_kelas && siswa.nama_kelas.toLowerCase().includes(q))
-      );
-    })
-    .sort((a, b) => a.nama.localeCompare(b.nama, 'id-ID', { numeric: true, sensitivity: 'base' }));
-
-  const displayedGuruList = [...filteredGuruList].sort((a, b) => {
-    if (a.aktif === b.aktif) return a.nama.localeCompare(b.nama, 'id-ID', { numeric: true, sensitivity: 'base' });
-    return a.aktif ? -1 : 1;
-  });
-  const displayedSiswaList = [...filteredSiswaList].sort((a, b) => {
-    if (a.aktif === b.aktif) return a.nama.localeCompare(b.nama, 'id-ID', { numeric: true, sensitivity: 'base' });
-    return a.aktif ? -1 : 1;
-  });
-
-  const totalPages = Math.ceil(totalData / itemsPerPage);
-
-  const filteredKelasOptions = kelasList.filter(kelas =>
-    kelas.nama.toLowerCase().includes(filterSearchQuery.toLowerCase())
-  );
-
-  const filteredKelasList = kelasList.filter(kelas => {
-    if (!searchKelasQuery) return true;
-    const q = searchKelasQuery.toLowerCase();
-    return (
-      kelas.nama.toLowerCase().includes(q) ||
-      (kelas.guru_nama && kelas.guru_nama.toLowerCase().includes(q)) ||
-      kelas.id_kelas.toString().includes(q)
-    );
-  });
-
-  // State untuk search di dropdown kelas (saat tambah/edit siswa)
-  const [kelasSearchTerm, setKelasSearchTerm] = useState("");
-  const filteredKelasForSelect = kelasList.filter(kelas =>
-    kelas.nama.toLowerCase().includes(kelasSearchTerm.toLowerCase())
-  );
-
-  // ========== FETCH DATA ==========
+  // ========== FETCH KELAS, GURU, JURUSAN ==========
   const fetchGuruOptions = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -384,133 +480,47 @@ export default function UserManagement() {
     }
   }, [toast]);
 
-  const fetchGuru = useCallback(async () => {
-    setIsFetching(true);
+  const fetchJurusan = useCallback(async () => {
     try {
-      const { count: totalCount, error: countError } = await supabase
-        .from("guru")
-        .select("*", { count: "exact", head: true });
-      if (countError) throw countError;
-      setTotalData(totalCount || 0);
-
-      const from = (currentPage - 1) * itemsPerPage;
-      const to = from + itemsPerPage - 1;
-
-      const { data: guruData, error: guruError } = await supabase
-        .from("guru")
-        .select("id_guru, nama, nik, gender, aktif")
-        .order("nama", { ascending: true })
-        .range(from, to);
-      if (guruError) throw guruError;
-
-      const guruIds = guruData?.map(g => g.id_guru) || [];
-      const { data: akunData, error: akunError } = await supabase
-        .from("akun")
-        .select("id_guru, username")
-        .in("id_guru", guruIds);
-      if (akunError) throw akunError;
-
-      const usernameMap = new Map<number, string>();
-      akunData?.forEach(akun => usernameMap.set(akun.id_guru, akun.username));
-
-      const combined: GuruData[] = (guruData || []).map(guru => ({
-        id_guru: guru.id_guru,
-        nama: guru.nama,
-        nik: guru.nik?.toString() || "",
-        username: usernameMap.get(guru.id_guru) || "",
-        gender: guru.gender,
-        aktif: guru.aktif,
-      }));
-      setGuruList(combined);
+      const { data, error } = await supabase
+        .from("jurusan")
+        .select("id_jurusan, nama_jurusan")
+        .eq("aktif", true)
+        .order("nama_jurusan");
+      if (error) throw error;
+      setJurusanList(data || []);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Gagal mengambil data guru";
-      toast({ title: "Kesalahan", description: message, variant: "destructive" });
-    } finally {
-      setIsFetching(false);
+      console.error("Fetch jurusan error:", error);
     }
-  }, [currentPage, itemsPerPage, toast]);
+  }, []);
 
-  const fetchSiswa = useCallback(async () => {
-    setIsFetching(true);
-    try {
-      let countQuery = supabase.from("siswa").select("*", { count: "exact", head: true });
-      if (filterKelas !== "all") {
-        if (filterKelas === "unassigned") countQuery = countQuery.is("id_kelas", null);
-        else countQuery = countQuery.eq("id_kelas", parseInt(filterKelas));
-      }
-      const { count: totalCount, error: countError } = await countQuery;
-      if (countError) throw countError;
-      setTotalData(totalCount || 0);
-
-      let siswaQuery = supabase
-        .from("siswa")
-        .select("id_siswa, nama, nis, gender, aktif, id_kelas")
-        .order("nama", { ascending: true })
-        .range((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage - 1);
-
-      if (filterKelas !== "all") {
-        if (filterKelas === "unassigned") siswaQuery = siswaQuery.is("id_kelas", null);
-        else siswaQuery = siswaQuery.eq("id_kelas", parseInt(filterKelas));
-      }
-      const { data: siswaData, error: siswaError } = await siswaQuery;
-      if (siswaError) throw siswaError;
-
-      const siswaIds = siswaData?.map(s => s.id_siswa) || [];
-      const { data: akunData, error: akunError } = await supabase
-        .from("akun")
-        .select("id_siswa, username")
-        .in("id_siswa", siswaIds);
-      if (akunError) throw akunError;
-
-      const usernameMap = new Map<number, string>();
-      akunData?.forEach(akun => usernameMap.set(akun.id_siswa, akun.username));
-
-      const kelasIds = siswaData?.map(s => s.id_kelas).filter(Boolean) as number[];
-      const kelasMap = new Map<number, string>();
-      if (kelasIds.length > 0) {
-        const { data: kelasData, error: kelasError } = await supabase
-          .from("kelas")
-          .select("id_kelas, nama")
-          .in("id_kelas", kelasIds);
-        if (!kelasError && kelasData) {
-          kelasData.forEach(k => kelasMap.set(k.id_kelas, k.nama));
-        }
-      }
-
-      const combined: SiswaData[] = (siswaData || []).map(siswa => ({
-        id_siswa: siswa.id_siswa,
-        nama: siswa.nama,
-        nis: siswa.nis?.toString() || "",
-        username: usernameMap.get(siswa.id_siswa) || "",
-        gender: siswa.gender,
-        aktif: siswa.aktif,
-        id_kelas: siswa.id_kelas,
-        nama_kelas: siswa.id_kelas ? kelasMap.get(siswa.id_kelas) || null : null,
-      }));
-      setSiswaList(combined);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Gagal mengambil data siswa";
-      toast({ title: "Kesalahan", description: message, variant: "destructive" });
-    } finally {
-      setIsFetching(false);
-    }
-  }, [currentPage, itemsPerPage, filterKelas, toast]);
-
+  // ========== DEPENDENCY EFFECTS ==========
   useEffect(() => {
     fetchGuruOptions();
     fetchKelas();
-  }, [fetchGuruOptions, fetchKelas]);
+    fetchJurusan();
+  }, [fetchGuruOptions, fetchKelas, fetchJurusan]);
 
   useEffect(() => {
-    if (activeTab === "list") {
-      if (userType === "guru") fetchGuru();
-      else fetchSiswa();
-    }
-  }, [activeTab, userType, currentPage, itemsPerPage, filterKelas, fetchGuru, fetchSiswa]);
+    fetchData();
+  }, [fetchData]);
 
   useEffect(() => {
     resetPagination();
   }, [searchQuery, filterKelas, userType, itemsPerPage]);
+
+  // ========== UTILITIES ==========
+  const filteredUserList = userList.filter(user => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return user.nama.toLowerCase().includes(q) || user.username.toLowerCase().includes(q);
+  });
+
+  const totalPages = Math.ceil(totalData / itemsPerPage);
+  const paginatedUserList = filteredUserList.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   const resetFilters = () => {
     setSearchQuery("");
@@ -528,63 +538,20 @@ export default function UserManagement() {
     setCurrentPage(1);
   };
 
-  // ========== IMPORT FUNCTIONS ==========
-  const downloadTemplate = (type: "guru" | "siswa") => {
-    let headers: string[];
-    let data: (string | number)[][];
-    if (type === "guru") {
-      headers = ["nama", "nik", "username", "gender", "password"];
-      data = [
-        ["Ahmad Santoso", "198512342021011001", "ahmad.santoso@school.com", "L", "password123"],
-        ["Siti Aminah", "198709152021012002", "siti.aminah@school.com", "P", "password123"],
-      ];
-    } else {
-      headers = ["nama", "nis", "username", "gender", "kelas", "password"];
-      data = [
-        ["Budi Raharjo", "1234567890", "budi.raharjo@student.com", "L", "XII RPL 1", "password123"],
-        ["Anisa Fitri", "1234567891", "anisa.fitri@student.com", "P", "XII RPL 2", "password123"],
-      ];
-    }
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, `Template_${type}`);
-    XLSX.writeFile(wb, `template_import_${type}.xlsx`);
-  };
-
-  const handleUserFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setUploadError(null);
-    setIsLoading(true);
-    setImportStep("upload");
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const workbook = XLSX.read(arrayBuffer);
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet) as ExcelRow[];
-      if (jsonData.length === 0) throw new Error("File kosong");
-      
-      let requiredColumns: string[];
-      if (userType === "guru") requiredColumns = ["nama", "nik", "username", "gender"];
-      else requiredColumns = ["nama", "nis", "username", "gender", "kelas"];
-      
-      const firstRow = jsonData[0];
-      const missingColumns = requiredColumns.filter(col => !(col in firstRow));
-      if (missingColumns.length) throw new Error(`Kolom tidak ditemukan: ${missingColumns.join(", ")}`);
-      
-      setImportRawData(jsonData);
-      setPreviewData(jsonData);
-      setImportStep("preview");
-      setImportDialogOpen(true);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Upload gagal";
-      setUploadError(message);
-      setPreviewData([]);
-      toast({ title: "Upload Gagal", description: message, variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-      event.target.value = "";
-    }
+  // ========== CRUD UNIFIED ==========
+  const openAddDialog = () => {
+    setAddForm({
+      nama: "",
+      username: "",
+      password: "",
+      gender: "",
+      nik: "",
+      nis: "",
+      kelas_id: "",
+      peran: userType,
+      id_jurusan: "",
+    });
+    setAddDialogOpen(true);
   };
 
   const getNextId = async (table: "guru" | "siswa"): Promise<number> => {
@@ -600,367 +567,192 @@ export default function UserManagement() {
     return currentMax + 1;
   };
 
-  // PERBAIKAN: gunakan any[] untuk memutus rekursi tipe dan cast supabase query ke any
-  const checkExistingData = async (type: "guru" | "siswa", data: any[]) => {
-    const usernames = data.map(item => item.username as string).filter(Boolean);
-    const nikNisValues = data.map(item => type === "guru" ? item.nik as string : item.nis as string).filter(Boolean);
-    
-    const { data: existingAccounts } = await supabase
-      .from("akun")
-      .select("username")
-      .in("username", usernames);
-    const existingusernames = existingAccounts?.map(acc => acc.username) || [];
-    
-    const field = type === "guru" ? "nik" : "nis";
-    // Cast query builder ke any untuk menghindari deep type instantiation
-    const { data: existingRecords } = await (supabase.from(type) as any)
-      .select(field)
-      .in(field, nikNisValues);
-    
-    const existingnikNis = (existingRecords as any[])?.map((record: any) => record[field]) || [];
-    
-    return { existingusernames, existingnikNis };
-  };
-
-  const getKelasIdFromName = async (namaKelas: string): Promise<number | null> => {
-    const { data, error } = await supabase
-      .from("kelas")
-      .select("id_kelas")
-      .eq("nama", namaKelas)
-      .maybeSingle();
-    if (error) throw error;
-    return data?.id_kelas || null;
-  };
-
-  const importGuru = async (data: GuruImportData[]) => {
-    const { existingusernames, existingnikNis } = await checkExistingData("guru", data);
-    const filteredData = data.filter(item =>
-      !existingusernames.includes(item.username) &&
-      !existingnikNis.includes(item.nik)
-    );
-    const skippedCount = data.length - filteredData.length;
-    if (!filteredData.length) {
-      throw new Error(`Semua data sudah ada (${skippedCount} duplikat)`);
-    }
-    const nextId = await getNextId("guru");
-    const guruRecords = filteredData.map((item, idx) => ({
-      id_guru: nextId + idx,
-      nama: item.nama,
-      nik: parseInt(item.nik),
-      gender: item.gender.toUpperCase(),
-      aktif: true,
-      dibuat_pada: new Date().toISOString(),
-    }));
-    const { data: insertedGuru, error: guruError } = await supabase.from("guru").insert(guruRecords).select();
-    if (guruError) throw new Error(`Gagal menyimpan data guru: ${guruError.message}`);
-    const akunRecords: {
-      nama: string;
-      username: string;
-      peran: string;
-      aktif: boolean;
-      dibuat_pada: string;
-      id_guru: number;
-      id_siswa: null;
-      kata_sandi: string;
-    }[] = [];
-    for (let i = 0; i < filteredData.length; i++) {
-      const item = filteredData[i];
-      const plainPassword = item.password || "password123";
-      const hashedPassword = await bcrypt.hash(plainPassword, 10);
-      akunRecords.push({
-        nama: item.nama,
-        username: item.username,
-        peran: "guru",
-        aktif: true,
-        dibuat_pada: new Date().toISOString(),
-        id_guru: nextId + i,
-        id_siswa: null,
-        kata_sandi: hashedPassword,
-      });
-    }
-    const { error: akunError } = await supabase.from("akun").insert(akunRecords);
-    if (akunError) {
-      await supabase.from("guru").delete().in("id_guru", insertedGuru?.map(g => g.id_guru) || []);
-      throw new Error(`Gagal menyimpan data akun: ${akunError.message}`);
-    }
-    return { success: filteredData.length, skipped: skippedCount };
-  };
-
-  const importSiswa = async (data: SiswaImportData[]) => {
-    const kelasNames = [...new Set(data.map(item => item.kelas).filter(Boolean))];
-    const kelasMap = new Map<string, number>();
-    for (const nama of kelasNames) {
-      const id = await getKelasIdFromName(nama);
-      if (!id) throw new Error(`Kelas "${nama}" tidak ditemukan.`);
-      kelasMap.set(nama, id);
-    }
-    const { existingusernames, existingnikNis } = await checkExistingData("siswa", data);
-    const filteredData = data.filter(item =>
-      !existingusernames.includes(item.username) &&
-      !existingnikNis.includes(item.nis)
-    );
-    const skippedCount = data.length - filteredData.length;
-    if (!filteredData.length) throw new Error(`Semua data sudah ada (${skippedCount} duplikat)`);
-    const nextId = await getNextId("siswa");
-    const siswaRecords = filteredData.map((item, idx) => ({
-      id_siswa: nextId + idx,
-      nama: item.nama,
-      nis: parseInt(item.nis),
-      gender: item.gender.toUpperCase(),
-      aktif: true,
-      dibuat_pada: new Date().toISOString(),
-      id_kelas: kelasMap.get(item.kelas) || null,
-    }));
-    const { data: insertedSiswa, error: siswaError } = await supabase.from("siswa").insert(siswaRecords).select();
-    if (siswaError) throw new Error(`Gagal menyimpan data siswa: ${siswaError.message}`);
-    const akunRecords: {
-      nama: string;
-      username: string;
-      peran: string;
-      aktif: boolean;
-      dibuat_pada: string;
-      id_guru: null;
-      id_siswa: number;
-      kata_sandi: string;
-    }[] = [];
-    for (let i = 0; i < filteredData.length; i++) {
-      const item = filteredData[i];
-      const plainPassword = item.password || "password123";
-      const hashedPassword = await bcrypt.hash(plainPassword, 10);
-      akunRecords.push({
-        nama: item.nama,
-        username: item.username,
-        peran: "siswa",
-        aktif: true,
-        dibuat_pada: new Date().toISOString(),
-        id_guru: null,
-        id_siswa: nextId + i,
-        kata_sandi: hashedPassword,
-      });
-    }
-    const { error: akunError } = await supabase.from("akun").insert(akunRecords);
-    if (akunError) {
-      await supabase.from("siswa").delete().in("id_siswa", insertedSiswa?.map(s => s.id_siswa) || []);
-      throw new Error(`Gagal menyimpan data akun: ${akunError.message}`);
-    }
-    return { success: filteredData.length, skipped: skippedCount };
-  };
-
-  const handleImport = async () => {
-    if (!previewData.length) {
-      toast({ title: "Kesalahan", description: "Tidak ada data untuk diimpor", variant: "destructive" });
-      return;
-    }
-    setIsLoading(true);
-    try {
-      let result: { success: number; skipped: number };
-      if (userType === "guru") {
-        result = await importGuru(previewData as unknown as GuruImportData[]);
-      } else {
-        result = await importSiswa(previewData as unknown as SiswaImportData[]);
-      }
-      if (result.success > 0) {
-        toast({ title: "Impor Berhasil", description: `${result.success} data berhasil diimpor, ${result.skipped} duplikat dilewati.` });
-        setImportDialogOpen(false);
-        setPreviewData([]);
-        setImportRawData([]);
-        setImportStep("upload");
-        resetPagination();
-        if (userType === "guru") fetchGuru(); else fetchSiswa();
-      } else {
-        toast({ title: "Tidak Ada Data Baru", description: "Semua data sudah ada dalam sistem.", variant: "destructive" });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Impor gagal";
-      toast({ title: "Impor Gagal", description: message, variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ========== TAMBAH MANUAL ==========
-  const openAddDialog = () => {
-    setAddForm({
-      nama: "",
-      username: "",
-      gender: "",
-      nik: "",
-      nis: "",
-      kelas_id: "",
-      password: "",
-    });
-    setAddDialogOpen(true);
-  };
-
   const handleAddUser = async () => {
-    if (!addForm.nama.trim()) {
-      toast({ title: "Error", description: "Nama tidak boleh kosong", variant: "destructive" });
+    if (!addForm.nama.trim() || !addForm.username.trim()) {
+      toast({ title: "Error", description: "Nama dan Username harus diisi", variant: "destructive" });
       return;
     }
-    if (!addForm.username.trim()) {
-      toast({ title: "Error", description: "Nama Pengguna tidak boleh kosong", variant: "destructive" });
+    if (addForm.peran === "guru" && !addForm.nik.trim()) {
+      toast({ title: "Error", description: "NIK harus diisi untuk guru", variant: "destructive" });
       return;
     }
-    if (!addForm.gender) {
-      toast({ title: "Error", description: "Jenis Kelamin harus dipilih", variant: "destructive" });
+    if (addForm.peran === "siswa" && !addForm.nis.trim()) {
+      toast({ title: "Error", description: "NIS harus diisi untuk siswa", variant: "destructive" });
       return;
     }
-    if (userType === "guru") {
-      if (!addForm.nik.trim()) {
-        toast({ title: "Error", description: "NIK tidak boleh kosong", variant: "destructive" });
-        return;
-      }
-    } else {
-      if (!addForm.nis.trim()) {
-        toast({ title: "Error", description: "NIS tidak boleh kosong", variant: "destructive" });
-        return;
-      }
+    if (addForm.peran === "admin_jurusan" && !addForm.id_jurusan) {
+      toast({ title: "Error", description: "Pilih jurusan untuk admin jurusan", variant: "destructive" });
+      return;
+    }
+    if (addForm.peran !== "bk" && !addForm.gender) {
+      toast({ title: "Error", description: "Jenis kelamin harus dipilih", variant: "destructive" });
+      return;
     }
 
     setIsLoading(true);
     try {
-      const { data: existingusername } = await supabase
+      // Check username unique
+      const { data: existingUsername } = await supabase
         .from("akun")
         .select("username")
         .eq("username", addForm.username)
         .maybeSingle();
-      if (existingusername) {
-        throw new Error("Nama Pengguna sudah digunakan.");
-      }
+      if (existingUsername) throw new Error("Username sudah digunakan");
 
-      if (userType === "guru") {
-        const { data: existingnik } = await supabase
+      const hashedPassword = await bcrypt.hash(addForm.password || "password123", 10);
+      const now = new Date().toISOString();
+
+      if (addForm.peran === "guru") {
+        const { data: existingNik } = await supabase
           .from("guru")
           .select("nik")
           .eq("nik", parseInt(addForm.nik))
           .maybeSingle();
-        if (existingnik) throw new Error("NIK sudah digunakan.");
-
+        if (existingNik) throw new Error("NIK sudah digunakan");
         const nextId = await getNextId("guru");
-        const { error: guruError } = await supabase.from("guru").insert({
+        await supabase.from("guru").insert({
           id_guru: nextId,
           nama: addForm.nama,
           nik: parseInt(addForm.nik),
           gender: addForm.gender.toUpperCase(),
           aktif: true,
-          dibuat_pada: new Date().toISOString(),
+          dibuat_pada: now,
         });
-        if (guruError) throw guruError;
-
-        const hashedPassword = await bcrypt.hash(addForm.password || "password123", 10);
-        const { error: akunError } = await supabase.from("akun").insert({
+        await supabase.from("akun").insert({
           nama: addForm.nama,
           username: addForm.username,
           peran: "guru",
           aktif: true,
-          dibuat_pada: new Date().toISOString(),
+          dibuat_pada: now,
           id_guru: nextId,
           id_siswa: null,
           kata_sandi: hashedPassword,
         });
-        if (akunError) {
-          await supabase.from("guru").delete().eq("id_guru", nextId);
-          throw akunError;
-        }
-        toast({ title: "Berhasil", description: "Guru baru ditambahkan." });
-        fetchGuru();
-      } else {
+      } else if (addForm.peran === "siswa") {
         const { data: existingNis } = await supabase
           .from("siswa")
           .select("nis")
           .eq("nis", parseInt(addForm.nis))
           .maybeSingle();
-        if (existingNis) throw new Error("NIS sudah digunakan.");
-
+        if (existingNis) throw new Error("NIS sudah digunakan");
         let kelasId: number | null = null;
         if (addForm.kelas_id && addForm.kelas_id !== "none") {
           kelasId = parseInt(addForm.kelas_id);
         }
-
         const nextId = await getNextId("siswa");
-        const { error: siswaError } = await supabase.from("siswa").insert({
+        await supabase.from("siswa").insert({
           id_siswa: nextId,
           nama: addForm.nama,
           nis: parseInt(addForm.nis),
           gender: addForm.gender.toUpperCase(),
           aktif: true,
-          dibuat_pada: new Date().toISOString(),
+          dibuat_pada: now,
           id_kelas: kelasId,
         });
-        if (siswaError) throw siswaError;
-
-        const hashedPassword = await bcrypt.hash(addForm.password || "password123", 10);
-        const { error: akunError } = await supabase.from("akun").insert({
+        await supabase.from("akun").insert({
           nama: addForm.nama,
           username: addForm.username,
           peran: "siswa",
           aktif: true,
-          dibuat_pada: new Date().toISOString(),
+          dibuat_pada: now,
           id_guru: null,
           id_siswa: nextId,
           kata_sandi: hashedPassword,
         });
-        if (akunError) {
-          await supabase.from("siswa").delete().eq("id_siswa", nextId);
-          throw akunError;
-        }
-        toast({ title: "Berhasil", description: "Siswa baru ditambahkan." });
-        fetchSiswa();
+      } else if (addForm.peran === "admin_jurusan") {
+        await supabase.from("akun").insert({
+          nama: addForm.nama,
+          username: addForm.username,
+          peran: "admin_jurusan",
+          aktif: true,
+          dibuat_pada: now,
+          id_guru: null,
+          id_siswa: null,
+          id_jurusan: parseInt(addForm.id_jurusan),
+          kata_sandi: hashedPassword,
+        });
+      } else if (addForm.peran === "bk") {
+        await supabase.from("akun").insert({
+          nama: addForm.nama,
+          username: addForm.username,
+          peran: "bk",
+          aktif: true,
+          dibuat_pada: now,
+          id_guru: null,
+          id_siswa: null,
+          id_jurusan: null,
+          kata_sandi: hashedPassword,
+        });
       }
+      toast({ title: "Berhasil", description: "Pengguna berhasil ditambahkan" });
       setAddDialogOpen(false);
-      resetPagination();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Gagal menambahkan";
-      toast({ title: "Gagal", description: message, variant: "destructive" });
+      fetchData();
+    } catch (error: any) {
+      toast({ title: "Gagal", description: error.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ========== UPDATE USER ==========
-  const checkDuplicateusername = async (username: string, excludeId?: { type: 'guru' | 'siswa', id: number }): Promise<boolean> => {
-    let query = supabase.from('akun').select('username').eq('username', username);
-    if (excludeId) {
-      if (excludeId.type === 'guru') query = query.not('id_guru', 'eq', excludeId.id);
-      else query = query.not('id_siswa', 'eq', excludeId.id);
+  const openEditDialog = (userItem: UserItem) => {
+    setEditingUser(userItem);
+    if (userItem.peran === "guru") {
+      const guru = userItem as GuruData;
+      setEditForm({
+        nama: guru.nama,
+        username: guru.username,
+        password: "",
+        gender: guru.gender,
+        nik: guru.nik,
+        nis: "",
+        kelas_id: "",
+        peran: "guru",
+        id_jurusan: "",
+        aktif: guru.aktif,
+      });
+    } else if (userItem.peran === "siswa") {
+      const siswa = userItem as SiswaData;
+      setEditForm({
+        nama: siswa.nama,
+        username: siswa.username,
+        password: "",
+        gender: siswa.gender,
+        nik: "",
+        nis: siswa.nis,
+        kelas_id: siswa.id_kelas?.toString() || "",
+        peran: "siswa",
+        id_jurusan: "",
+        aktif: siswa.aktif,
+      });
+    } else if (userItem.peran === "admin_jurusan") {
+      const adminJur = userItem as AdminJurusanData;
+      setEditForm({
+        nama: adminJur.nama,
+        username: adminJur.username,
+        password: "",
+        gender: "",
+        nik: "",
+        nis: "",
+        kelas_id: "",
+        peran: "admin_jurusan",
+        id_jurusan: adminJur.id_jurusan?.toString() || "",
+        aktif: adminJur.aktif,
+      });
+    } else if (userItem.peran === "bk") {
+      const bk = userItem as BKData;
+      setEditForm({
+        nama: bk.nama,
+        username: bk.username,
+        password: "",
+        gender: "",
+        nik: "",
+        nis: "",
+        kelas_id: "",
+        peran: "bk",
+        id_jurusan: "",
+        aktif: bk.aktif,
+      });
     }
-    const { data, error } = await query;
-    if (error) throw error;
-    return (data && data.length > 0);
-  };
-
-  const checkDuplicatenik = async (nik: string, excludeGuruId?: number): Promise<boolean> => {
-    const numericnik = parseInt(nik);
-    if (isNaN(numericnik)) return false;
-    let query = supabase.from('guru').select('nik').eq('nik', numericnik);
-    if (excludeGuruId) query = query.not('id_guru', 'eq', excludeGuruId);
-    const { data, error } = await query;
-    if (error) throw error;
-    return (data && data.length > 0);
-  };
-
-  const checkDuplicateNis = async (nis: string, excludeSiswaId?: number): Promise<boolean> => {
-    const numericNis = parseInt(nis);
-    if (isNaN(numericNis)) return false;
-    let query = supabase.from('siswa').select('nis').eq('nis', numericNis);
-    if (excludeSiswaId) query = query.not('id_siswa', 'eq', excludeSiswaId);
-    const { data, error } = await query;
-    if (error) throw error;
-    return (data && data.length > 0);
-  };
-
-  const openEditDialog = (user: GuruData | SiswaData) => {
-    setEditingUser(user);
-    setEditForm({
-      nama: user.nama,
-      username: user.username,
-      gender: user.gender,
-      nik: 'nik' in user ? user.nik : "",
-      nis: 'nis' in user ? user.nis : "",
-      kelas_id: 'id_kelas' in user ? (user.id_kelas?.toString() || "") : "",
-      password: "",
-      aktif: user.aktif,
-    });
     setEditDialogOpen(true);
   };
 
@@ -968,111 +760,94 @@ export default function UserManagement() {
     if (!editingUser) return;
     setIsLoading(true);
     try {
-      const isGuru = userType === "guru";
-      const userId = isGuru ? (editingUser as GuruData).id_guru : (editingUser as SiswaData).id_siswa;
-
-      const isusernameExist = await checkDuplicateusername(editForm.username, { type: userType, id: userId });
-      if (isusernameExist) {
-        toast({ title: "Error", description: "Nama Pengguna sudah digunakan oleh pengguna lain.", variant: "destructive" });
-        return;
+      // Check username uniqueness
+      let query = supabase.from("akun").select("id_akun").eq("username", editForm.username);
+      if (editingUser.peran === "guru") query = query.neq("id_guru", editingUser.id as number);
+      else if (editingUser.peran === "siswa") query = query.neq("id_siswa", editingUser.id as number);
+      else query = query.neq("id_akun", editingUser.id as string);
+      const { data: existingUsername } = await query;
+      if (existingUsername && existingUsername.length) {
+        throw new Error("Username sudah digunakan oleh pengguna lain");
       }
 
-      if (isGuru) {
+      const updateData: any = { nama: editForm.nama, username: editForm.username, aktif: editForm.aktif };
+      if (editForm.password.trim()) updateData.kata_sandi = await bcrypt.hash(editForm.password, 10);
+
+      if (editingUser.peran === "guru") {
         const guruUser = editingUser as GuruData;
         if (editForm.nik && editForm.nik !== guruUser.nik) {
-          const isnikExist = await checkDuplicatenik(editForm.nik, userId);
-          if (isnikExist) {
-            toast({ title: "Kesalahan", description: "NIK sudah digunakan oleh guru lain.", variant: "destructive" });
-            return;
-          }
+          const { data: existingNik } = await supabase
+            .from("guru")
+            .select("nik")
+            .eq("nik", parseInt(editForm.nik))
+            .neq("id_guru", guruUser.id)
+            .maybeSingle();
+          if (existingNik) throw new Error("NIK sudah digunakan oleh guru lain");
+          await supabase.from("guru").update({ nik: parseInt(editForm.nik) }).eq("id_guru", guruUser.id);
         }
-      } else {
+        await supabase.from("guru").update({ nama: editForm.nama, gender: editForm.gender.toUpperCase(), aktif: editForm.aktif }).eq("id_guru", guruUser.id);
+        await supabase.from("akun").update(updateData).eq("id_guru", guruUser.id);
+      } else if (editingUser.peran === "siswa") {
         const siswaUser = editingUser as SiswaData;
         if (editForm.nis && editForm.nis !== siswaUser.nis) {
-          const isNisExist = await checkDuplicateNis(editForm.nis, userId);
-          if (isNisExist) {
-            toast({ title: "Kesalahan", description: "NIS sudah digunakan oleh siswa lain.", variant: "destructive" });
-            return;
-          }
+          const { data: existingNis } = await supabase
+            .from("siswa")
+            .select("nis")
+            .eq("nis", parseInt(editForm.nis))
+            .neq("id_siswa", siswaUser.id)
+            .maybeSingle();
+          if (existingNis) throw new Error("NIS sudah digunakan oleh siswa lain");
+          await supabase.from("siswa").update({ nis: parseInt(editForm.nis) }).eq("id_siswa", siswaUser.id);
         }
-      }
-
-      const tableName = isGuru ? "guru" : "siswa";
-      const idField = isGuru ? "id_guru" : "id_siswa";
-
-      if (isGuru) {
-        const updateData: GuruUpdateData = {
+        let kelasId = null;
+        if (editForm.kelas_id && editForm.kelas_id !== "none") kelasId = parseInt(editForm.kelas_id);
+        await supabase.from("siswa").update({
           nama: editForm.nama,
           gender: editForm.gender.toUpperCase(),
           aktif: editForm.aktif,
-        };
-        if (editForm.nik && editForm.nik !== (editingUser as GuruData).nik) {
-          updateData.nik = parseInt(editForm.nik);
+          id_kelas: kelasId,
+        }).eq("id_siswa", siswaUser.id);
+        await supabase.from("akun").update(updateData).eq("id_siswa", siswaUser.id);
+      } else if (editingUser.peran === "admin_jurusan") {
+        if (editForm.peran !== "admin_jurusan") {
+          // Change role
+          await supabase.from("akun").update({ ...updateData, peran: editForm.peran, id_jurusan: null }).eq("id_akun", editingUser.id);
+        } else {
+          const data: any = { ...updateData, peran: "admin_jurusan" };
+          if (editForm.id_jurusan) data.id_jurusan = parseInt(editForm.id_jurusan);
+          else data.id_jurusan = null;
+          await supabase.from("akun").update(data).eq("id_akun", editingUser.id);
         }
-        const { error: updateError } = await supabase
-          .from("guru")
-          .update(updateData)
-          .eq("id_guru", userId);
-        if (updateError) throw updateError;
-      } else {
-        const updateData: SiswaUpdateData = {
-          nama: editForm.nama,
-          gender: editForm.gender.toUpperCase(),
-          aktif: editForm.aktif,
-        };
-        if (editForm.nis && editForm.nis !== (editingUser as SiswaData).nis) {
-          updateData.nis = parseInt(editForm.nis);
+      } else if (editingUser.peran === "bk") {
+        if (editForm.peran !== "bk") {
+          await supabase.from("akun").update({ ...updateData, peran: editForm.peran, id_jurusan: null }).eq("id_akun", editingUser.id);
+        } else {
+          await supabase.from("akun").update({ ...updateData, peran: "bk", id_jurusan: null }).eq("id_akun", editingUser.id);
         }
-        if (editForm.kelas_id && editForm.kelas_id !== "none") {
-          updateData.id_kelas = parseInt(editForm.kelas_id);
-        } else if (editForm.kelas_id === "none") {
-          updateData.id_kelas = null;
-        }
-        const { error: updateError } = await supabase
-          .from("siswa")
-          .update(updateData)
-          .eq("id_siswa", userId);
-        if (updateError) throw updateError;
       }
-      
-      const akunUpdate: { nama: string; username: string; aktif: boolean; kata_sandi?: string } = { 
-        nama: editForm.nama, 
-        username: editForm.username,
-        aktif: editForm.aktif,
-      };
-      if (editForm.password.trim()) {
-        akunUpdate.kata_sandi = await bcrypt.hash(editForm.password, 10);
-      }
-      
-      const { error: akunError } = await supabase
-        .from("akun")
-        .update(akunUpdate)
-        .eq(isGuru ? "id_guru" : "id_siswa", userId);
-      if (akunError) throw akunError;
-      
       toast({ title: "Berhasil", description: "Data pengguna berhasil diperbarui" });
       setEditDialogOpen(false);
-      resetPagination();
-      if (isGuru) fetchGuru(); else fetchSiswa();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Terjadi kesalahan";
-      toast({ title: "Kesalahan", description: message, variant: "destructive" });
+      fetchData();
+    } catch (error: any) {
+      toast({ title: "Kesalahan", description: error.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ========== NONAKTIFKAN / AKTIFKAN ==========
-  const checkUserRelatedData = async (type: "guru" | "siswa", id: number): Promise<string[]> => {
+  // ========== DEACTIVATE / ACTIVATE ==========
+  const checkUserRelatedData = async (userItem: UserItem): Promise<string[]> => {
     const related: string[] = [];
-    if (type === "guru") {
+    if (userItem.peran === "guru") {
+      const id = userItem.id as number;
       const { data: jadwalData } = await supabase.from("jadwal").select("id_jadwal").eq("id_guru", id);
       if (jadwalData?.length) related.push(`📚 Memiliki ${jadwalData.length} jadwal mengajar`);
       const { data: kelasData } = await supabase.from("kelas").select("id_kelas").eq("id_guru", id);
       if (kelasData?.length) related.push(`🏫 Menjadi wali kelas untuk ${kelasData.length} kelas`);
       const { data: pklData } = await supabase.from("pkl").select("id_pkl").eq("id_guru", id);
       if (pklData?.length) related.push(`🏢 Membimbing ${pklData.length} PKL`);
-    } else {
+    } else if (userItem.peran === "siswa") {
+      const id = userItem.id as number;
       const { data: presHarian } = await supabase.from("presensi_harian").select("id_presensi_harian").eq("id_siswa", id);
       if (presHarian?.length) related.push(`📅 Memiliki ${presHarian.length} data presensi harian`);
       const { data: presMapel } = await supabase.from("presensi_siswa_mapel").select("id_pre_siswa").eq("id_siswa", id);
@@ -1081,41 +856,16 @@ export default function UserManagement() {
     return related;
   };
 
-  const executeActivateUser = async (user: GuruData | SiswaData) => {
-    const isGuru = userType === "guru";
-    const userId = isGuru ? (user as GuruData).id_guru : (user as SiswaData).id_siswa;
-    const tableName = isGuru ? "guru" : "siswa";
-    const idField = isGuru ? "id_guru" : "id_siswa";
-
-    const { error: updateError } = await (supabase.from(tableName) as any) 
-      .update({ aktif: true })
-      .eq(idField, userId);
-    if (updateError) throw updateError;
-
-    const { error: akunError } = await supabase
-      .from("akun")
-      .update({ aktif: true })
-      .eq(isGuru ? "id_guru" : "id_siswa", userId);
-    if (akunError) throw akunError;
-
-    toast({ title: "Berhasil", description: `Pengguna ${user.nama} telah diaktifkan kembali.` });
-    resetPagination();
-    if (isGuru) fetchGuru(); else fetchSiswa();
-    if (selectMode) { setSelectMode(false); setSelectedIds([]); }
-  };
-
-  const confirmDeactivate = async (user: GuruData | SiswaData) => {
-    const isGuru = userType === "guru";
-    const userId = isGuru ? (user as GuruData).id_guru : (user as SiswaData).id_siswa;
-    const constraints = await checkUserRelatedData(userType, userId);
-    setDeactivatingUser(user);
+  const confirmDeactivate = async (userItem: UserItem) => {
+    const constraints = await checkUserRelatedData(userItem);
+    setDeactivatingUser(userItem);
     setDeactivateConstraints(constraints);
     setIsActivatingMode(false);
     setDeactivateDialogOpen(true);
   };
 
-  const confirmActivate = (user: GuruData | SiswaData) => {
-    setDeactivatingUser(user);
+  const confirmActivate = (userItem: UserItem) => {
+    setDeactivatingUser(userItem);
     setDeactivateConstraints([]);
     setIsActivatingMode(true);
     setDeactivateDialogOpen(true);
@@ -1125,35 +875,25 @@ export default function UserManagement() {
     if (!deactivatingUser) return;
     setIsLoading(true);
     setDeactivateDialogOpen(false);
-    if (isActivatingMode) {
-      await executeActivateUser(deactivatingUser);
-    } else {
-      const isGuru = userType === "guru";
-      const userId = isGuru ? (deactivatingUser as GuruData).id_guru : (deactivatingUser as SiswaData).id_siswa;
-      const tableName = isGuru ? "guru" : "siswa";
-      const idField = isGuru ? "id_guru" : "id_siswa";
-      try {
-        const { error: updateError } = await (supabase.from(tableName) as any)
-          .update({ aktif: false })
-          .eq(idField, userId);
-        if (updateError) throw updateError;
-        const { error: akunError } = await supabase
-          .from("akun")
-          .update({ aktif: false })
-          .eq(isGuru ? "id_guru" : "id_siswa", userId);
-        if (akunError) throw akunError;
-        toast({ title: "Berhasil", description: `Pengguna ${deactivatingUser.nama} telah dinonaktifkan.` });
-        resetPagination();
-        if (isGuru) fetchGuru(); else fetchSiswa();
-        if (selectMode) { setSelectMode(false); setSelectedIds([]); }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Terjadi kesalahan";
-        toast({ title: "Kesalahan", description: message, variant: "destructive" });
+    try {
+      const newStatus = !deactivatingUser.aktif;
+      if (deactivatingUser.peran === "guru") {
+        await supabase.from("guru").update({ aktif: newStatus }).eq("id_guru", deactivatingUser.id as number);
+        await supabase.from("akun").update({ aktif: newStatus }).eq("id_guru", deactivatingUser.id as number);
+      } else if (deactivatingUser.peran === "siswa") {
+        await supabase.from("siswa").update({ aktif: newStatus }).eq("id_siswa", deactivatingUser.id as number);
+        await supabase.from("akun").update({ aktif: newStatus }).eq("id_siswa", deactivatingUser.id as number);
+      } else {
+        await supabase.from("akun").update({ aktif: newStatus }).eq("id_akun", deactivatingUser.id as string);
       }
+      toast({ title: "Berhasil", description: `Pengguna ${deactivatingUser.nama} telah ${newStatus ? "diaktifkan" : "dinonaktifkan"}.` });
+      fetchData();
+    } catch (error: any) {
+      toast({ title: "Kesalahan", description: error.message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+      setDeactivatingUser(null);
     }
-    setIsLoading(false);
-    setDeactivatingUser(null);
-    setDeactivateConstraints([]);
   };
 
   // ========== SELECT MASSAL ==========
@@ -1163,20 +903,15 @@ export default function UserManagement() {
   };
 
   const handleSelectAll = () => {
-    const currentIds = userType === "guru"
-      ? displayedGuruList.map(g => g.id_guru)
-      : displayedSiswaList.map(s => s.id_siswa);
-    if (selectedIds.length === currentIds.length && currentIds.length > 0) {
+    if (selectedIds.length === paginatedUserList.length && paginatedUserList.length > 0) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(currentIds);
+      setSelectedIds(paginatedUserList.map(u => u.id));
     }
   };
 
-  const handleSelectItem = (id: number) => {
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
+  const handleSelectItem = (id: string | number) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
   const handleBulkAction = async (action: "activate" | "deactivate") => {
@@ -1184,42 +919,38 @@ export default function UserManagement() {
       toast({ title: "Tidak ada data dipilih", variant: "destructive" });
       return;
     }
-
-    const isGuru = userType === "guru";
     const usersSelected = selectedIds.map(id => {
-      if (isGuru) {
-        const guru = guruList.find(g => g.id_guru === id);
-        return { id, nama: guru?.nama || `ID ${id}`, aktif: guru?.aktif ?? false };
-      } else {
-        const siswa = siswaList.find(s => s.id_siswa === id);
-        return { id, nama: siswa?.nama || `ID ${id}`, aktif: siswa?.aktif ?? false };
-      }
-    });
-
-    const cannotProcess: { id: number; nama: string; reasons: string[] }[] = [];
-    const canProcessIds: number[] = [];
-
+      const u = userList.find(u => u.id === id);
+      return { id, nama: u?.nama || `ID ${id}`, aktif: u?.aktif ?? false, peran: u?.peran };
+    }).filter(u => u.peran) as { id: string | number; nama: string; aktif: boolean; peran: string }[];
+    const cannotProcess: { id: string | number; nama: string; reasons: string[] }[] = [];
+    const canProcessIds: (string | number)[] = [];
     if (action === "deactivate") {
-      for (const user of usersSelected) {
-        if (!user.aktif) continue;
-        const reasons = await checkUserRelatedData(userType, user.id);
-        if (reasons.length > 0) {
-          cannotProcess.push({ id: user.id, nama: user.nama, reasons });
-        } else {
-          canProcessIds.push(user.id);
+      for (const u of usersSelected) {
+        if (!u.aktif) continue;
+        let reasons: string[] = [];
+        if (u.peran === "guru") {
+          const { data: jadwalData } = await supabase.from("jadwal").select("id_jadwal").eq("id_guru", u.id as number);
+          if (jadwalData?.length) reasons.push(`📚 Memiliki ${jadwalData.length} jadwal`);
+          const { data: kelasData } = await supabase.from("kelas").select("id_kelas").eq("id_guru", u.id as number);
+          if (kelasData?.length) reasons.push(`🏫 Wali kelas ${kelasData.length} kelas`);
+          const { data: pklData } = await supabase.from("pkl").select("id_pkl").eq("id_guru", u.id as number);
+          if (pklData?.length) reasons.push(`🏢 Membimbing ${pklData.length} PKL`);
+        } else if (u.peran === "siswa") {
+          const { data: presHarian } = await supabase.from("presensi_harian").select("id_presensi_harian").eq("id_siswa", u.id as number);
+          if (presHarian?.length) reasons.push(`📅 ${presHarian.length} presensi harian`);
+          const { data: presMapel } = await supabase.from("presensi_siswa_mapel").select("id_pre_siswa").eq("id_siswa", u.id as number);
+          if (presMapel?.length) reasons.push(`📖 ${presMapel.length} presensi mapel`);
         }
+        if (reasons.length) cannotProcess.push({ id: u.id, nama: u.nama, reasons });
+        else canProcessIds.push(u.id);
       }
     } else {
-      for (const user of usersSelected) {
-        if (!user.aktif) canProcessIds.push(user.id);
+      for (const u of usersSelected) {
+        if (!u.aktif) canProcessIds.push(u.id);
       }
     }
-
-    setBulkActionData({
-      users: usersSelected,
-      cannotProcess,
-      canProcessIds,
-    });
+    setBulkActionData({ users: usersSelected, cannotProcess, canProcessIds });
     setBulkActionType(action);
     setBulkActionDialogOpen(true);
   };
@@ -1227,63 +958,44 @@ export default function UserManagement() {
   const executeBulkAction = async () => {
     if (!bulkActionData) return;
     const { canProcessIds } = bulkActionData;
-    const isGuru = userType === "guru";
-    const tableName = isGuru ? "guru" : "siswa";
-    const idField = isGuru ? "id_guru" : "id_siswa";
     const newActiveStatus = bulkActionType === "activate";
-
-    setIsProcessingSelected(true);
-    setBulkActionDialogOpen(false);
-
-    let successCount = 0;
-    let failCount = 0;
-
+    let successCount = 0, failCount = 0;
     for (const id of canProcessIds) {
       try {
-        const { error: updateError } = await (supabase.from(tableName) as any)
-          .update({ aktif: newActiveStatus })
-          .eq(idField, id);
-        if (updateError) throw updateError;
-        const { error: akunError } = await (supabase.from("akun") as any)
-          .update({ aktif: newActiveStatus })
-          .eq(isGuru ? "id_guru" : "id_siswa", id);
-        if (akunError) throw akunError;
+        const targetUser = userList.find(u => u.id === id);
+        if (!targetUser) continue;
+        if (targetUser.peran === "guru") {
+          await supabase.from("guru").update({ aktif: newActiveStatus }).eq("id_guru", id as number);
+          await supabase.from("akun").update({ aktif: newActiveStatus }).eq("id_guru", id as number);
+        } else if (targetUser.peran === "siswa") {
+          await supabase.from("siswa").update({ aktif: newActiveStatus }).eq("id_siswa", id as number);
+          await supabase.from("akun").update({ aktif: newActiveStatus }).eq("id_siswa", id as number);
+        } else {
+          await supabase.from("akun").update({ aktif: newActiveStatus }).eq("id_akun", id as string);
+        }
         successCount++;
-      } catch (err) {
-        console.error(`Gagal ${bulkActionType} ID ${id}:`, err);
+      } catch {
         failCount++;
       }
     }
-
-    if (successCount > 0) {
-      toast({
-        title: "Berhasil",
-        description: `${successCount} pengguna berhasil ${bulkActionType === "activate" ? "diaktifkan" : "dinonaktifkan"}${failCount > 0 ? `, ${failCount} gagal` : ""}`,
-      });
-      resetPagination();
-      if (isGuru) fetchGuru(); else fetchSiswa();
-      setSelectMode(false);
-      setSelectedIds([]);
-    } else {
-      toast({ title: "Gagal", description: "Tidak ada perubahan.", variant: "destructive" });
-    }
-    setIsProcessingSelected(false);
-    setBulkActionData(null);
+    toast({ title: "Berhasil", description: `${successCount} pengguna berhasil ${bulkActionType === "activate" ? "diaktifkan" : "dinonaktifkan"}${failCount ? `, ${failCount} gagal` : ""}` });
+    fetchData();
+    setSelectMode(false);
+    setSelectedIds([]);
+    setBulkActionDialogOpen(false);
   };
 
-  // ========== CRUD KELAS ==========
+  // ========== KELAS MANAGEMENT (same as before) ==========
   const handleAddKelas = () => {
     setEditingKelas(null);
     setKelasForm({ nama: "", id_guru: "" });
     setKelasDialogOpen(true);
   };
-
   const handleEditKelas = (kelas: Kelas) => {
     setEditingKelas(kelas);
     setKelasForm({ nama: kelas.nama, id_guru: kelas.id_guru?.toString() || "" });
     setKelasDialogOpen(true);
   };
-
   const handleSaveKelas = async () => {
     if (!kelasForm.nama.trim()) {
       toast({ title: "Kesalahan", description: "Nama kelas tidak boleh kosong", variant: "destructive" });
@@ -1296,170 +1008,96 @@ export default function UserManagement() {
         id_guru: kelasForm.id_guru ? parseInt(kelasForm.id_guru) : null,
       };
       if (editingKelas) {
-        const { error } = await supabase
-          .from("kelas")
-          .update(data)
-          .eq("id_kelas", editingKelas.id_kelas);
-        if (error) throw error;
+        await supabase.from("kelas").update(data).eq("id_kelas", editingKelas.id_kelas);
         toast({ title: "Berhasil", description: "Kelas berhasil diperbarui" });
       } else {
-        const { error } = await supabase
-          .from("kelas")
-          .insert({
-            ...data,
-            aktif: true,
-            dibuat_pada: new Date().toISOString(),
-          });
-        if (error) throw error;
+        await supabase.from("kelas").insert({ ...data, aktif: true, dibuat_pada: new Date().toISOString() });
         toast({ title: "Berhasil", description: "Kelas baru berhasil ditambahkan" });
       }
       setKelasDialogOpen(false);
       fetchKelas();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Terjadi kesalahan";
-      toast({ title: "Kesalahan", description: message, variant: "destructive" });
+      toast({ title: "Kesalahan", description: error instanceof Error ? error.message : "Terjadi kesalahan", variant: "destructive" });
     } finally {
       setIsSavingKelas(false);
     }
   };
-
   const confirmToggleActiveKelas = (kelas: Kelas, isActivating: boolean) => {
     setTogglingKelas(kelas);
     setIsActivatingKelasMode(isActivating);
     setToggleKelasDialogOpen(true);
   };
-
   const executeToggleActiveKelas = async () => {
     if (!togglingKelas) return;
     setIsSavingKelas(true);
     setToggleKelasDialogOpen(false);
     try {
-      const newStatus = !togglingKelas.aktif;
-      const { error } = await supabase
-        .from("kelas")
-        .update({ aktif: newStatus })
-        .eq("id_kelas", togglingKelas.id_kelas);
-      if (error) throw error;
-      toast({
-        title: "Berhasil",
-        description: `Kelas ${togglingKelas.nama} telah ${newStatus ? "diaktifkan" : "dinonaktifkan"}.`
-      });
+      await supabase.from("kelas").update({ aktif: !togglingKelas.aktif }).eq("id_kelas", togglingKelas.id_kelas);
+      toast({ title: "Berhasil", description: `Kelas ${togglingKelas.nama} telah ${!togglingKelas.aktif ? "diaktifkan" : "dinonaktifkan"}.` });
       fetchKelas();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Terjadi kesalahan";
-      toast({ title: "Kesalahan", description: message, variant: "destructive" });
+      toast({ title: "Kesalahan", description: error instanceof Error ? error.message : "Terjadi kesalahan", variant: "destructive" });
     } finally {
       setIsSavingKelas(false);
       setTogglingKelas(null);
     }
   };
 
-  // ========== IMPORT KELAS ==========
+  // Import Kelas (same as before)
   const downloadKelasTemplate = () => {
     const headers = ["nama", "nik_wali", "aktif"];
-    const data = [
-      ["X IPA 1", "198512342021011001", "1"],
-      ["XI IPS 2", "198709152021012002", "1"],
-      ["XII RPL 3", "", "0"],
-    ];
+    const data = [["X IPA 1", "198512342021011001", "1"], ["XI IPS 2", "198709152021012002", "1"], ["XII RPL 3", "", "0"]];
     const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Template_Kelas");
     XLSX.writeFile(wb, "template_import_kelas.xlsx");
   };
-
-  const validateKelasImportRow = (row: ExcelRow, index: number) => {
-    const errors: string[] = [];
-    const nama = row.nama?.toString().trim();
-    if (!nama) errors.push("Nama kelas tidak boleh kosong");
-    return errors;
-  };
-
-  const processKelasPreview = async (rawData: ExcelRow[]) => {
-    const missingGurusSet = new Set<string>();
-    const previewWithValidation: {
-      nama: string | undefined;
-      nik_wali: string | null;
-      aktif: boolean;
-      rowIndex: number;
-      guruId: number | null;
-      guruValid: boolean;
-      validationErrors: string[];
-      isValid: boolean;
-    }[] = [];
-
-    for (let i = 0; i < rawData.length; i++) {
-      const row = rawData[i];
-      const validationErrors = validateKelasImportRow(row, i);
-      
-      const namaKelas = row.nama?.toString().trim();
-      const nikWali = row.nik_wali?.toString().trim();
-      
-      let guru: GuruSimple | undefined = undefined;
-      if (nikWali) {
-        guru = guruOptions.find(g => g.nik === nikWali);
-        if (!guru) {
-          missingGurusSet.add(nikWali);
-        }
-      }
-      
-      const aktif = row.aktif === undefined ? true : (row.aktif === "1" || row.aktif === true || row.aktif === "true");
-      
-      previewWithValidation.push({
-        nama: namaKelas,
-        nik_wali: nikWali || null,
-        aktif: aktif,
-        rowIndex: i + 1,
-        guruId: guru?.id_guru || null,
-        guruValid: !nikWali || !!guru,
-        validationErrors,
-        isValid: validationErrors.length === 0 && (!nikWali || !!guru),
-      });
-    }
-    
-    setImportKelasMissingGurus(missingGurusSet);
-    return previewWithValidation;
-  };
-
   const handleKelasFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     setImportKelasUploadError(null);
     setIsImportingKelas(true);
     setImportKelasStep("upload");
-    
     try {
       const arrayBuffer = await file.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(worksheet) as ExcelRow[];
       if (jsonData.length === 0) throw new Error("File kosong");
-      
       const firstRow = jsonData[0];
-      const requiredColumns = ["nama"];
-      const missingColumns = requiredColumns.filter(col => !(col in firstRow));
-      if (missingColumns.length) throw new Error(`Kolom tidak ditemukan: ${missingColumns.join(", ")}`);
-      
+      if (!("nama" in firstRow)) throw new Error("Kolom 'nama' tidak ditemukan");
       setImportKelasRawData(jsonData);
-      const preview = await processKelasPreview(jsonData);
-      setImportKelasPreviewRows(preview);
-      
-      if (preview.some(p => !p.guruValid && p.nik_wali)) {
-        setMissingGuruDialogOpen(true);
-      } else {
-        setImportKelasStep("preview");
-        setImportKelasDialogOpen(true);
+      const missingGurusSet = new Set<string>();
+      const previewWithValidation = [];
+      for (let i = 0; i < jsonData.length; i++) {
+        const row = jsonData[i];
+        const nama = row.nama?.toString().trim();
+        const nikWali = row.nik_wali?.toString().trim();
+        let guru = null;
+        if (nikWali) {
+          guru = guruOptions.find(g => g.nik === nikWali);
+          if (!guru) missingGurusSet.add(nikWali);
+        }
+        const aktif = row.aktif === undefined ? true : (row.aktif === "1" || row.aktif === true);
+        previewWithValidation.push({
+          nama, nik_wali: nikWali || null, aktif, rowIndex: i + 1,
+          guruId: guru?.id_guru || null, guruValid: !nikWali || !!guru,
+          validationErrors: !nama ? ["Nama kelas tidak boleh kosong"] : [],
+          isValid: !!nama && (!nikWali || !!guru),
+        });
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Upload gagal";
-      setImportKelasUploadError(message);
-      toast({ title: "Upload Gagal", description: message, variant: "destructive" });
+      setImportKelasMissingGurus(missingGurusSet);
+      setImportKelasPreviewRows(previewWithValidation);
+      if (previewWithValidation.some(p => !p.guruValid && p.nik_wali)) setMissingGuruDialogOpen(true);
+      else { setImportKelasStep("preview"); setImportKelasDialogOpen(true); }
+    } catch (error: any) {
+      setImportKelasUploadError(error.message);
+      toast({ title: "Upload Gagal", description: error.message, variant: "destructive" });
     } finally {
       setIsImportingKelas(false);
       event.target.value = "";
     }
   };
-
   const confirmImportKelas = async () => {
     const validRows = importKelasPreviewRows.filter(row => row.isValid);
     if (validRows.length === 0) {
@@ -1467,49 +1105,27 @@ export default function UserManagement() {
       return;
     }
     setIsImportingKelas(true);
-    let successCount = 0;
-    let failCount = 0;
+    let successCount = 0, failCount = 0;
     for (const row of validRows) {
       try {
-        const { data: existing } = await supabase
-          .from("kelas")
-          .select("id_kelas")
-          .eq("nama", row.nama)
-          .maybeSingle();
-        if (existing) {
-          failCount++;
-          continue;
-        }
-        const { error } = await supabase.from("kelas").insert({
-          nama: row.nama,
-          id_guru: row.guruId || null,
-          aktif: row.aktif,
-          dibuat_pada: new Date().toISOString(),
-        });
-        if (error) throw error;
+        const { data: existing } = await supabase.from("kelas").select("id_kelas").eq("nama", row.nama).maybeSingle();
+        if (existing) { failCount++; continue; }
+        await supabase.from("kelas").insert({ nama: row.nama, id_guru: row.guruId, aktif: row.aktif, dibuat_pada: new Date().toISOString() });
         successCount++;
-      } catch (error) {
-        failCount++;
-      }
+      } catch { failCount++; }
     }
-    if (successCount > 0) {
-      toast({ title: "Impor Selesai", description: `${successCount} kelas berhasil diimpor, ${failCount} gagal.` });
-      fetchKelas();
-    } else {
-      toast({ title: "Impor Gagal", description: "Tidak ada kelas yang berhasil diimpor.", variant: "destructive" });
-    }
+    if (successCount > 0) toast({ title: "Impor Selesai", description: `${successCount} kelas berhasil diimpor, ${failCount} gagal.` });
+    else toast({ title: "Impor Gagal", description: "Tidak ada kelas yang berhasil diimpor.", variant: "destructive" });
+    fetchKelas();
     setImportKelasDialogOpen(false);
     setImportKelasRawData([]);
     setImportKelasPreviewRows([]);
     setImportKelasStep("upload");
     setIsImportingKelas(false);
   };
-
   const handleSkipMissingGurus = () => {
     const filteredRows = importKelasPreviewRows.map(row => {
-      if (!row.guruValid && row.nik_wali) {
-        return { ...row, isValid: false, validationErrors: [...row.validationErrors, "NIK wali tidak ditemukan, baris akan dilewati"] };
-      }
+      if (!row.guruValid && row.nik_wali) return { ...row, isValid: false, validationErrors: [...row.validationErrors, "NIK wali tidak ditemukan, baris akan dilewati"] };
       return row;
     });
     setImportKelasPreviewRows(filteredRows);
@@ -1518,27 +1134,19 @@ export default function UserManagement() {
     setImportKelasDialogOpen(true);
   };
 
-  // ========== STATS ==========
-  const totalAllGuru = guruList.length;
-  const totalAllSiswa = siswaList.length;
-  const totalAllAkun = totalAllGuru + totalAllSiswa;
-
   // ========== RENDER ==========
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* HEADER SECTION */}
+      {/* HEADER */}
       <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
         <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-3 sm:gap-4">
               <div className="bg-white/20 p-2 sm:p-3 rounded-2xl backdrop-blur-sm"><Users className="h-6 w-6 sm:h-8 sm:w-8" /></div>
               <div>
-                <div className="flex items-center gap-2">
-                  {greeting === "Selamat Pagi" ? <Sun className="h-3 w-3 sm:h-4 sm:w-4" /> : greeting === "Selamat Malam" ? <Moon className="h-3 w-3 sm:h-4 sm:w-4" /> : <Cloud className="h-3 w-3 sm:h-4 sm:w-4" />}
-                  <p className="text-xs sm:text-sm text-blue-100">{greeting}</p>
-                </div>
+                <div className="flex items-center gap-2">{greeting === "Selamat Pagi" ? <Sun className="h-3 w-3 sm:h-4 sm:w-4" /> : greeting === "Selamat Malam" ? <Moon className="h-3 w-3 sm:h-4 sm:w-4" /> : <Cloud className="h-3 w-3 sm:h-4 sm:w-4" />}<p className="text-xs sm:text-sm text-blue-100">{greeting}</p></div>
                 <h1 className="text-base sm:text-2xl lg:text-3xl font-bold leading-tight">Manajemen Data Pengguna &amp; Kelas</h1>
-                <p className="text-blue-100 text-xs sm:text-sm">Impor, ubah, aktifkan/nonaktifkan data guru/siswa, serta kelola kelas</p>
+                <p className="text-blue-100 text-xs sm:text-sm">Kelola guru, siswa, admin jurusan, BK, serta kelas</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -1551,31 +1159,18 @@ export default function UserManagement() {
         </div>
       </div>
 
-      {/* MAIN CONTENT */}
       <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8">
         {/* STATS CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-            <CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-blue-600 font-medium">Total Guru</p><p className="text-lg sm:text-2xl font-bold text-blue-900">{totalAllGuru}</p></div><User className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" /></div></CardContent>
-          </Card>
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
-            <CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Total Siswa</p><p className="text-lg sm:text-2xl font-bold text-emerald-900">{totalAllSiswa}</p></div><GraduationCap className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" /></div></CardContent>
-          </Card>
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-            <CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-purple-600 font-medium">Total Kelas</p><p className="text-lg sm:text-2xl font-bold text-purple-900">{kelasList.length}</p></div><School className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" /></div></CardContent>
-          </Card>
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
-            <CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-amber-600 font-medium">Total Akun</p><p className="text-lg sm:text-2xl font-bold text-amber-900">{totalAllAkun}</p></div><UserCheck className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" /></div></CardContent>
-          </Card>
+          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100"><CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-blue-600 font-medium">Total Guru</p><p className="text-lg sm:text-2xl font-bold text-blue-900">{userList.filter(u => u.peran === "guru").length}</p></div><User className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" /></div></CardContent></Card>
+          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100"><CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Total Siswa</p><p className="text-lg sm:text-2xl font-bold text-emerald-900">{userList.filter(u => u.peran === "siswa").length}</p></div><GraduationCap className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" /></div></CardContent></Card>
+          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100"><CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-purple-600 font-medium">Total Admin Jurusan</p><p className="text-lg sm:text-2xl font-bold text-purple-900">{userList.filter(u => u.peran === "admin_jurusan").length}</p></div><Building2 className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" /></div></CardContent></Card>
+          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100"><CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-amber-600 font-medium">Total BK</p><p className="text-lg sm:text-2xl font-bold text-amber-900">{userList.filter(u => u.peran === "bk").length}</p></div><Shield className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" /></div></CardContent></Card>
         </div>
 
-        {/* MAIN TABS CARD */}
         <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
           <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-6">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="bg-white/10 p-1.5 sm:p-2 rounded-xl"><Shield className="h-5 w-5 sm:h-6 sm:w-6" /></div>
-              <div><CardTitle className="text-base sm:text-xl">Manajemen Pengguna &amp; Kelas</CardTitle><CardDescription className="text-slate-300 text-xs sm:text-sm">Kelola data guru, siswa, dan kelas dengan soft delete</CardDescription></div>
-            </div>
+            <div className="flex items-center gap-2 sm:gap-3"><div className="bg-white/10 p-1.5 sm:p-2 rounded-xl"><Shield className="h-5 w-5 sm:h-6 sm:w-6" /></div><div><CardTitle className="text-base sm:text-xl">Manajemen Pengguna &amp; Kelas</CardTitle><CardDescription className="text-slate-300 text-xs sm:text-sm">Kelola semua jenis pengguna dan kelas</CardDescription></div></div>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "list" | "kelas")} className="space-y-4 sm:space-y-6">
@@ -1590,184 +1185,94 @@ export default function UserManagement() {
               <TabsContent value="list" className="space-y-4 sm:space-y-6">
                 <div className="flex flex-col gap-4">
                   <div className="flex justify-start">
-                    <Select value={userType} onValueChange={(v) => { setUserType(v as "guru" | "siswa"); resetFilters(); }}>
-                      <SelectTrigger className="w-[140px] sm:w-[180px] rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="guru">Guru</SelectItem><SelectItem value="siswa">Siswa</SelectItem></SelectContent>
+                    <Select value={userType} onValueChange={(v) => { setUserType(v as any); resetPagination(); }}>
+                      <SelectTrigger className="w-[180px] rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="guru">Guru</SelectItem>
+                        <SelectItem value="siswa">Siswa</SelectItem>
+                        <SelectItem value="admin_jurusan">Admin Jurusan</SelectItem>
+                        <SelectItem value="bk">BK (Bimbingan Konseling)</SelectItem>
+                      </SelectContent>
                     </Select>
                   </div>
-
                   <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-2">
-                    <Button variant="default" onClick={openAddDialog} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600 w-full">
-                      <Plus className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" /> Tambah
-                    </Button>
-                    <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full">
-                      <Upload className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" /> Impor
-                    </Button>
-                    <Button variant="outline" onClick={() => { resetPagination(); userType === "guru" ? fetchGuru() : fetchSiswa(); }} disabled={isFetching} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full">
-                      <RefreshCw className={`mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5 ${isFetching ? "animate-spin" : ""}`} /> Segarkan
-                    </Button>
+                    <Button onClick={openAddDialog} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600 w-full"><Plus className="mr-1 h-3 w-3" /> Tambah</Button>
+                    <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full"><Upload className="mr-1 h-3 w-3" /> Impor</Button>
+                    <Button variant="outline" onClick={fetchData} disabled={isFetching} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full"><RefreshCw className={`mr-1 h-3 w-3 ${isFetching ? "animate-spin" : ""}`} /> Segarkan</Button>
                   </div>
-
-                  <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400" />
-                      <Input type="text" placeholder={`Cari ${userType === "guru" ? "guru" : "siswa"}...`} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 pr-8 rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full" />
-                      {searchQuery && <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2"><X className="h-3.5 w-3.5" /></button>}
-                    </div>
-                    {userType === "siswa" && (
-                      <div className="relative">
-                        <Button variant="outline" onClick={() => setShowFilter(!showFilter)} className={`rounded-xl h-8 sm:h-9 text-xs sm:text-sm gap-2 w-full sm:w-auto ${filterKelas !== "all" ? "bg-blue-50 border-blue-300 text-blue-700" : ""}`}>
-                          <Filter className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Filter Kelas
-                          {filterKelas !== "all" && <Badge className="bg-blue-500 text-white text-[10px] sm:text-xs ml-1 hidden sm:inline-block">{filterKelas === "unassigned" ? "Tanpa Kelas" : kelasList.find(k => k.id_kelas.toString() === filterKelas)?.nama || "?"}</Badge>}
-                        </Button>
-                        {showFilter && (
-                          <div className="absolute top-full mt-2 right-0 z-20 bg-white rounded-xl shadow-xl border p-3 min-w-[240px] sm:min-w-[260px]">
-                            <div className="text-xs font-medium text-slate-500 mb-2">Filter berdasarkan kelas</div>
-                            <div className="relative mb-2"><Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" /><Input placeholder="Cari kelas..." value={filterSearchQuery} onChange={(e) => setFilterSearchQuery(e.target.value)} className="pl-7 h-8 text-xs rounded-lg" onClick={(e) => e.stopPropagation()} /></div>
-                            <div className="max-h-60 overflow-y-auto space-y-1">
-                              <button onClick={() => { setFilterKelas("all"); setShowFilter(false); setFilterSearchQuery(""); resetPagination(); }} className={`w-full text-left px-3 py-2 text-xs sm:text-sm rounded-lg hover:bg-slate-50 flex justify-between items-center ${filterKelas === "all" ? "bg-blue-50 text-blue-700" : ""}`}><span>Semua Kelas</span><Badge className="bg-slate-100 text-slate-600 text-[10px]">{totalData}</Badge></button>
-                              <button onClick={() => { setFilterKelas("unassigned"); setShowFilter(false); setFilterSearchQuery(""); resetPagination(); }} className={`w-full text-left px-3 py-2 text-xs sm:text-sm rounded-lg hover:bg-slate-50 flex justify-between items-center ${filterKelas === "unassigned" ? "bg-blue-50 text-blue-700" : ""}`}><span className="text-amber-600">⚠️ Tanpa Kelas</span><Badge className="bg-amber-100 text-amber-600 text-[10px]">-</Badge></button>
-                              <div className="border-t my-1"></div>
-                              {filteredKelasOptions.map(kelas => <button key={kelas.id_kelas} onClick={() => { setFilterKelas(kelas.id_kelas.toString()); setShowFilter(false); setFilterSearchQuery(""); resetPagination(); }} className={`w-full text-left px-3 py-2 text-xs sm:text-sm rounded-lg hover:bg-slate-50 flex justify-between items-center ${filterKelas === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700" : ""}`}><span>{kelas.nama}</span><Badge className="bg-slate-100 text-slate-600 text-[10px]">-</Badge></button>)}
-                              {filteredKelasOptions.length === 0 && filterSearchQuery && <div className="text-center text-xs text-slate-400 py-2">Tidak ada kelas yang cocok</div>}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400" />
+                    <Input placeholder="Cari nama atau username..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 pr-8 rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full" />
+                    {searchQuery && <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2"><X className="h-3.5 w-3.5" /></button>}
                   </div>
-
                   <div className="flex flex-col sm:flex-row gap-2 items-center justify-between">
-                    <Button variant={selectMode ? "default" : "outline"} onClick={toggleSelectMode} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full sm:w-auto">
-                      {selectMode ? "Batalkan Mode Pilih" : "Mode Pilih"}
-                    </Button>
-                    {selectMode && (
-                      <div className="flex gap-2 w-full sm:w-auto justify-center">
-                        <Button variant="default" onClick={() => handleBulkAction("activate")} disabled={selectedIds.length === 0 || isProcessingSelected} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-initial bg-green-600 hover:bg-green-700">
-                          {isProcessingSelected ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-                          Aktifkan ({selectedIds.filter(id => { const u = userType === "guru" ? guruList.find(g => g.id_guru === id) : siswaList.find(s => s.id_siswa === id); return u && !u.aktif; }).length})
-                        </Button>
-                        <Button variant="destructive" onClick={() => handleBulkAction("deactivate")} disabled={selectedIds.length === 0 || isProcessingSelected} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-initial">
-                          {isProcessingSelected ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-                          Nonaktifkan ({selectedIds.filter(id => { const u = userType === "guru" ? guruList.find(g => g.id_guru === id) : siswaList.find(s => s.id_siswa === id); return u && u.aktif; }).length})
-                        </Button>
-                      </div>
-                    )}
+                    <Button variant={selectMode ? "default" : "outline"} onClick={toggleSelectMode} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full sm:w-auto">{selectMode ? "Batalkan Mode Pilih" : "Mode Pilih"}</Button>
+                    {selectMode && <div className="flex gap-2 w-full sm:w-auto justify-center"><Button onClick={() => handleBulkAction("activate")} disabled={selectedIds.length === 0} className="bg-green-600 hover:bg-green-700 rounded-xl text-xs">Aktifkan ({selectedIds.filter(id => !userList.find(u => u.id === id)?.aktif).length})</Button><Button variant="destructive" onClick={() => handleBulkAction("deactivate")} disabled={selectedIds.length === 0} className="rounded-xl text-xs">Nonaktifkan ({selectedIds.filter(id => userList.find(u => u.id === id)?.aktif).length})</Button></div>}
                   </div>
                 </div>
-
-                {(searchQuery || filterKelas !== "all") && (
-                  <div className="flex items-center justify-between bg-slate-50 p-2 rounded-lg">
-                    <div className="text-xs sm:text-sm">Menampilkan {totalData} data {userType}</div>
-                    <Button variant="ghost" size="sm" onClick={resetFilters} className="h-7 text-xs"><X className="h-3 w-3 mr-1" /> Reset Filter</Button>
-                  </div>
-                )}
-
-                {isFetching ? (
-                  <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>
-                ) : (
-                  <>
-                    <div className="border rounded-xl overflow-hidden shadow-sm">
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="bg-slate-50">
-                              {selectMode && <TableHead className="w-10"><Checkbox checked={selectedIds.length > 0 && selectedIds.length === (userType === "guru" ? displayedGuruList.length : displayedSiswaList.length)} onCheckedChange={handleSelectAll} /></TableHead>}
-                              <TableHead>Nama</TableHead>
-                              <TableHead>{userType === "guru" ? "NIK" : "NIS"}</TableHead>
-                              <TableHead>Nama Pengguna</TableHead>
-                              <TableHead>Jenis Kelamin</TableHead>
-                              {userType === "siswa" && <TableHead>Kelas</TableHead>}
-                              <TableHead className="text-center">Status</TableHead>
-                              <TableHead className="text-center">Aksi</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {userType === "guru" ? displayedGuruList.map(guru => (
-                              <TableRow key={guru.id_guru} className="hover:bg-slate-50">
-                                {selectMode && <TableCell><Checkbox checked={selectedIds.includes(guru.id_guru)} onCheckedChange={() => handleSelectItem(guru.id_guru)} /></TableCell>}
-                                <TableCell className="whitespace-nowrap">{guru.nama}</TableCell>
-                                <TableCell className="font-mono whitespace-nowrap">{guru.nik}</TableCell>
-                                <TableCell className="break-all min-w-[180px]">{guru.username}</TableCell>
-                                <TableCell><Badge className={guru.gender === "L" ? "bg-blue-100 text-blue-700" : "bg-pink-100 text-pink-700"}>{guru.gender === "L" ? "Laki-laki" : "Perempuan"}</Badge></TableCell>
-                                <TableCell className="text-center"><Badge className={guru.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>{guru.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell>
-                                <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditDialog(guru)}><Edit className="h-4 w-4 text-blue-500" /></Button>{guru.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmDeactivate(guru)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmActivate(guru)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell>
-                              </TableRow>
-                            )) : displayedSiswaList.map(siswa => (
-                              <TableRow key={siswa.id_siswa} className="hover:bg-slate-50">
-                                {selectMode && <TableCell><Checkbox checked={selectedIds.includes(siswa.id_siswa)} onCheckedChange={() => handleSelectItem(siswa.id_siswa)} /></TableCell>}
-                                <TableCell className="whitespace-nowrap">{siswa.nama}</TableCell>
-                                <TableCell className="font-mono whitespace-nowrap">{siswa.nis}</TableCell>
-                                <TableCell className="break-all min-w-[180px]">{siswa.username}</TableCell>
-                                <TableCell><Badge className={siswa.gender === "L" ? "bg-blue-100 text-blue-700" : "bg-pink-100 text-pink-700"}>{siswa.gender === "L" ? "Laki-laki" : "Perempuan"}</Badge></TableCell>
-                                <TableCell className="whitespace-nowrap">{siswa.nama_kelas ? <Badge variant="outline" className="bg-purple-50">{siswa.nama_kelas}</Badge> : <Badge variant="outline" className="bg-amber-50">Belum kelas</Badge>}</TableCell>
-                                <TableCell className="text-center"><Badge className={siswa.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>{siswa.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell>
-                                <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditDialog(siswa)}><Edit className="h-4 w-4 text-blue-500" /></Button>{siswa.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmDeactivate(siswa)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmActivate(siswa)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell>
-                              </TableRow>
-                            ))}
-                            {((userType === "guru" && !displayedGuruList.length) || (userType === "siswa" && !displayedSiswaList.length)) && (
-                              <TableRow><TableCell colSpan={userType === "guru" ? (selectMode ? 8 : 7) : (selectMode ? 9 : 8)} className="text-center py-8 text-slate-500"><Users className="h-8 w-8 mx-auto mb-2 text-slate-300" />Tidak ada data</TableCell></TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
-                    {totalData > 0 && (
-                      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
-                        <div className="flex items-center gap-2"><span className="text-xs sm:text-sm">Tampilkan</span><Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}><SelectTrigger className="w-[70px] h-7 sm:h-8 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="20">20</SelectItem><SelectItem value="50">50</SelectItem><SelectItem value="100">100</SelectItem></SelectContent></Select><span className="text-xs sm:text-sm">per halaman</span></div>
-                        <div className="flex gap-1"><Button variant="outline" size="sm" onClick={goToFirstPage} disabled={currentPage === 1}><ChevronsLeft className="h-3.5 w-3.5" /></Button><Button variant="outline" size="sm" onClick={goToPreviousPage} disabled={currentPage === 1}><ChevronLeft className="h-3.5 w-3.5" /></Button><div className="px-2 text-sm"><span className="font-medium">{currentPage}</span><span className="text-slate-400"> / {totalPages || 1}</span></div><Button variant="outline" size="sm" onClick={goToNextPage} disabled={currentPage === totalPages || totalPages === 0}><ChevronRight className="h-3.5 w-3.5" /></Button><Button variant="outline" size="sm" onClick={goToLastPage} disabled={currentPage === totalPages || totalPages === 0}><ChevronsRight className="h-3.5 w-3.5" /></Button></div>
-                        <div className="text-xs sm:text-sm">Menampilkan {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, totalData)} dari {totalData} data</div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </TabsContent>
-
-              {/* TAB KELOLA KELAS */}
-              <TabsContent value="kelas" className="space-y-4 sm:space-y-6">
-                <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
-                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                    <Button onClick={handleAddKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm px-3 bg-gradient-to-r from-blue-600 to-indigo-600">
-                      <Plus className="mr-1 h-3 w-3" /> Tambah Kelas
-                    </Button>
-                    <Button variant="outline" onClick={() => setImportKelasDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm px-3">
-                      <Upload className="mr-1 h-3 w-3" /> Impor Excel
-                    </Button>
-                  </div>
-                  <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                    <Input type="text" placeholder="Cari kelas (nama, wali, ID)..." value={searchKelasQuery} onChange={(e) => setSearchKelasQuery(e.target.value)} className="pl-9 pr-8 rounded-xl border-slate-200 h-8 sm:h-9 text-xs sm:text-sm w-full" />
-                    {searchKelasQuery && <button onClick={() => setSearchKelasQuery("")} className="absolute right-3 top-1/2"><X className="h-3.5 w-3.5" /></button>}
-                  </div>
-                  <Button variant="outline" onClick={fetchKelas} disabled={isFetchingKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm px-3"><RefreshCw className={`mr-1 h-3 w-3 ${isFetchingKelas ? "animate-spin" : ""}`} /> Segarkan</Button>
-                </div>
-                {searchKelasQuery && <div className="text-xs sm:text-sm text-slate-500 bg-slate-50 p-2 rounded-lg">Menampilkan {filteredKelasList.length} dari {kelasList.length} kelas</div>}
-                {isFetchingKelas ? <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div> : (
+                {isFetching ? <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div> : (
                   <div className="border rounded-xl overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-slate-50">
-                            <TableHead>Nama Kelas</TableHead>
-                            <TableHead>Wali Kelas</TableHead>
-                            <TableHead className="text-center">Status</TableHead>
-                            <TableHead>Dibuat Pada</TableHead>
+                            {selectMode && <TableHead className="w-10"><Checkbox checked={selectedIds.length === paginatedUserList.length && paginatedUserList.length > 0} onCheckedChange={handleSelectAll} /></TableHead>}
+                            <TableHead>Nama</TableHead>
+                            <TableHead>Nama Pengguna</TableHead>
+                            {userType === "guru" && <TableHead>NIK</TableHead>}
+                            {userType === "siswa" && <TableHead>NIS</TableHead>}
+                            {userType === "siswa" && <TableHead>Kelas</TableHead>}
+                            {userType === "admin_jurusan" && <TableHead>Jurusan</TableHead>}
+                            <TableHead>Status</TableHead>
                             <TableHead className="text-center">Aksi</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredKelasList.map(kelas => (
-                            <TableRow key={kelas.id_kelas} className="hover:bg-slate-50 transition-colors">
-                              <TableCell className="whitespace-nowrap font-medium">{kelas.nama}</TableCell>
-                              <TableCell><div className="flex items-center gap-2"><div className="bg-purple-100 p-1.5 rounded-lg"><User className="h-3 w-3 text-purple-600" /></div>{kelas.guru_nama || "-"}</div></TableCell>
-                              <TableCell className="text-center"><Badge className={kelas.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>{kelas.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell>
-                              <TableCell className="text-slate-500 text-sm whitespace-nowrap">{new Date(kelas.dibuat_pada).toLocaleDateString()}</TableCell>
-                              <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => handleEditKelas(kelas)} className="h-8 w-8 p-0 rounded-lg"><Edit className="h-4 w-4 text-blue-500" /></Button>{kelas.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, false)} className="h-8 w-8 p-0 rounded-lg"><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, true)} className="h-8 w-8 p-0 rounded-lg"><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell>
+                          {paginatedUserList.map(item => (
+                            <TableRow key={item.id} className="hover:bg-slate-50">
+                              {selectMode && <TableCell><Checkbox checked={selectedIds.includes(item.id)} onCheckedChange={() => handleSelectItem(item.id)} /></TableCell>}
+                              <TableCell className="whitespace-nowrap">{item.nama}</TableCell>
+                              <TableCell className="break-all min-w-[180px]">{item.username}</TableCell>
+                              {userType === "guru" && <TableCell>{(item as GuruData).nik}</TableCell>}
+                              {userType === "siswa" && <TableCell>{(item as SiswaData).nis}</TableCell>}
+                              {userType === "siswa" && <TableCell>{(item as SiswaData).nama_kelas || "-"}</TableCell>}
+                              {userType === "admin_jurusan" && <TableCell>{(item as AdminJurusanData).jurusan_nama || "-"}</TableCell>}
+                              <TableCell><Badge className={item.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>{item.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell>
+                              <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditDialog(item)}><Edit className="h-4 w-4 text-blue-500" /></Button>{item.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmDeactivate(item)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmActivate(item)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell>
                             </TableRow>
                           ))}
-                          {!filteredKelasList.length && (
-                            <TableRow><TableCell colSpan={5} className="text-center py-8 text-slate-500">{searchKelasQuery ? <><Search className="h-8 w-8 mx-auto mb-2 text-slate-300" />Tidak ada kelas yang cocok dengan "{searchKelasQuery}"</> : <><School className="h-8 w-8 mx-auto mb-2 text-slate-300" />Belum ada data kelas</>}</TableCell></TableRow>
-                          )}
+                          {paginatedUserList.length === 0 && <TableRow><TableCell colSpan={selectMode ? 8 : 7} className="text-center py-8 text-slate-500"><Users className="h-8 w-8 mx-auto mb-2 text-slate-300" />Tidak ada data</TableCell></TableRow>}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+                {totalData > 0 && (
+                  <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
+                    <div className="flex items-center gap-2"><span className="text-xs">Tampilkan</span><Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}><SelectTrigger className="w-[70px] h-7 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="20">20</SelectItem><SelectItem value="50">50</SelectItem><SelectItem value="100">100</SelectItem></SelectContent></Select><span className="text-xs">per halaman</span></div>
+                    <div className="flex gap-1"><Button variant="outline" size="sm" onClick={goToFirstPage} disabled={currentPage === 1}><ChevronsLeft className="h-3.5 w-3.5" /></Button><Button variant="outline" size="sm" onClick={goToPreviousPage} disabled={currentPage === 1}><ChevronLeft className="h-3.5 w-3.5" /></Button><div className="px-2 text-sm"><span className="font-medium">{currentPage}</span><span className="text-slate-400"> / {totalPages || 1}</span></div><Button variant="outline" size="sm" onClick={goToNextPage} disabled={currentPage === totalPages || totalPages === 0}><ChevronRight className="h-3.5 w-3.5" /></Button><Button variant="outline" size="sm" onClick={goToLastPage} disabled={currentPage === totalPages || totalPages === 0}><ChevronsRight className="h-3.5 w-3.5" /></Button></div>
+                    <div className="text-xs">Menampilkan {(currentPage-1)*itemsPerPage+1} - {Math.min(currentPage*itemsPerPage, totalData)} dari {totalData} data</div>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* TAB KELAS (sama seperti sebelumnya) */}
+              <TabsContent value="kelas" className="space-y-4 sm:space-y-6">
+                <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start"><Button onClick={handleAddKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600"><Plus className="mr-1 h-3 w-3" /> Tambah Kelas</Button><Button variant="outline" onClick={() => setImportKelasDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><Upload className="mr-1 h-3 w-3" /> Impor Excel</Button></div>
+                  <div className="relative flex-1 max-w-md"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" /><Input placeholder="Cari kelas..." value={searchKelasQuery} onChange={(e) => setSearchKelasQuery(e.target.value)} className="pl-9 pr-8 rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full" />{searchKelasQuery && <button onClick={() => setSearchKelasQuery("")} className="absolute right-3 top-1/2"><X className="h-3.5 w-3.5" /></button>}</div>
+                  <Button variant="outline" onClick={fetchKelas} disabled={isFetchingKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><RefreshCw className={`mr-1 h-3 w-3 ${isFetchingKelas ? "animate-spin" : ""}`} /> Segarkan</Button>
+                </div>
+                {isFetchingKelas ? <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div> : (
+                  <div className="border rounded-xl overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader><TableRow className="bg-slate-50"><TableHead>Nama Kelas</TableHead><TableHead>Wali Kelas</TableHead><TableHead className="text-center">Status</TableHead><TableHead className="text-center">Aksi</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                          {kelasList.filter(k => !searchKelasQuery || k.nama.toLowerCase().includes(searchKelasQuery.toLowerCase())).map(kelas => (
+                            <TableRow key={kelas.id_kelas}><TableCell className="font-medium">{kelas.nama}</TableCell><TableCell><div className="flex items-center gap-2"><div className="bg-purple-100 p-1.5 rounded-lg"><User className="h-3 w-3 text-purple-600" /></div>{kelas.guru_nama || "-"}</div></TableCell><TableCell className="text-center"><Badge className={kelas.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>{kelas.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell><TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => handleEditKelas(kelas)}><Edit className="h-4 w-4 text-blue-500" /></Button>{kelas.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, false)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, true)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell></TableRow>
+                          ))}
+                          {kelasList.filter(k => !searchKelasQuery || k.nama.toLowerCase().includes(searchKelasQuery.toLowerCase())).length === 0 && <TableRow><TableCell colSpan={4} className="text-center py-8 text-slate-500">Belum ada data kelas</TableCell></TableRow>}
                         </TableBody>
                       </Table>
                     </div>
@@ -1779,166 +1284,118 @@ export default function UserManagement() {
         </Card>
 
         {/* TIPS SECTION */}
-        <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50 max-w-3xl mx-auto">
-          <CardContent className="p-4 sm:p-5"><div className="flex items-start gap-3 sm:gap-4"><div className="bg-indigo-100 p-2 sm:p-3 rounded-xl"><Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" /></div><div><h3 className="font-semibold text-slate-800 text-sm sm:text-base mb-1">Tips Mengelola Data</h3><p className="text-xs sm:text-sm text-slate-600">Gunakan fitur impor Excel untuk menambahkan banyak data sekaligus. Pastikan format file sesuai template. Data duplikat (Nama Pengguna, NIK, NIS) akan otomatis dilewati saat impor. Data ditampilkan dengan urutan nama (A-Z). Gunakan mode Pilih untuk mengaktifkan/nonaktifkan banyak pengguna sekaligus. Kelas dapat diimpor melalui Excel dengan kolom nama, nik_wali (opsional), dan aktif (opsional).</p></div></div></CardContent>
+        <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50 max-w-3xl mx-auto">
+          <CardContent className="p-4 sm:p-5"><div className="flex gap-3"><div className="bg-indigo-100 p-2 rounded-xl"><Sparkles className="h-5 w-5 text-indigo-600" /></div><div><h3 className="font-semibold text-sm">Tips Mengelola Data</h3><p className="text-xs text-slate-600">Gunakan impor Excel untuk data massal. Untuk admin jurusan, pastikan jurusan sudah tersedia. Data duplikat akan dilewati. Gunakan mode pilih untuk mengaktifkan/nonaktifkan banyak pengguna sekaligus.</p></div></div></CardContent>
         </Card>
-
-        {/* FOOTER */}
-        <div className="text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Manajemen Pengguna &amp; Kelas - SmartAS</p><p className="text-[10px] text-slate-300 mt-1">Sistem Informasi Akademik</p></div>
+        <div className="text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Manajemen Pengguna &amp; Kelas - SmartAS</p></div>
       </div>
 
-      {/* ==================== DIALOGS ==================== */}
-      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-        <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle>Impor {userType === "guru" ? "Guru" : "Siswa"} dari Excel</DialogTitle>
-            <DialogDescription>Unggah file Excel untuk menambah data secara massal</DialogDescription>
-          </DialogHeader>
-          {importStep === "upload" && (
-            <div className="space-y-4">
-              <div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50">
-                <div className="flex flex-col items-center gap-2">
-                  <Upload className="h-8 w-8 text-slate-400" />
-                  <label htmlFor="user-file-input" className="cursor-pointer">
-                    <span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk unggah</span>
-                    <input id="user-file-input" type="file" accept=".xlsx,.xls" onChange={handleUserFileUpload} className="hidden" disabled={isLoading} />
-                  </label>
-                  <p className="text-xs text-slate-500">atau tarik & lepas file Excel di sini</p>
-                </div>
-              </div>
-              {uploadError && <Alert className="bg-red-50 border-red-200"><AlertCircle className="h-4 w-4 text-red-600" /><AlertDescription className="text-red-700">{uploadError}</AlertDescription></Alert>}
-              <Button variant="outline" onClick={() => downloadTemplate(userType)} className="w-full rounded-lg"><Download className="h-4 w-4 mr-2" /> Unduh Template Excel</Button>
-              <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
-                <p className="font-semibold">Format File:</p>
-                <p>Kolom yang diperlukan: <strong>nama, {userType === "guru" ? "nik, nama pengguna, jenis kelamin" : "nis, nama pengguna, jenis kelamin, kelas"}</strong></p>
-                {userType === "siswa" && <p className="text-xs mt-1">Pastikan nama kelas sudah ada di database.</p>}
-                <p className="text-xs mt-1">Kolom kata sandi opsional, default "password123".</p>
-              </div>
-            </div>
-          )}
-          {importStep === "preview" && previewData.length > 0 && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center"><p className="text-sm font-medium">Pratinjau Data ({previewData.length} baris)</p></div>
-              <div className="border rounded-lg overflow-x-auto max-h-96">
-                <Table>
-                  <TableHeader><TableRow className="bg-slate-50"><TableHead>Nama</TableHead><TableHead>{userType === "guru" ? "NIK" : "NIS"}</TableHead><TableHead>Nama Pengguna</TableHead><TableHead>Jenis Kelamin</TableHead>{userType === "siswa" && <TableHead>Kelas</TableHead>}</TableRow></TableHeader>
-                  <TableBody>{previewData.slice(0,20).map((item,idx)=>(<TableRow key={idx}><TableCell>{item.nama as string}</TableCell><TableCell>{userType==="guru"?item.nik as string:item.nis as string}</TableCell><TableCell>{item.username as string}</TableCell><TableCell><Badge className={(item.gender as string)==="L"?"bg-blue-100":"bg-pink-100"}>{item.gender==="L"?"Laki-laki":"Perempuan"}</Badge></TableCell>{userType==="siswa"&&<TableCell>{item.kelas as string}</TableCell>}</TableRow>))}
-                  {previewData.length>20 && <TableRow><TableCell colSpan={5} className="text-center text-slate-500">... dan {previewData.length-20} baris lainnya</TableCell></TableRow>}</TableBody>
-                </Table>
-              </div>
-              <div className="flex gap-3 justify-end"><Button variant="outline" onClick={()=>{setImportDialogOpen(false);setPreviewData([]);setImportRawData([]);setImportStep("upload");}} className="rounded-lg">Batal</Button><Button onClick={handleImport} disabled={isLoading} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Impor Data</Button></div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* DIALOG TAMBAH / EDIT SISWA dengan search di dropdown kelas */}
+      {/* DIALOGS (Add, Edit, Import, Bulk, Kelas) - similar to before, but adapted for unified types */}
+      {/* Add User Dialog */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Plus className="h-5 w-5 text-emerald-600" /> Tambah {userType === "guru" ? "Guru" : "Siswa"}</DialogTitle>
-            <DialogDescription>Isi data {userType === "guru" ? "guru" : "siswa"} baru. Kata sandi default "password123".</DialogDescription>
-          </DialogHeader>
+        <DialogContent className="rounded-2xl max-w-md">
+          <DialogHeader><DialogTitle><Plus className="h-5 w-5 inline mr-2 text-emerald-600" /> Tambah {addForm.peran === "guru" ? "Guru" : addForm.peran === "siswa" ? "Siswa" : addForm.peran === "admin_jurusan" ? "Admin Jurusan" : "BK"}</DialogTitle><DialogDescription>Isi data pengguna baru. Kata sandi default "password123".</DialogDescription></DialogHeader>
           <div className="space-y-4">
-            <div><Label>Nama Lengkap</Label><Input value={addForm.nama} onChange={e => setAddForm({...addForm, nama: e.target.value})} className="rounded-xl mt-1" placeholder="Nama lengkap" /></div>
-            <div><Label>Nama Pengguna</Label><Input type="text" value={addForm.username} onChange={e => setAddForm({...addForm, username: e.target.value})} className="rounded-xl mt-1" placeholder="contoh: ahmad.santoso" /></div>
-            <div><Label>Jenis Kelamin</Label><Select value={addForm.gender} onValueChange={v => setAddForm({...addForm, gender: v})}><SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="Pilih jenis kelamin" /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>
-            {userType === "guru" ? (
-              <div><Label>NIK</Label><Input value={addForm.nik} onChange={e => setAddForm({...addForm, nik: e.target.value})} className="rounded-xl mt-1" placeholder="Nomor Induk Pegawai" /></div>
-            ) : (
-              <>
-                <div><Label>NIS</Label><Input value={addForm.nis} onChange={e => setAddForm({...addForm, nis: e.target.value})} className="rounded-xl mt-1" placeholder="Nomor Induk Siswa" /></div>
-                <div><Label>Kelas</Label>
-                  <Select value={addForm.kelas_id} onValueChange={v => setAddForm({...addForm, kelas_id: v})}>
-                    <SelectTrigger className="rounded-xl mt-1">
-                      <SelectValue placeholder="Pilih kelas (opsional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <div className="sticky top-0 bg-white p-2 border-b">
-                        <Input
-                          placeholder="Cari kelas..."
-                          value={kelasSearchTerm}
-                          onChange={(e) => setKelasSearchTerm(e.target.value)}
-                          className="h-8 text-sm"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </div>
-                      <SelectItem value="none">Tidak ada kelas</SelectItem>
-                      {filteredKelasForSelect.map(k => (
-                        <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>
-                      ))}
-                      {filteredKelasForSelect.length === 0 && kelasSearchTerm && (
-                        <div className="px-2 py-1 text-sm text-slate-500">Tidak ada kelas yang cocok</div>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
+            <div><Label>Nama Lengkap</Label><Input value={addForm.nama} onChange={e => setAddForm({...addForm, nama: e.target.value})} className="rounded-xl" /></div>
+            <div><Label>Nama Pengguna</Label><Input value={addForm.username} onChange={e => setAddForm({...addForm, username: e.target.value})} className="rounded-xl" /></div>
+            {addForm.peran !== "bk" && (addForm.peran !== "admin_jurusan") && (
+              <div><Label>Jenis Kelamin</Label><Select value={addForm.gender} onValueChange={v => setAddForm({...addForm, gender: v})}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jenis kelamin" /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>
             )}
-            <div><Label>Kata Sandi (opsional)</Label><Input type="password" value={addForm.password} onChange={e => setAddForm({...addForm, password: e.target.value})} className="rounded-xl mt-1" placeholder="Kosongkan untuk default: password123" /></div>
+            {addForm.peran === "guru" && <div><Label>NIK</Label><Input value={addForm.nik} onChange={e => setAddForm({...addForm, nik: e.target.value})} className="rounded-xl" /></div>}
+            {addForm.peran === "siswa" && <div><Label>NIS</Label><Input value={addForm.nis} onChange={e => setAddForm({...addForm, nis: e.target.value})} className="rounded-xl" /></div>}
+            {addForm.peran === "siswa" && (
+              <div><Label>Kelas</Label>
+                <Select value={addForm.kelas_id} onValueChange={v => setAddForm({...addForm, kelas_id: v})}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih kelas (opsional)" /></SelectTrigger>
+                  <SelectContent><SelectItem value="none">Tidak ada kelas</SelectItem>{kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
+            {addForm.peran === "admin_jurusan" && (
+              <div><Label>Jurusan</Label>
+                <Select value={addForm.id_jurusan} onValueChange={v => setAddForm({...addForm, id_jurusan: v})}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger>
+                  <SelectContent>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
+            <div><Label>Kata Sandi (opsional)</Label><Input type="password" value={addForm.password} onChange={e => setAddForm({...addForm, password: e.target.value})} className="rounded-xl" placeholder="Kosongkan untuk default: password123" /></div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>Batal</Button>
-            <Button onClick={handleAddUser} disabled={isLoading} className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button>
-          </DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setAddDialogOpen(false)}>Batal</Button><Button onClick={handleAddUser} disabled={isLoading} className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG EDIT dengan search di dropdown kelas */}
+      {/* Edit User Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="rounded-2xl"><DialogHeader><DialogTitle><Edit className="h-5 w-5 inline mr-2 text-blue-600" /> Edit Pengguna</DialogTitle><DialogDescription>Ubah informasi pengguna. Kosongkan kata sandi jika tidak ingin mengubah.</DialogDescription></DialogHeader>
-          <div className="space-y-4"><div><Label>Nama</Label><Input value={editForm.nama} onChange={e => setEditForm({...editForm, nama: e.target.value})} className="rounded-xl mt-1" /></div><div><Label>Nama Pengguna</Label><Input type="text" value={editForm.username} onChange={e => setEditForm({...editForm, username: e.target.value})} className="rounded-xl mt-1" /></div>
-          {userType === "guru" && <div><Label>NIK</Label><Input value={editForm.nik} onChange={e => setEditForm({...editForm, nik: e.target.value})} className="rounded-xl mt-1" /></div>}
-          {userType === "siswa" && <div><Label>NIS</Label><Input value={editForm.nis} onChange={e => setEditForm({...editForm, nis: e.target.value})} className="rounded-xl mt-1" /></div>}
-          <div><Label>Jenis Kelamin</Label><Select value={editForm.gender} onValueChange={v => setEditForm({...editForm, gender: v})}><SelectTrigger className="rounded-xl mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>
-          {userType === "siswa" && (
-            <div><Label>Kelas</Label>
-              <Select value={editForm.kelas_id} onValueChange={v => setEditForm({...editForm, kelas_id: v})}>
-                <SelectTrigger className="rounded-xl mt-1">
-                  <SelectValue placeholder="Pilih kelas" />
-                </SelectTrigger>
+        <DialogContent className="rounded-2xl max-w-md">
+          <DialogHeader><DialogTitle><Edit className="h-5 w-5 inline mr-2 text-blue-600" /> Edit Pengguna</DialogTitle><DialogDescription>Ubah informasi pengguna. Kosongkan kata sandi jika tidak ingin mengubah.</DialogDescription></DialogHeader>
+          <div className="space-y-4">
+            <div><Label>Nama</Label><Input value={editForm.nama} onChange={e => setEditForm({...editForm, nama: e.target.value})} className="rounded-xl" /></div>
+            <div><Label>Nama Pengguna</Label><Input value={editForm.username} onChange={e => setEditForm({...editForm, username: e.target.value})} className="rounded-xl" /></div>
+            {editForm.peran !== "bk" && editForm.peran !== "admin_jurusan" && (
+              <div><Label>Jenis Kelamin</Label><Select value={editForm.gender} onValueChange={v => setEditForm({...editForm, gender: v})}><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>
+            )}
+            {editForm.peran === "guru" && <div><Label>NIK</Label><Input value={editForm.nik} onChange={e => setEditForm({...editForm, nik: e.target.value})} className="rounded-xl" /></div>}
+            {editForm.peran === "siswa" && <div><Label>NIS</Label><Input value={editForm.nis} onChange={e => setEditForm({...editForm, nis: e.target.value})} className="rounded-xl" /></div>}
+            {editForm.peran === "siswa" && (
+              <div><Label>Kelas</Label>
+                <Select value={editForm.kelas_id} onValueChange={v => setEditForm({...editForm, kelas_id: v})}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih kelas" /></SelectTrigger>
+                  <SelectContent><SelectItem value="none">Tidak ada kelas</SelectItem>{kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
+            {editForm.peran === "admin_jurusan" && (
+              <div><Label>Jurusan</Label>
+                <Select value={editForm.id_jurusan} onValueChange={v => setEditForm({...editForm, id_jurusan: v})}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger>
+                  <SelectContent>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
+            <div><Label>Role</Label>
+              <Select value={editForm.peran} onValueChange={v => setEditForm({...editForm, peran: v as any})}>
+                <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <div className="sticky top-0 bg-white p-2 border-b">
-                    <Input
-                      placeholder="Cari kelas..."
-                      value={kelasSearchTerm}
-                      onChange={(e) => setKelasSearchTerm(e.target.value)}
-                      className="h-8 text-sm"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </div>
-                  <SelectItem value="none">Tidak ada kelas</SelectItem>
-                  {filteredKelasForSelect.map(k => (
-                    <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>
-                  ))}
-                  {filteredKelasForSelect.length === 0 && kelasSearchTerm && (
-                    <div className="px-2 py-1 text-sm text-slate-500">Tidak ada kelas yang cocok</div>
-                  )}
+                  <SelectItem value="guru">Guru</SelectItem>
+                  <SelectItem value="siswa">Siswa</SelectItem>
+                  <SelectItem value="admin_jurusan">Admin Jurusan</SelectItem>
+                  <SelectItem value="bk">BK</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          )}
-          <div><Label>Kata Sandi Baru (Opsional)</Label><Input type="password" placeholder="Kosongkan jika tidak ingin mengubah" value={editForm.password} onChange={e => setEditForm({...editForm, password: e.target.value})} className="rounded-xl mt-1" /></div>
-          <div className="flex items-center space-x-2"><Checkbox id="aktif" checked={editForm.aktif} onCheckedChange={(checked) => setEditForm({...editForm, aktif: checked === true})} /><Label htmlFor="aktif">Aktif (centang agar pengguna dapat login)</Label></div>
+            <div><Label>Kata Sandi Baru (Opsional)</Label><Input type="password" placeholder="Kosongkan jika tidak ingin mengubah" value={editForm.password} onChange={e => setEditForm({...editForm, password: e.target.value})} className="rounded-xl" /></div>
+            <div className="flex items-center space-x-2"><Checkbox id="edit_aktif" checked={editForm.aktif} onCheckedChange={(checked) => setEditForm({...editForm, aktif: checked === true})} /><Label htmlFor="edit_aktif">Aktif (centang agar pengguna dapat login)</Label></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setEditDialogOpen(false)}>Batal</Button><Button onClick={handleUpdateUser} disabled={isLoading} className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}><DialogContent className="rounded-2xl max-w-lg"><DialogHeader><DialogTitle>{isActivatingMode ? <UserPlus className="h-5 w-5 inline mr-2 text-green-600" /> : <UserMinus className="h-5 w-5 inline mr-2 text-red-600" />}{isActivatingMode ? "Aktifkan Pengguna" : "Nonaktifkan Pengguna"}</DialogTitle><DialogDescription>{isActivatingMode ? `Aktifkan kembali pengguna ${deactivatingUser?.nama}?` : `Yakin ingin menonaktifkan ${deactivatingUser?.nama}?`}</DialogDescription></DialogHeader>
-        {!isActivatingMode && deactivateConstraints.length > 0 && <div className="bg-amber-50 border border-amber-200 rounded-lg p-3"><p className="font-medium text-amber-800 text-sm flex items-center gap-2"><AlertCircle className="h-4 w-4" /> Informasi - Data Terkait</p><ul className="list-disc list-inside text-xs text-amber-700 mt-2">{deactivateConstraints.map((c,i)=><li key={i}>{c}</li>)}</ul><p className="text-xs text-amber-600 mt-2">Pengguna akan dinonaktifkan, namun data terkait tetap tersimpan.</p></div>}
-        <DialogFooter><Button variant="outline" onClick={() => setDeactivateDialogOpen(false)}>Batal</Button><Button variant={isActivatingMode ? "default" : "destructive"} onClick={executeToggleActive} disabled={isLoading}>{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isActivatingMode ? "Ya, Aktifkan" : "Nonaktifkan"}</Button></DialogFooter></DialogContent>
+      {/* Deactivate Dialog */}
+      <Dialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-lg">
+          <DialogHeader><DialogTitle>{isActivatingMode ? "Aktifkan Pengguna" : "Nonaktifkan Pengguna"}</DialogTitle><DialogDescription>{isActivatingMode ? `Aktifkan kembali ${deactivatingUser?.nama}?` : `Yakin ingin menonaktifkan ${deactivatingUser?.nama}?`}</DialogDescription></DialogHeader>
+          {!isActivatingMode && deactivateConstraints.length > 0 && <div className="bg-amber-50 border p-3 rounded-lg"><p className="font-medium text-amber-800">Data terkait:</p><ul className="list-disc list-inside text-xs">{deactivateConstraints.map((c,i)=><li key={i}>{c}</li>)}</ul><p className="text-xs mt-1">Pengguna akan dinonaktifkan, namun data terkait tetap tersimpan.</p></div>}
+          <DialogFooter><Button variant="outline" onClick={() => setDeactivateDialogOpen(false)}>Batal</Button><Button variant={isActivatingMode ? "default" : "destructive"} onClick={executeToggleActive} disabled={isLoading}>{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isActivatingMode ? "Aktifkan" : "Nonaktifkan"}</Button></DialogFooter>
+        </DialogContent>
       </Dialog>
 
-      <Dialog open={toggleKelasDialogOpen} onOpenChange={setToggleKelasDialogOpen}><DialogContent className="rounded-2xl max-w-lg"><DialogHeader><DialogTitle className="text-xl flex items-center gap-2">{isActivatingKelasMode ? <UserPlus className="h-5 w-5 text-green-600" /> : <UserMinus className="h-5 w-5 text-red-600" />}{isActivatingKelasMode ? "Aktifkan Kelas" : "Nonaktifkan Kelas"}</DialogTitle><DialogDescription>{isActivatingKelasMode ? `Aktifkan kembali kelas ${togglingKelas?.nama}? Kelas yang aktif dapat digunakan untuk siswa.` : `Yakin ingin menonaktifkan kelas ${togglingKelas?.nama}? Kelas yang dinonaktifkan tidak dapat dipilih untuk siswa.`}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setToggleKelasDialogOpen(false)}>Batal</Button><Button variant={isActivatingKelasMode ? "default" : "destructive"} onClick={executeToggleActiveKelas} disabled={isSavingKelas}>{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isActivatingKelasMode ? "Ya, Aktifkan" : "Nonaktifkan"}</Button></DialogFooter></DialogContent>
+      {/* Bulk Action Dialog */}
+      <Dialog open={bulkActionDialogOpen} onOpenChange={setBulkActionDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-lg">
+          <DialogHeader><DialogTitle>{bulkActionType === "activate" ? "Aktifkan Massal" : "Nonaktifkan Massal"}</DialogTitle><DialogDescription>Anda akan {bulkActionType === "activate" ? "mengaktifkan" : "menonaktifkan"} {bulkActionData?.users.length} pengguna.</DialogDescription></DialogHeader>
+          {bulkActionData && bulkActionData.cannotProcess.length > 0 && <div className="bg-amber-50 border p-3 rounded-lg"><p className="font-medium text-amber-800">⚠️ Beberapa pengguna memiliki data terkait:</p><ul className="list-disc list-inside text-xs">{bulkActionData.cannotProcess.map(c=><li key={c.id}>{c.nama}: {c.reasons.join(", ")}</li>)}</ul><p className="text-xs mt-1">Tetap dapat dinonaktifkan, data terkait tetap tersimpan.</p></div>}
+          <DialogFooter><Button variant="outline" onClick={() => setBulkActionDialogOpen(false)}>Batal</Button><Button variant={bulkActionType === "activate" ? "default" : "destructive"} onClick={executeBulkAction} disabled={isProcessingSelected}>{isProcessingSelected && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Ya, {bulkActionType === "activate" ? "Aktifkan" : "Nonaktifkan"} {bulkActionData?.canProcessIds.length} Pengguna</Button></DialogFooter>
+        </DialogContent>
       </Dialog>
 
-      <Dialog open={bulkActionDialogOpen} onOpenChange={setBulkActionDialogOpen}><DialogContent className="rounded-2xl max-w-lg"><DialogHeader><DialogTitle>{bulkActionType === "activate" ? "Aktifkan Massal" : "Nonaktifkan Massal"}</DialogTitle><DialogDescription>Anda akan {bulkActionType === "activate" ? "mengaktifkan" : "menonaktifkan"} {bulkActionData?.users.length} pengguna.</DialogDescription></DialogHeader>
-        {bulkActionData && bulkActionData.cannotProcess.length > 0 && bulkActionType === "deactivate" && <div className="bg-amber-50 border border-amber-200 rounded-lg p-3"><p className="font-medium text-amber-800 text-sm">⚠️ Beberapa pengguna memiliki data terkait:</p><ul className="list-disc list-inside text-xs mt-1">{bulkActionData.cannotProcess.map(c=><li key={c.id}>{c.nama}: {c.reasons.join(", ")}</li>)}</ul><p className="text-xs text-amber-600 mt-2">Pengguna tersebut tetap dapat dinonaktifkan, data terkait akan tetap tersimpan.</p></div>}
-        <DialogFooter><Button variant="outline" onClick={() => setBulkActionDialogOpen(false)}>Batal</Button><Button variant={bulkActionType === "activate" ? "default" : "destructive"} onClick={executeBulkAction} disabled={isProcessingSelected}>{isProcessingSelected && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Ya, {bulkActionType === "activate" ? "Aktifkan" : "Nonaktifkan"} {bulkActionData?.canProcessIds.length} Pengguna</Button></DialogFooter></DialogContent>
+      {/* Kelas Dialogs */}
+      <Dialog open={kelasDialogOpen} onOpenChange={setKelasDialogOpen}>
+        <DialogContent className="rounded-2xl"><DialogHeader><DialogTitle>{editingKelas ? "Ubah Kelas" : "Tambah Kelas Baru"}</DialogTitle></DialogHeader><div><Label>Nama Kelas</Label><Input value={kelasForm.nama} onChange={e => setKelasForm({...kelasForm, nama: e.target.value})} className="rounded-xl mt-1" /></div><div><Label>Wali Kelas</Label><Select value={kelasForm.id_guru} onValueChange={v => setKelasForm({...kelasForm, id_guru: v})}><SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="Pilih wali kelas (opsional)" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada wali kelas</SelectItem>{guruOptions.map(g => <SelectItem key={g.id_guru} value={g.id_guru.toString()}>{g.nama} (NIK: {g.nik})</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setKelasDialogOpen(false)}>Batal</Button><Button onClick={handleSaveKelas} disabled={isSavingKelas} className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600">{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button></DialogFooter></DialogContent>
       </Dialog>
 
-      <Dialog open={kelasDialogOpen} onOpenChange={setKelasDialogOpen}><DialogContent className="rounded-2xl"><DialogHeader><DialogTitle><School className="h-5 w-5 inline mr-2 text-blue-600" />{editingKelas ? "Ubah Kelas" : "Tambah Kelas Baru"}</DialogTitle></DialogHeader><div className="space-y-4"><div><Label>Nama Kelas</Label><Input value={kelasForm.nama} onChange={e => setKelasForm({...kelasForm, nama: e.target.value})} placeholder="Contoh: XII RPL 1" className="rounded-xl mt-1" /></div><div><Label>Wali Kelas</Label><Select value={kelasForm.id_guru} onValueChange={v => setKelasForm({...kelasForm, id_guru: v})}><SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="Pilih wali kelas (opsional)" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada wali kelas</SelectItem>{guruOptions.map(guru => <SelectItem key={guru.id_guru} value={guru.id_guru.toString()}>{guru.nama} (NIK: {guru.nik})</SelectItem>)}</SelectContent></Select></div></div><DialogFooter><Button variant="outline" onClick={() => setKelasDialogOpen(false)}>Batal</Button><Button onClick={handleSaveKelas} disabled={isSavingKelas} className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600">{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button></DialogFooter></DialogContent>
+      <Dialog open={toggleKelasDialogOpen} onOpenChange={setToggleKelasDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-lg"><DialogHeader><DialogTitle>{isActivatingKelasMode ? "Aktifkan Kelas" : "Nonaktifkan Kelas"}</DialogTitle><DialogDescription>{isActivatingKelasMode ? `Aktifkan kembali kelas ${togglingKelas?.nama}?` : `Yakin ingin menonaktifkan kelas ${togglingKelas?.nama}?`}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setToggleKelasDialogOpen(false)}>Batal</Button><Button onClick={executeToggleActiveKelas} disabled={isSavingKelas}>{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isActivatingKelasMode ? "Aktifkan" : "Nonaktifkan"}</Button></DialogFooter></DialogContent>
       </Dialog>
 
       <Dialog open={importKelasDialogOpen} onOpenChange={setImportKelasDialogOpen}>
@@ -1947,22 +1404,27 @@ export default function UserManagement() {
           {importKelasStep === "upload" && (
             <div className="space-y-4">
               <div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50"><div className="flex flex-col items-center gap-2"><Upload className="h-8 w-8 text-slate-400" /><label htmlFor="kelas-file-input" className="cursor-pointer"><span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk unggah</span><input id="kelas-file-input" type="file" accept=".xlsx,.xls" onChange={handleKelasFileUpload} className="hidden" disabled={isImportingKelas} /></label><p className="text-xs text-slate-500">atau tarik & lepas file Excel di sini</p></div></div>
-              {importKelasUploadError && <Alert className="bg-red-50 border-red-200"><AlertCircle className="h-4 w-4 text-red-600" /><AlertDescription className="text-red-700">{importKelasUploadError}</AlertDescription></Alert>}
-              <Button variant="outline" onClick={downloadKelasTemplate} className="w-full rounded-lg"><Download className="h-4 w-4 mr-2" /> Unduh Template Excel Kelas</Button>
-              <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700"><p className="font-semibold">Format File:</p><p>Kolom yang diperlukan: <strong>nama</strong> (wajib), <strong>nik_wali</strong> (opsional), <strong>aktif</strong> (opsional, 1 untuk aktif, 0 untuk nonaktif)</p><p className="text-xs mt-1">Contoh: X IPA 1, 198512342021011001, 1</p><p className="text-xs mt-1 text-red-600">* NIK wali harus sesuai dengan data guru di database</p></div>
+              {importKelasUploadError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{importKelasUploadError}</AlertDescription></Alert>}
+              <Button variant="outline" onClick={downloadKelasTemplate} className="w-full"><Download className="h-4 w-4 mr-2" /> Unduh Template Excel Kelas</Button>
+              <div className="bg-blue-50 p-3 rounded-lg text-sm"><p className="font-semibold">Format File:</p><p>Kolom yang diperlukan: <strong>nama</strong> (wajib), <strong>nik_wali</strong> (opsional), <strong>aktif</strong> (opsional, 1 untuk aktif)</p><p className="text-xs text-red-600">* NIK wali harus sesuai dengan data guru di database</p></div>
             </div>
           )}
           {importKelasStep === "preview" && importKelasPreviewRows.length > 0 && (
             <div className="space-y-4">
-              <div className="flex justify-between items-center"><p className="text-sm font-medium">Pratinjau Data ({importKelasPreviewRows.length} baris)</p><Badge className={importKelasPreviewRows.filter(r=>r.isValid).length===importKelasPreviewRows.length?"bg-green-100 text-green-700":"bg-yellow-100 text-yellow-700"}>{importKelasPreviewRows.filter(r=>r.isValid).length} dari {importKelasPreviewRows.length} valid</Badge></div>
-              <div className="border rounded-lg overflow-x-auto max-h-96"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead className="w-12">#</TableHead><TableHead>Nama Kelas</TableHead><TableHead>NIK Wali</TableHead><TableHead>Aktif</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader><TableBody>{importKelasPreviewRows.map((row,idx)=>(<TableRow key={idx} className={!row.isValid?"bg-red-50":""}><TableCell className="text-xs text-slate-500">{row.rowIndex}</TableCell><TableCell>{row.nama}</TableCell><TableCell>{row.nik_wali||"-"}{!row.guruValid && row.nik_wali && <span className="text-red-500 text-xs ml-1">(tidak ditemukan)</span>}</TableCell><TableCell><Badge className={row.aktif?"bg-green-100 text-green-700":"bg-gray-100 text-gray-700"}>{row.aktif?"Aktif":"Nonaktif"}</Badge></TableCell><TableCell className="text-center">{row.isValid?<Badge className="bg-green-100 text-green-700">Valid</Badge>:<div className="text-xs text-red-600">{row.validationErrors?.map((err:string,i:number)=><div key={i}>{err}</div>)}{row.nik_wali && !row.guruValid && <div>NIK wali tidak ditemukan</div>}</div>}</TableCell></TableRow>))}</TableBody></Table></div>
-              <div className="flex gap-3 justify-end"><Button variant="outline" onClick={()=>{setImportKelasDialogOpen(false);setImportKelasRawData([]);setImportKelasPreviewRows([]);setImportKelasStep("upload");}} className="rounded-lg">Batal</Button><Button onClick={confirmImportKelas} disabled={isImportingKelas || importKelasPreviewRows.filter(r=>r.isValid).length===0} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600">{isImportingKelas?<><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Mengimpor...</>:"Impor Data"}</Button></div>
+              <div className="flex justify-between"><p className="text-sm font-medium">Pratinjau Data ({importKelasPreviewRows.length} baris)</p><Badge>{importKelasPreviewRows.filter(r=>r.isValid).length} dari {importKelasPreviewRows.length} valid</Badge></div>
+              <div className="border rounded-lg overflow-x-auto max-h-96"><Table><TableHeader><TableRow><TableHead>#</TableHead><TableHead>Nama Kelas</TableHead><TableHead>NIK Wali</TableHead><TableHead>Aktif</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{importKelasPreviewRows.map((row,idx)=>(<TableRow key={idx} className={!row.isValid?"bg-red-50":""}><TableCell>{row.rowIndex}</TableCell><TableCell>{row.nama}</TableCell><TableCell>{row.nik_wali||"-"}{!row.guruValid && row.nik_wali && <span className="text-red-500">(tidak ditemukan)</span>}</TableCell><TableCell>{row.aktif ? "Aktif" : "Nonaktif"}</TableCell><TableCell>{row.isValid ? "Valid" : <div className="text-red-600 text-xs">{row.validationErrors.join(", ")}</div>}</TableCell></TableRow>))}</TableBody></Table></div>
+              <div className="flex justify-end gap-3"><Button variant="outline" onClick={()=>{setImportKelasDialogOpen(false);setImportKelasRawData([]);setImportKelasPreviewRows([]);setImportKelasStep("upload");}}>Batal</Button><Button onClick={confirmImportKelas} disabled={isImportingKelas || importKelasPreviewRows.filter(r=>r.isValid).length===0} className="bg-gradient-to-r from-blue-600 to-indigo-600">{isImportingKelas && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Impor Data</Button></div>
             </div>
           )}
         </DialogContent>
       </Dialog>
 
-      <Dialog open={missingGuruDialogOpen} onOpenChange={setMissingGuruDialogOpen}><DialogContent className="rounded-xl max-w-md"><DialogHeader><DialogTitle>Wali Kelas Tidak Ditemukan</DialogTitle><DialogDescription>Beberapa NIK wali kelas dalam file Excel tidak ditemukan di database guru.</DialogDescription></DialogHeader><div className="space-y-4"><div className="bg-yellow-50 p-3 rounded-lg"><p className="text-sm font-medium text-yellow-800">NIK yang tidak ditemukan:</p><ul className="list-disc list-inside mt-2 space-y-1">{Array.from(importKelasMissingGurus).map((nik,idx)=><li key={idx} className="text-sm text-yellow-700 font-mono">{nik}</li>)}</ul></div><p className="text-sm text-slate-600">Baris dengan NIK yang tidak ditemukan akan dilewati (tidak diimpor). Apakah Anda ingin melanjutkan impor?</p></div><DialogFooter className="gap-2"><Button variant="outline" onClick={() => { setMissingGuruDialogOpen(false); setImportKelasDialogOpen(false); setImportKelasRawData([]); }} className="rounded-lg">Batalkan Impor</Button><Button onClick={handleSkipMissingGurus} disabled={isImportingKelas} className="rounded-lg bg-green-600 hover:bg-green-700">Lanjutkan (Lewati Baris Bermasalah)</Button></DialogFooter></DialogContent>
+      <Dialog open={missingGuruDialogOpen} onOpenChange={setMissingGuruDialogOpen}>
+        <DialogContent className="rounded-xl max-w-md">
+          <DialogHeader><DialogTitle>Wali Kelas Tidak Ditemukan</DialogTitle><DialogDescription>Beberapa NIK wali kelas tidak ditemukan.</DialogDescription></DialogHeader>
+          <div className="bg-yellow-50 p-3 rounded-lg"><p className="font-medium">NIK tidak ditemukan:</p><ul className="list-disc list-inside mt-1">{Array.from(importKelasMissingGurus).map(nik=><li key={nik} className="font-mono">{nik}</li>)}</ul><p className="text-sm mt-2">Baris dengan NIK tidak ditemukan akan dilewati. Lanjutkan?</p></div>
+          <DialogFooter><Button variant="outline" onClick={() => { setMissingGuruDialogOpen(false); setImportKelasDialogOpen(false); setImportKelasRawData([]); }}>Batalkan Impor</Button><Button onClick={handleSkipMissingGurus} className="bg-green-600">Lanjutkan (Lewati Baris Bermasalah)</Button></DialogFooter>
+        </DialogContent>
       </Dialog>
     </div>
   );

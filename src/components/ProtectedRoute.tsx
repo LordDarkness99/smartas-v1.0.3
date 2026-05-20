@@ -1,3 +1,4 @@
+// File: src/components/ProtectedRoute.tsx
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -27,6 +28,8 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     if (user.peran === "siswa") return <Navigate to="/student/dashboard" replace />;
     if (user.peran === "guru") return <Navigate to="/guru/dashboard" replace />;
     if (user.peran === "admin") return <Navigate to="/admin/dashboard" replace />;
+    if (user.peran === "bk") return <Navigate to="/bk/dashboard" replace />;
+    if (user.peran === "admin_jurusan") return <Navigate to="/admin-jurusan/dashboard" replace />;
     return <Navigate to="/" replace />;
   }
 

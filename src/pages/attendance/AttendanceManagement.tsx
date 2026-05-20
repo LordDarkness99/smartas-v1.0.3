@@ -1,3 +1,4 @@
+// src/pages/attendance/AttendanceManagement.tsx
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -57,6 +58,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import QRCode from "qrcode";
+import { isAdminJurusan, isBK, isAdmin } from "@/lib/utils";
 
 interface Siswa {
   id_siswa: number;
@@ -81,7 +83,7 @@ interface Jadwal {
   jam: string;
   mata_pelajaran: string;
   guru: string;
-  id_guru: number; // tambahan
+  id_guru: number;
   id_kelas: number;
   kelas_nama: string;
 }
@@ -180,7 +182,7 @@ export default function AttendanceManagement() {
     return true;
   });
 
-  // Greeting & clock
+  // ========== GREETING & CLOCK ==========
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour < 12) setGreeting("Selamat Pagi");
@@ -199,7 +201,7 @@ export default function AttendanceManagement() {
     });
   };
 
-  // Fetch kelas berdasarkan role (untuk kedua tab)
+  // ========== FETCH KELAS (dengan filter role) ==========
   const fetchKelas = async () => {
     if (!user) return;
     if (!user.id_akun) {
@@ -258,8 +260,23 @@ export default function AttendanceManagement() {
       );
       setKelasListMapel(kelasListUnik);
       setKelasListHarian(waliKelas || []);
+    } else if (userRole === 'admin_jurusan' && user.id_jurusan) {
+      // Admin jurusan: hanya kelas yang memiliki id_jurusan sesuai
+      const { data, error } = await supabase
+        .from("kelas")
+        .select("id_kelas, nama")
+        .eq("id_jurusan", user.id_jurusan)
+        .eq("aktif", true)
+        .order("nama");
+      if (error) console.error(error);
+      else {
+        setKelasListMapel(data || []);
+        // Admin jurusan juga bisa mengakses presensi harian? Ya, sesuai kebutuhan, kita berikan akses ke kelas jurusannya
+        setKelasListHarian(data || []);
+      }
+      setWaliKelasIds([]);
     } else {
-      // Admin: ambil semua kelas aktif
+      // Admin super (atau role lain) -> semua kelas aktif
       const { data, error } = await supabase
         .from("kelas")
         .select("id_kelas, nama")
@@ -289,7 +306,7 @@ export default function AttendanceManagement() {
     }
   }, [kelasListMapel, selectedKelasMapel]);
 
-  // Fetch jadwal dengan akses wali kelas
+  // ========== FETCH JADWAL (dengan filter role) ==========
   const fetchJadwal = async () => {
     if (!user) return;
     try {
@@ -301,14 +318,14 @@ export default function AttendanceManagement() {
           hari,
           jam,
           id_kelas,
-          kelas:kelas (nama),
+          kelas:kelas (nama, id_jurusan),
           mapel:mata_pelajaran (nama),
           guru:guru (nama)
         `)
         .eq("aktif", true);
 
       if (user.peran === "guru" && user.id_guru) {
-        // Ambil id_kelas yang menjadi wali
+        // Guru: hanya jadwal pada kelas yang diampu atau wali
         const { data: waliKelas, error: waliError } = await supabase
           .from("kelas")
           .select("id_kelas")
@@ -316,7 +333,6 @@ export default function AttendanceManagement() {
           .eq("aktif", true);
         const waliIds = waliKelas?.map(k => k.id_kelas) || [];
 
-        // Ambil id_kelas yang diampu (dari jadwal yang id_guru-nya sama)
         const { data: diampuKelas, error: diampuError } = await supabase
           .from("jadwal")
           .select("id_kelas")
@@ -331,6 +347,9 @@ export default function AttendanceManagement() {
           setJadwalList([]);
           return;
         }
+      } else if (user.peran === "admin_jurusan" && user.id_jurusan) {
+        // Admin jurusan: hanya jadwal untuk kelas yang memiliki id_jurusan sesuai
+        query = query.eq("kelas.id_jurusan", user.id_jurusan);
       }
 
       const { data, error } = await query.order("hari").order("jam");
@@ -351,7 +370,7 @@ export default function AttendanceManagement() {
     }
   };
 
-  // Filter jadwal berdasarkan kelas dan role
+  // Filter jadwal berdasarkan kelas dan role (untuk tampilan di tab mapel)
   useEffect(() => {
     if (!selectedKelasMapel) {
       setFilteredJadwalList([]);
@@ -367,7 +386,7 @@ export default function AttendanceManagement() {
     if (user?.peran === 'guru' && !waliKelasIds.includes(kelasId)) {
       filtered = filtered.filter(j => j.id_guru === user.id_guru);
     }
-
+    // Admin jurusan tidak perlu filter tambahan karena sudah difilter di fetchJadwal
     setFilteredJadwalList(filtered);
     setSelectedJadwal(null);
     setSelectedDay("");
@@ -382,7 +401,7 @@ export default function AttendanceManagement() {
 
   const jadwalByDay = selectedDay ? filteredJadwalList.filter((j) => j.hari === selectedDay) : [];
 
-  // Initial fetch
+  // ========== INITIAL FETCH ==========
   useEffect(() => {
     const init = async () => {
       setLoading(true);
@@ -393,7 +412,7 @@ export default function AttendanceManagement() {
     init();
   }, []);
 
-  // Presensi Harian
+  // ========== PRESENSI HARIAN ==========
   const fetchPresensiHarian = async (skipAutoAlfa = false) => {
     if (!selectedKelasHarian) return;
     setIsFetchingHarian(true);
@@ -529,7 +548,7 @@ export default function AttendanceManagement() {
     }
   };
 
-  // Presensi Mapel
+  // ========== PRESENSI MAPEL ==========
   const fetchPresensiMapel = async (skipAutoAlfa = false) => {
     if (!selectedJadwal) return;
     setIsFetchingMapel(true);
@@ -664,7 +683,7 @@ export default function AttendanceManagement() {
     }
   };
 
-  // QR Dinamis
+  // ========== QR GENERATION ==========
   const generateQRCode = async (jadwal: Jadwal) => {
     const daysMap: Record<string, number> = {
       Senin: 1, Selasa: 2, Rabu: 3, Kamis: 4, Jumat: 5, Sabtu: 6, Minggu: 0,
@@ -738,7 +757,7 @@ export default function AttendanceManagement() {
     };
   }, [qrRefreshInterval]);
 
-  // Auto-fetch ketika kelas/tanggal/jadwal berubah
+  // ========== AUTO-FETCH ==========
   useEffect(() => {
     if (activeTab === "harian" && selectedKelasHarian) {
       setAutoAlfaProcessedHarian(false);
@@ -804,7 +823,7 @@ export default function AttendanceManagement() {
             <CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-purple-600 font-medium">Status</p><p className="text-lg sm:text-xl font-bold text-purple-900">Aktif</p></div><UserCheck className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" /></div></CardContent>
           </Card>
           <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
-            <CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-amber-600 font-medium">Role</p><p className="text-lg sm:text-xl font-bold text-amber-900">{user?.peran === "guru" ? "Guru" : "Admin"}</p></div><GraduationCap className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" /></div></CardContent>
+            <CardContent className="p-3 sm:p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] sm:text-xs text-amber-600 font-medium">Role</p><p className="text-lg sm:text-xl font-bold text-amber-900">{user?.peran === "guru" ? "Guru" : user?.peran === "admin_jurusan" ? "Admin Jurusan" : "Admin"}</p></div><GraduationCap className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" /></div></CardContent>
           </Card>
         </div>
 
@@ -824,7 +843,7 @@ export default function AttendanceManagement() {
 
               {/* TAB PRESENSI HARIAN */}
               <TabsContent value="harian" className="space-y-4 sm:space-y-5">
-                {user?.peran === 'guru' && kelasListHarian.length === 0 ? (
+                {(user?.peran === 'guru' && kelasListHarian.length === 0) ? (
                   <Alert className="rounded-lg bg-amber-50 border-amber-200">
                     <AlertCircle className="h-4 w-4 text-amber-600" />
                     <AlertDescription className="text-amber-700 text-xs sm:text-sm">
