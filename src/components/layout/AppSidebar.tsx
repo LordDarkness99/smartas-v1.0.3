@@ -57,12 +57,6 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // ========== KONFIGURASI WARNA SIDEBAR ==========
-  // Ubah nilai di bawah ini untuk mengganti seluruh warna background sidebar
-  const sidebarBg = "bg-white";           // background utama sidebar
-  const sidebarBorder = "border-indigo-100"; // warna border
-  const sidebarShadow = "shadow-lg";       // shadow
-
   const getMenuItems = () => {
     if (userRole === "siswa") {
       return [
@@ -126,38 +120,54 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
     await signOut();
   };
 
+  const isMenuItemActive = (itemPath: string) => {
+    if (itemPath === "/face-registration") {
+      return location.pathname.includes("face-registration");
+    }
+    return location.pathname === itemPath || location.pathname === itemPath + "/";
+  };
+
+  const button3D = `
+    transition-all duration-100 ease-out
+    active:translate-y-[2px] active:shadow-[0_2px_0_rgba(0,0,0,0.2)]
+    hover:-translate-y-[2px] hover:shadow-[0_6px_0_rgba(0,0,0,0.2)]
+  `;
+
+  // Texture halus: dot grid dengan warna biru sangat transparan (opacity 0.02)
+  const subtleTexture = "bg-[radial-gradient(ellipse_at_center,_rgba(44,94,173,0.02)_1px,_transparent_1px)] bg-[length:24px_24px]";
+
   return (
     <>
       <Sidebar
         collapsible="icon"
         side={isMobile ? "right" : "left"}
-        className={`${sidebarBg} border-r ${sidebarBorder} ${sidebarShadow}`}
+        className={`bg-white ${subtleTexture} border-r border-[#C4E2F5]/30 shadow-[-8px_0_20px_-8px_rgba(44,94,173,0.15)] z-10 transition-all duration-300`}
       >
-        {/* HEADER - warna sama dengan sidebar */}
-        <SidebarHeader className={`py-5 px-6 flex flex-col items-center justify-center ${sidebarBg}`}>
+        {/* HEADER */}
+        <SidebarHeader className={`py-5 px-6 flex flex-col items-center justify-center bg-white ${subtleTexture} relative after:absolute after:bottom-0 after:left-4 after:right-4 after:h-px after:bg-gradient-to-r after:from-transparent after:via-[#1591DC]/20 after:to-transparent`}>
           <div className="mb-0.5 flex items-center justify-center h-14 w-full text-center">
-            <img src="/smartas-logo.png" alt="SMARTAS Logo" className="h-12 w-auto object-contain" />
+            <img src="/smartas-logo.png" alt="SMARTAS Logo" className="h-12 w-auto object-contain drop-shadow-md" />
           </div>
           <div className="text-center group-data-[collapsible=icon]:hidden">
-            <h2 className="text-xl font-black italic tracking-tighter bg-gradient-to-r from-indigo-700 to-purple-700 bg-clip-text text-transparent uppercase leading-[0.8]">
+            <h2 className="text-xl font-black italic tracking-tighter bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] bg-clip-text text-transparent uppercase leading-[0.8]">
               SMARTAS
             </h2>
-            <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-indigo-400 mt-1.5">
+            <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-[#4BB8FA] mt-1.5">
               {userRole || "Access"} Mode
             </p>
           </div>
         </SidebarHeader>
 
-        {/* CONTENT - warna sama */}
-        <SidebarContent className={`px-4 py-0 ${sidebarBg}`}>
+        {/* CONTENT */}
+        <SidebarContent className={`px-4 py-2 bg-white ${subtleTexture}`}>
           <SidebarGroup>
-            <SidebarGroupLabel className="mb-2 px-2 text-[10px] font-bold uppercase tracking-widest text-indigo-400 text-center group-data-[collapsible=icon]:hidden">
+            <SidebarGroupLabel className="mb-3 px-2 text-[10px] font-bold uppercase tracking-widest text-[#2C5EAD]/60 text-center group-data-[collapsible=icon]:hidden">
               Navigation
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {menuItems.map((item) => {
-                  const isActive = location.pathname === item.path;
+                  const isActive = isMenuItemActive(item.path);
                   return (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
@@ -165,21 +175,24 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
                         isActive={isActive}
                         tooltip={item.title}
                         onClick={() => { if (isMobile) setOpenMobile(false); }}
-                        className={`group mb-1 h-10 px-4 transition-all duration-300 rounded-xl ${
-                          isActive
-                            ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-200"
-                            : "text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"
-                        }`}
+                        className={`group relative mb-2 h-10 px-4 rounded-xl overflow-hidden
+                          ${button3D}
+                          ${isActive
+                            ? "bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] text-white shadow-[0_4px_0_rgba(0,0,0,0.25)] hover:shadow-[0_6px_0_rgba(0,0,0,0.25)] active:shadow-[0_2px_0_rgba(0,0,0,0.25)]"
+                            : "bg-white border border-[#C4E2F5] text-[#2C5EAD] shadow-[0_4px_0_rgba(0,0,0,0.1)] hover:shadow-[0_6px_0_rgba(0,0,0,0.1)] active:shadow-[0_2px_0_rgba(0,0,0,0.1)]"
+                          }`}
                       >
-                        <Link to={item.path} className="flex items-center gap-3">
+                        <Link to={item.path} className="flex items-center gap-3 w-full">
                           <item.icon
-                            className={`h-4.5 w-4.5 transition-transform duration-300 group-hover:scale-110 ${
-                              isActive ? "text-white" : "text-indigo-500 group-hover:text-indigo-600"
-                            }`}
+                            className={`h-4.5 w-4.5 transition-all duration-300 group-hover:scale-110
+                              ${isActive ? "text-white drop-shadow-sm" : "text-[#1591DC] group-hover:text-[#2C5EAD]"}`}
                           />
                           <span className="font-bold text-sm tracking-tight group-data-[collapsible=icon]:hidden">
                             {item.title}
                           </span>
+                          {isActive && (
+                            <span className="absolute right-2 h-1.5 w-1.5 rounded-full bg-white shadow-md animate-pulse group-data-[collapsible=icon]:right-0.5" />
+                          )}
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -190,55 +203,86 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
           </SidebarGroup>
         </SidebarContent>
 
-        {/* FOOTER - warna sama, dengan logika seperti yang diinginkan */}
-        <SidebarFooter className={`p-4 border-t ${sidebarBorder} ${sidebarBg}`}>
-          <div className={`flex items-center gap-3 rounded-2xl ${sidebarBg} p-2.5 shadow-sm border ${sidebarBorder} overflow-hidden`}>
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-inner">
-              <UserCircle className="h-5.5 w-5.5" />
+        {/* FOOTER */}
+        <SidebarFooter className={`p-4 border-t border-[#C4E2F5]/30 bg-white ${subtleTexture}`}>
+          <div className="relative flex items-center gap-3 rounded-2xl p-2.5 bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] shadow-lg overflow-hidden group">
+            <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12" />
+            <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm ring-2 ring-white/40">
+              <UserCircle className="h-5 w-5" />
+              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-white shadow-md animate-pulse" />
             </div>
-            <div className="flex-1 overflow-hidden group-data-[collapsible=icon]:hidden">
-              <p className="truncate text-[9px] font-bold text-indigo-600 uppercase tracking-tighter">{userRole} Akun</p>
-              <p className="truncate text-sm font-black text-indigo-900 leading-tight">{userName || "User"}</p>
+            <div className="relative flex-1 overflow-hidden group-data-[collapsible=icon]:hidden">
+              <p className="truncate text-[9px] font-bold text-white/80 uppercase tracking-tighter">
+                {userRole} Akun
+              </p>
+              <p className="truncate text-sm font-black text-white leading-tight">
+                {userName || "User"}
+              </p>
             </div>
             <button
               onClick={() => setIsDialogOpen(true)}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-indigo-500 hover:bg-indigo-100 hover:text-indigo-700 transition-all duration-200 group-data-[collapsible=icon]:hidden"
+              className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg 
+                bg-gradient-to-br from-red-500 via-red-600 to-red-800 
+                text-white shadow-[0_4px_0_rgba(0,0,0,0.4)] hover:shadow-[0_6px_0_rgba(0,0,0,0.4)] active:shadow-[0_2px_0_rgba(0,0,0,0.4)]
+                ${button3D} group-data-[collapsible=icon]:hidden`}
             >
-              <UserCircle className="h-4 w-4" />
+              <KeyRound className="h-4 w-4 drop-shadow-sm" />
             </button>
           </div>
         </SidebarFooter>
       </Sidebar>
 
+      {/* Dialog - tetap tanpa texture */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-md bg-white border border-indigo-100 shadow-xl">
+        <DialogContent className="sm:max-w-md bg-white border border-[#C4E2F5] shadow-xl">
           <DialogHeader>
-            <DialogTitle className="text-indigo-800">Akun Saya</DialogTitle>
-            <DialogDescription className="text-indigo-500">Informasi akun dan pengaturan sandi</DialogDescription>
+            <DialogTitle className="text-[#2C5EAD] flex items-center gap-2">
+              <UserCircle className="h-5 w-5 text-[#1591DC]" />
+              Akun Saya
+            </DialogTitle>
+            <DialogDescription className="text-[#1591DC]">
+              Informasi akun dan pengaturan sandi
+            </DialogDescription>
           </DialogHeader>
 
           {!isChangingPassword ? (
             <div className="space-y-4 py-2">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-indigo-600">Nama</p>
-                <p className="text-base font-semibold text-indigo-900">{userName || "User"}</p>
+              <div className="space-y-1 p-3 rounded-xl bg-[#C4E2F5]/10 border border-[#C4E2F5]/30">
+                <p className="text-sm font-medium text-[#2C5EAD]">Nama</p>
+                <p className="text-base font-semibold text-[#2C5EAD]">
+                  {userName || "User"}
+                </p>
               </div>
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-indigo-600">Role</p>
-                <p className="text-base font-semibold text-indigo-900 capitalize">{userRole || "-"}</p>
+              <div className="space-y-1 p-3 rounded-xl bg-[#C4E2F5]/10 border border-[#C4E2F5]/30">
+                <p className="text-sm font-medium text-[#2C5EAD]">Role</p>
+                <p className="text-base font-semibold text-[#2C5EAD] capitalize">
+                  {userRole || "-"}
+                </p>
               </div>
               {username && (
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-indigo-600">Nama Pengguna</p>
-                  <p className="text-base font-semibold text-indigo-900">{username}</p>
+                <div className="space-y-1 p-3 rounded-xl bg-[#C4E2F5]/10 border border-[#C4E2F5]/30">
+                  <p className="text-sm font-medium text-[#2C5EAD]">Nama Pengguna</p>
+                  <p className="text-base font-semibold text-[#2C5EAD]">{username}</p>
                 </div>
               )}
               <div className="flex gap-3 pt-4">
-                <Button variant="outline" className="flex-1 gap-2 border-indigo-300 text-indigo-700 hover:bg-indigo-50" onClick={() => setIsChangingPassword(true)}>
+                <Button
+                  variant="outline"
+                  className={`flex-1 gap-2 border-[#C4E2F5] text-[#2C5EAD] 
+                    bg-white shadow-[0_4px_0_rgba(0,0,0,0.1)] hover:shadow-[0_6px_0_rgba(0,0,0,0.1)] active:shadow-[0_2px_0_rgba(0,0,0,0.1)]
+                    ${button3D}`}
+                  onClick={() => setIsChangingPassword(true)}
+                >
                   <KeyRound className="h-4 w-4" />
                   Ganti Sandi
                 </Button>
-                <Button variant="destructive" className="flex-1 gap-2 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700" onClick={handleLogout}>
+                <Button
+                  className={`flex-1 gap-2 
+                    bg-gradient-to-br from-red-500 via-red-600 to-red-800 
+                    text-white shadow-[0_4px_0_rgba(0,0,0,0.4)] hover:shadow-[0_6px_0_rgba(0,0,0,0.4)] active:shadow-[0_2px_0_rgba(0,0,0,0.4)]
+                    ${button3D}`}
+                  onClick={handleLogout}
+                >
                   <LogOut className="h-4 w-4" />
                   Logout
                 </Button>
@@ -247,7 +291,9 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
           ) : (
             <form onSubmit={handleChangePassword} className="space-y-4 py-2">
               <div className="space-y-2">
-                <Label htmlFor="newPassword" className="text-indigo-700">Sandi Baru (min. 6 karakter)</Label>
+                <Label htmlFor="newPassword" className="text-[#2C5EAD]">
+                  Sandi Baru (min. 6 karakter)
+                </Label>
                 <Input
                   id="newPassword"
                   type="password"
@@ -255,25 +301,39 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
                   minLength={6}
-                  className="border-indigo-200 focus:border-indigo-400 focus:ring-indigo-400"
+                  className="border-[#C4E2F5] focus:border-[#1591DC] focus:ring-[#1591DC]/20 transition-all"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-indigo-700">Konfirmasi Sandi Baru</Label>
+                <Label htmlFor="confirmPassword" className="text-[#2C5EAD]">
+                  Konfirmasi Sandi Baru
+                </Label>
                 <Input
                   id="confirmPassword"
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  className="border-indigo-200 focus:border-indigo-400"
+                  className="border-[#C4E2F5] focus:border-[#1591DC] focus:ring-[#1591DC]/20 transition-all"
                 />
               </div>
               <div className="flex gap-3 pt-2">
-                <Button type="button" variant="ghost" onClick={() => setIsChangingPassword(false)} className="text-indigo-600">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={`text-[#2C5EAD] bg-white shadow-[0_4px_0_rgba(0,0,0,0.08)] hover:shadow-[0_6px_0_rgba(0,0,0,0.08)] active:shadow-[0_2px_0_rgba(0,0,0,0.08)]
+                    ${button3D}`}
+                  onClick={() => setIsChangingPassword(false)}
+                >
                   Batal
                 </Button>
-                <Button type="submit" disabled={isLoading} className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700">
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className={`bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] text-white 
+                    shadow-[0_4px_0_rgba(0,0,0,0.3)] hover:shadow-[0_6px_0_rgba(0,0,0,0.3)] active:shadow-[0_2px_0_rgba(0,0,0,0.3)]
+                    ${button3D}`}
+                >
                   {isLoading ? "Menyimpan..." : "Simpan Sandi"}
                 </Button>
               </div>
