@@ -52,13 +52,13 @@ import {
   GraduationCap,
   UserCheck,
   AlertCircle,
-  Sparkles,
   Search,
   X,
   ChevronDown,
+  LogIn,
+  LogOut,
 } from "lucide-react";
 import QRCode from "qrcode";
-import { isAdminJurusan, isBK, isAdmin } from "@/lib/utils";
 
 interface Siswa {
   id_siswa: number;
@@ -118,7 +118,7 @@ export default function AttendanceManagement() {
   const [greeting, setGreeting] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // State untuk daftar kelas (dipisah antara harian dan mapel)
+  // State untuk daftar kelas
   const [kelasListHarian, setKelasListHarian] = useState<{ id_kelas: number; nama: string }[]>([]);
   const [kelasListMapel, setKelasListMapel] = useState<{ id_kelas: number; nama: string }[]>([]);
   const [selectedKelasHarian, setSelectedKelasHarian] = useState<string>("");
@@ -134,6 +134,12 @@ export default function AttendanceManagement() {
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [selectedBulkStatus, setSelectedBulkStatus] = useState<string | null>(null);
   const [autoAlfaProcessedHarian, setAutoAlfaProcessedHarian] = useState(false);
+
+  // State untuk tipe presensi (Masuk / Pulang)
+  const [presensiTypeHarian, setPresensiTypeHarian] = useState<"masuk" | "pulang">("masuk");
+  // State untuk bulk pulang
+  const [isBulkPulangUpdating, setIsBulkPulangUpdating] = useState(false);
+  const [selectedBulkPulang, setSelectedBulkPulang] = useState(false);
 
   const [popoverHarianOpen, setPopoverHarianOpen] = useState(false);
   const [kelasHarianSearchQuery, setKelasHarianSearchQuery] = useState("");
@@ -201,7 +207,7 @@ export default function AttendanceManagement() {
     });
   };
 
-  // ========== FETCH KELAS (dengan filter role) ==========
+  // ========== FETCH KELAS ==========
   const fetchKelas = async () => {
     if (!user) return;
     if (!user.id_akun) {
@@ -222,7 +228,6 @@ export default function AttendanceManagement() {
 
       const id_guru = user.id_guru;
 
-      // 1. Kelas sebagai wali kelas
       const { data: waliKelas, error: waliError } = await supabase
         .from("kelas")
         .select("id_kelas, nama")
@@ -232,7 +237,6 @@ export default function AttendanceManagement() {
       const waliIds = waliKelas?.map(k => k.id_kelas) || [];
       setWaliKelasIds(waliIds);
 
-      // 2. Kelas yang diampu melalui jadwal
       const { data: jadwalKelas, error: jadwalError } = await supabase
         .from("jadwal")
         .select("kelas:id_kelas(id_kelas, nama)")
@@ -261,7 +265,6 @@ export default function AttendanceManagement() {
       setKelasListMapel(kelasListUnik);
       setKelasListHarian(waliKelas || []);
     } else if (userRole === 'admin_jurusan' && user.id_jurusan) {
-      // Admin jurusan: hanya kelas yang memiliki id_jurusan sesuai
       const { data, error } = await supabase
         .from("kelas")
         .select("id_kelas, nama")
@@ -271,12 +274,10 @@ export default function AttendanceManagement() {
       if (error) console.error(error);
       else {
         setKelasListMapel(data || []);
-        // Admin jurusan juga bisa mengakses presensi harian? Ya, sesuai kebutuhan, kita berikan akses ke kelas jurusannya
         setKelasListHarian(data || []);
       }
       setWaliKelasIds([]);
     } else {
-      // Admin super (atau role lain) -> semua kelas aktif
       const { data, error } = await supabase
         .from("kelas")
         .select("id_kelas, nama")
@@ -291,7 +292,6 @@ export default function AttendanceManagement() {
     }
   };
 
-  // Reset pilihan kelas jika tidak valid
   useEffect(() => {
     if (selectedKelasHarian && kelasListHarian.length > 0) {
       const isValid = kelasListHarian.some(k => k.id_kelas.toString() === selectedKelasHarian);
@@ -306,7 +306,7 @@ export default function AttendanceManagement() {
     }
   }, [kelasListMapel, selectedKelasMapel]);
 
-  // ========== FETCH JADWAL (dengan filter role) ==========
+  // ========== FETCH JADWAL ==========
   const fetchJadwal = async () => {
     if (!user) return;
     try {
@@ -325,7 +325,6 @@ export default function AttendanceManagement() {
         .eq("aktif", true);
 
       if (user.peran === "guru" && user.id_guru) {
-        // Guru: hanya jadwal pada kelas yang diampu atau wali
         const { data: waliKelas, error: waliError } = await supabase
           .from("kelas")
           .select("id_kelas")
@@ -348,7 +347,6 @@ export default function AttendanceManagement() {
           return;
         }
       } else if (user.peran === "admin_jurusan" && user.id_jurusan) {
-        // Admin jurusan: hanya jadwal untuk kelas yang memiliki id_jurusan sesuai
         query = query.eq("kelas.id_jurusan", user.id_jurusan);
       }
 
@@ -370,7 +368,6 @@ export default function AttendanceManagement() {
     }
   };
 
-  // Filter jadwal berdasarkan kelas dan role (untuk tampilan di tab mapel)
   useEffect(() => {
     if (!selectedKelasMapel) {
       setFilteredJadwalList([]);
@@ -382,11 +379,9 @@ export default function AttendanceManagement() {
     const kelasId = parseInt(selectedKelasMapel);
     let filtered = jadwalList.filter(j => j.id_kelas === kelasId);
 
-    // Jika guru dan bukan wali kelas untuk kelas ini, hanya tampilkan mapel yang diampu
     if (user?.peran === 'guru' && !waliKelasIds.includes(kelasId)) {
       filtered = filtered.filter(j => j.id_guru === user.id_guru);
     }
-    // Admin jurusan tidak perlu filter tambahan karena sudah difilter di fetchJadwal
     setFilteredJadwalList(filtered);
     setSelectedJadwal(null);
     setSelectedDay("");
@@ -436,11 +431,20 @@ export default function AttendanceManagement() {
 
       const startDate = `${selectedTanggal}T00:00:00`;
       const endDate = `${selectedTanggal}T23:59:59`;
-      const { data: presensiData, error: presensiError } = await supabase
+      
+      let query = supabase
         .from("presensi_harian")
         .select("*")
         .gte("waktu_presensi", startDate)
         .lte("waktu_presensi", endDate);
+      
+      if (presensiTypeHarian === "masuk") {
+        query = query.neq("status_presensi", "Pulang");
+      } else {
+        query = query.eq("status_presensi", "Pulang");
+      }
+      
+      const { data: presensiData, error: presensiError } = await query;
       if (presensiError) throw presensiError;
 
       const combined = siswaList.map((siswa) => {
@@ -455,7 +459,7 @@ export default function AttendanceManagement() {
       });
       setPresensiHarian(combined);
 
-      if (!skipAutoAlfa && !autoAlfaProcessedHarian && combined.some(p => !p.status_presensi)) {
+      if (presensiTypeHarian === "masuk" && !skipAutoAlfa && !autoAlfaProcessedHarian && combined.some(p => !p.status_presensi)) {
         setAutoAlfaProcessedHarian(true);
         const belumAbsen = combined.filter(p => !p.status_presensi);
         for (const item of belumAbsen) {
@@ -468,7 +472,7 @@ export default function AttendanceManagement() {
           }
         }
         await fetchPresensiHarian(true);
-        toast({ title: "Info", description: "Siswa yang belum absen otomatis diisi Alfa" });
+        toast({ title: "Info", description: "Siswa yang belum absen masuk otomatis diisi Alfa" });
       }
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -499,7 +503,41 @@ export default function AttendanceManagement() {
             : item
         )
       );
-      toast({ title: "Berhasil", description: "Status presensi diperbarui" });
+      toast({ title: "Berhasil", description: "Status presensi masuk diperbarui" });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
+
+  const togglePresensiPulang = async (siswaId: number, currentAttendance: any, isChecked: boolean) => {
+    setUpdatingStatus({ id: siswaId, type: "harian" });
+    try {
+      if (isChecked) {
+        if (currentAttendance.id_pres_harian) {
+          await supabase
+            .from("presensi_harian")
+            .update({ status_presensi: "Pulang", waktu_presensi: new Date().toISOString() })
+            .eq("id_pres_harian", currentAttendance.id_pres_harian);
+        } else {
+          await supabase.from("presensi_harian").insert({
+            id_siswa: siswaId,
+            status_presensi: "Pulang",
+            waktu_presensi: new Date().toISOString(),
+          });
+        }
+        toast({ title: "Berhasil", description: "Presensi pulang dicatat" });
+      } else {
+        if (currentAttendance.id_pres_harian) {
+          await supabase
+            .from("presensi_harian")
+            .delete()
+            .eq("id_pres_harian", currentAttendance.id_pres_harian);
+          toast({ title: "Berhasil", description: "Presensi pulang dihapus" });
+        }
+      }
+      await fetchPresensiHarian(true);
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
@@ -547,6 +585,61 @@ export default function AttendanceManagement() {
       setIsBulkUpdating(false);
     }
   };
+
+  // Bulk action untuk presensi pulang (centang semua / hapus semua)
+  const handleBulkPulang = async (checked: boolean) => {
+    setIsBulkPulangUpdating(true);
+    setSelectedBulkPulang(checked);
+    try {
+      if (checked) {
+        // Set semua siswa menjadi pulang
+        for (const item of presensiHarian) {
+          if (item.status_presensi === "Pulang") continue;
+          if (item.id_pres_harian) {
+            await supabase
+              .from("presensi_harian")
+              .update({ status_presensi: "Pulang", waktu_presensi: new Date().toISOString() })
+              .eq("id_pres_harian", item.id_pres_harian);
+          } else {
+            await supabase.from("presensi_harian").insert({
+              id_siswa: item.id_siswa,
+              status_presensi: "Pulang",
+              waktu_presensi: new Date().toISOString(),
+            });
+          }
+        }
+        toast({ title: "Berhasil", description: "Semua siswa telah dicatat pulang" });
+      } else {
+        // Hapus semua presensi pulang untuk kelas dan tanggal ini
+        const startDate = `${selectedTanggal}T00:00:00`;
+        const endDate = `${selectedTanggal}T23:59:59`;
+        const { error } = await supabase
+          .from("presensi_harian")
+          .delete()
+          .eq("status_presensi", "Pulang")
+          .gte("waktu_presensi", startDate)
+          .lte("waktu_presensi", endDate)
+          .in("id_siswa", presensiHarian.map(p => p.id_siswa));
+        if (error) throw error;
+        toast({ title: "Berhasil", description: "Semua presensi pulang telah dihapus" });
+      }
+      await fetchPresensiHarian(true);
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setIsBulkPulangUpdating(false);
+    }
+  };
+
+  // Sinkronisasi checkbox bulk pulang dengan status semua siswa
+  useEffect(() => {
+    if (presensiTypeHarian === "pulang" && presensiHarian.length > 0) {
+      const allPulang = presensiHarian.every(item => item.status_presensi === "Pulang");
+      setSelectedBulkPulang(allPulang);
+    } else {
+      setSelectedBulkPulang(false);
+    }
+  }, [presensiHarian, presensiTypeHarian]);
 
   // ========== PRESENSI MAPEL ==========
   const fetchPresensiMapel = async (skipAutoAlfa = false) => {
@@ -763,7 +856,7 @@ export default function AttendanceManagement() {
       setAutoAlfaProcessedHarian(false);
       fetchPresensiHarian();
     }
-  }, [selectedKelasHarian, selectedTanggal, activeTab]);
+  }, [selectedKelasHarian, selectedTanggal, activeTab, presensiTypeHarian]);
 
   useEffect(() => {
     if (activeTab === "mapel" && selectedJadwal) {
@@ -853,45 +946,45 @@ export default function AttendanceManagement() {
                 ) : (
                   <>
                     <div className="flex flex-col gap-3">
-                      <div className="w-full sm:w-56">
-                        <Label className="text-slate-700 text-xs sm:text-sm font-medium">Kelas</Label>
-                        <Popover open={popoverHarianOpen} onOpenChange={setPopoverHarianOpen}>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" className="w-full justify-between rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm font-normal mt-1">
-                              {selectedKelasHarian ? kelasListHarian.find(k => k.id_kelas.toString() === selectedKelasHarian)?.nama || "Pilih Kelas" : "Pilih Kelas"}
-                              <ChevronDown className="h-3.5 w-3.5 opacity-50" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-64 p-0" align="start" sideOffset={5}>
-                            <div className="p-2 border-b bg-slate-50">
-                              <div className="flex gap-1 mb-2 flex-wrap">
-                                {["all", "X", "XI", "XII"].map(jenjang => (
-                                  <Button key={jenjang} variant={kelasHarianJenjangFilter === jenjang ? "default" : "ghost"} size="sm" className={`h-7 px-2 text-xs rounded-md ${kelasHarianJenjangFilter === jenjang ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"}`} onClick={() => setKelasHarianJenjangFilter(jenjang)}>
-                                    {jenjang === "all" ? "Semua" : jenjang}
-                                  </Button>
-                                ))}
+                      <div className="flex flex-wrap gap-3 items-end">
+                        <div className="w-full sm:w-56">
+                          <Label className="text-slate-700 text-xs sm:text-sm font-medium">Kelas</Label>
+                          <Popover open={popoverHarianOpen} onOpenChange={setPopoverHarianOpen}>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" className="w-full justify-between rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm font-normal mt-1">
+                                {selectedKelasHarian ? kelasListHarian.find(k => k.id_kelas.toString() === selectedKelasHarian)?.nama || "Pilih Kelas" : "Pilih Kelas"}
+                                <ChevronDown className="h-3.5 w-3.5 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-64 p-0" align="start" sideOffset={5}>
+                              <div className="p-2 border-b bg-slate-50">
+                                <div className="flex gap-1 mb-2 flex-wrap">
+                                  {["all", "X", "XI", "XII"].map(jenjang => (
+                                    <Button key={jenjang} variant={kelasHarianJenjangFilter === jenjang ? "default" : "ghost"} size="sm" className={`h-7 px-2 text-xs rounded-md ${kelasHarianJenjangFilter === jenjang ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"}`} onClick={() => setKelasHarianJenjangFilter(jenjang)}>
+                                      {jenjang === "all" ? "Semua" : jenjang}
+                                    </Button>
+                                  ))}
+                                </div>
+                                <div className="relative">
+                                  <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                  <Input placeholder="Cari kelas..." value={kelasHarianSearchQuery} onChange={(e) => setKelasHarianSearchQuery(e.target.value)} className="pl-7 h-8 text-sm rounded-lg" onClick={(e) => e.stopPropagation()} />
+                                  {kelasHarianSearchQuery && <button onClick={() => setKelasHarianSearchQuery("")} className="absolute right-2 top-1/2"><X className="h-3.5 w-3.5 text-slate-400" /></button>}
+                                </div>
                               </div>
-                              <div className="relative">
-                                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                                <Input placeholder="Cari kelas..." value={kelasHarianSearchQuery} onChange={(e) => setKelasHarianSearchQuery(e.target.value)} className="pl-7 h-8 text-sm rounded-lg" onClick={(e) => e.stopPropagation()} />
-                                {kelasHarianSearchQuery && <button onClick={() => setKelasHarianSearchQuery("")} className="absolute right-2 top-1/2"><X className="h-3.5 w-3.5 text-slate-400" /></button>}
+                              <div className="max-h-60 overflow-y-auto">
+                                {filteredKelasHarianOptions.length === 0 ? (
+                                  <div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada kelas yang cocok</div>
+                                ) : (
+                                  filteredKelasHarianOptions.map(kelas => (
+                                    <button key={kelas.id_kelas} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${selectedKelasHarian === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-700"}`} onClick={() => { setSelectedKelasHarian(kelas.id_kelas.toString()); setPopoverHarianOpen(false); setKelasHarianSearchQuery(""); setKelasHarianJenjangFilter("all"); }}>
+                                      {kelas.nama}
+                                    </button>
+                                  ))
+                                )}
                               </div>
-                            </div>
-                            <div className="max-h-60 overflow-y-auto">
-                              {filteredKelasHarianOptions.length === 0 ? (
-                                <div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada kelas yang cocok</div>
-                              ) : (
-                                filteredKelasHarianOptions.map(kelas => (
-                                  <button key={kelas.id_kelas} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${selectedKelasHarian === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-700"}`} onClick={() => { setSelectedKelasHarian(kelas.id_kelas.toString()); setPopoverHarianOpen(false); setKelasHarianSearchQuery(""); setKelasHarianJenjangFilter("all"); }}>
-                                    {kelas.nama}
-                                  </button>
-                                ))
-                              )}
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <div className="flex gap-3 items-end">
+                            </PopoverContent>
+                          </Popover>
+                        </div>
                         <div className="flex-1 sm:w-40">
                           <Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal</Label>
                           <Input type="date" value={selectedTanggal} onChange={(e) => setSelectedTanggal(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm w-full" />
@@ -899,6 +992,32 @@ export default function AttendanceManagement() {
                         <Button variant="outline" onClick={() => fetchPresensiHarian()} disabled={!selectedKelasHarian || isFetchingHarian} className="rounded-lg h-8 sm:h-9 px-3 text-xs sm:text-sm shrink-0">
                           <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingHarian ? "animate-spin" : ""}`} /> Refresh
                         </Button>
+                      </div>
+                      
+                      {/* Dropdown tipe presensi */}
+                      <div className="flex items-center gap-2 border rounded-lg p-1 w-fit bg-slate-50">
+                        <button
+                          onClick={() => setPresensiTypeHarian("masuk")}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            presensiTypeHarian === "masuk"
+                              ? "bg-blue-600 text-white shadow-sm"
+                              : "text-slate-600 hover:bg-slate-200"
+                          }`}
+                        >
+                          <LogIn className="h-3.5 w-3.5" />
+                          Presensi Masuk
+                        </button>
+                        <button
+                          onClick={() => setPresensiTypeHarian("pulang")}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            presensiTypeHarian === "pulang"
+                              ? "bg-blue-600 text-white shadow-sm"
+                              : "text-slate-600 hover:bg-slate-200"
+                          }`}
+                        >
+                          <LogOut className="h-3.5 w-3.5" />
+                          Presensi Pulang
+                        </button>
                       </div>
                     </div>
 
@@ -918,46 +1037,85 @@ export default function AttendanceManagement() {
                                 <TableHead className="font-semibold text-center text-xs sm:text-sm w-24">NIS</TableHead>
                                 <TableHead className="font-semibold text-center text-xs sm:text-sm min-w-[140px]">Nama Siswa</TableHead>
                                 <TableHead className="font-semibold text-center text-xs sm:text-sm w-28">Status PKL</TableHead>
-                                {STATUS_HARIAN_SEKOLAH.map(status => (
-                                  <TableHead key={status} className="text-center font-semibold text-xs sm:text-sm min-w-[80px]">
+                                {presensiTypeHarian === "masuk" ? (
+                                  STATUS_HARIAN_SEKOLAH.map(status => (
+                                    <TableHead key={status} className="text-center font-semibold text-xs sm:text-sm min-w-[80px]">
+                                      <div className="flex flex-col items-center gap-1">
+                                        <span>{status}</span>
+                                        <Checkbox checked={selectedBulkStatus === status} onCheckedChange={() => handleBulkCheckbox(status)} disabled={isBulkUpdating} className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                      </div>
+                                    </TableHead>
+                                  ))
+                                ) : (
+                                  <TableHead className="text-center font-semibold text-xs sm:text-sm min-w-[100px]">
                                     <div className="flex flex-col items-center gap-1">
-                                      <span>{status}</span>
-                                      <Checkbox checked={selectedBulkStatus === status} onCheckedChange={() => handleBulkCheckbox(status)} disabled={isBulkUpdating} className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                      <span>Pulang</span>
+                                      <Checkbox 
+                                        checked={selectedBulkPulang} 
+                                        onCheckedChange={handleBulkPulang} 
+                                        disabled={isBulkPulangUpdating} 
+                                        className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 h-3.5 w-3.5 sm:h-4 sm:w-4" 
+                                      />
                                     </div>
                                   </TableHead>
-                                ))}
+                                )}
                               </TableRow>
                             </TableHeader>
                             <TableBody>
                               {isFetchingHarian ? (
-                                <TableRow><TableCell colSpan={3 + STATUS_HARIAN_SEKOLAH.length} className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-500" /></TableCell></TableRow>
+                                <TableRow><TableCell colSpan={3 + (presensiTypeHarian === "masuk" ? STATUS_HARIAN_SEKOLAH.length : 1)} className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-500" /></TableCell></TableRow>
                               ) : presensiHarian.length === 0 ? (
-                                <TableRow><TableCell colSpan={3 + STATUS_HARIAN_SEKOLAH.length} className="text-center py-10 text-slate-500 text-xs sm:text-sm">Tidak ada data siswa</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={3 + (presensiTypeHarian === "masuk" ? STATUS_HARIAN_SEKOLAH.length : 1)} className="text-center py-10 text-slate-500 text-xs sm:text-sm">Tidak ada data siswa</TableCell></TableRow>
                               ) : (
                                 presensiHarian.map((item) => {
                                   const isPKL = item.siswa?.id_pkl !== null;
-                                  const availableStatus = isPKL ? STATUS_HARIAN_PKL : STATUS_HARIAN_SEKOLAH;
-                                  return (
-                                    <TableRow key={item.id_siswa} className="hover:bg-slate-50 transition-colors">
-                                      <TableCell className="text-center font-mono text-xs sm:text-sm">{item.siswa?.nis}</TableCell>
-                                      <TableCell className="text-center text-xs sm:text-sm font-medium">{item.siswa?.nama}</TableCell>
-                                      <TableCell className="text-center">
-                                        {isPKL ? <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs bg-blue-100 text-blue-700">PKL</span> : <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs bg-green-100 text-green-700">Sekolah</span>}
-                                      </TableCell>
-                                      {STATUS_HARIAN_SEKOLAH.map(status => {
-                                        if (!availableStatus.includes(status)) return <TableCell key={status} className="text-center bg-slate-50/30"></TableCell>;
-                                        return (
-                                          <TableCell key={status} className="text-center align-middle">
-                                            <div className="flex justify-center items-center">
-                                              <RadioGroup value={item.status_presensi || ""} onValueChange={(val) => updatePresensiHarian(item.id_siswa, item, val)} disabled={updatingStatus?.id === item.id_siswa && updatingStatus?.type === "harian"} className="flex justify-center">
-                                                <RadioGroupItem value={status} id={`harian-${item.id_siswa}-${status}`} className="data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600 h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                              </RadioGroup>
-                                            </div>
-                                          </TableCell>
-                                        );
-                                      })}
-                                    </TableRow>
-                                  );
+                                  
+                                  if (presensiTypeHarian === "masuk") {
+                                    const availableStatus = isPKL ? STATUS_HARIAN_PKL : STATUS_HARIAN_SEKOLAH;
+                                    return (
+                                      <TableRow key={item.id_siswa} className="hover:bg-slate-50 transition-colors">
+                                        <TableCell className="text-center font-mono text-xs sm:text-sm">{item.siswa?.nis}</TableCell>
+                                        <TableCell className="text-center text-xs sm:text-sm font-medium">{item.siswa?.nama}</TableCell>
+                                        <TableCell className="text-center">
+                                          {isPKL ? <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs bg-blue-100 text-blue-700">PKL</span> : <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs bg-green-100 text-green-700">Sekolah</span>}
+                                        </TableCell>
+                                        {STATUS_HARIAN_SEKOLAH.map(status => {
+                                          if (!availableStatus.includes(status)) return <TableCell key={status} className="text-center bg-slate-50/30"></TableCell>;
+                                          return (
+                                            <TableCell key={status} className="text-center align-middle">
+                                              <div className="flex justify-center items-center">
+                                                <RadioGroup value={item.status_presensi || ""} onValueChange={(val) => updatePresensiHarian(item.id_siswa, item, val)} disabled={updatingStatus?.id === item.id_siswa && updatingStatus?.type === "harian"} className="flex justify-center">
+                                                  <RadioGroupItem value={status} id={`harian-${item.id_siswa}-${status}`} className="data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                                </RadioGroup>
+                                              </div>
+                                            </TableCell>
+                                          );
+                                        })}
+                                      </TableRow>
+                                    );
+                                  } else {
+                                    // Mode Pulang
+                                    const isPulang = item.status_presensi === "Pulang";
+                                    return (
+                                      <TableRow key={item.id_siswa} className="hover:bg-slate-50 transition-colors">
+                                        <TableCell className="text-center font-mono text-xs sm:text-sm">{item.siswa?.nis}</TableCell>
+                                        <TableCell className="text-center text-xs sm:text-sm font-medium">{item.siswa?.nama}</TableCell>
+                                        <TableCell className="text-center">
+                                          {isPKL ? <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs bg-blue-100 text-blue-700">PKL</span> : <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs bg-green-100 text-green-700">Sekolah</span>}
+                                        </TableCell>
+                                        <TableCell className="text-center align-middle">
+                                          <div className="flex justify-center items-center">
+                                            <Checkbox
+                                              checked={isPulang}
+                                              onCheckedChange={(checked) => togglePresensiPulang(item.id_siswa, item, checked === true)}
+                                              disabled={updatingStatus?.id === item.id_siswa && updatingStatus?.type === "harian"}
+                                              className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 h-4 w-4 rounded-full"
+                                            />
+                                          </div>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  }
                                 })
                               )}
                             </TableBody>
@@ -969,7 +1127,7 @@ export default function AttendanceManagement() {
                 )}
               </TabsContent>
 
-              {/* TAB PRESENSI MAPEL */}
+              {/* TAB PRESENSI MAPEL (sama seperti sebelumnya) */}
               <TabsContent value="mapel" className="space-y-4 sm:space-y-5">
                 <div className="flex flex-col sm:flex-row gap-4 items-start">
                   <div className="w-full sm:w-64 flex-shrink-0">
