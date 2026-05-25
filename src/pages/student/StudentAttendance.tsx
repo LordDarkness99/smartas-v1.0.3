@@ -82,45 +82,35 @@ function FaceCaptureModal({ isOpen, onClose, onCapture, isLoading }: FaceCapture
   const [detectedExpression, setDetectedExpression] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Load face-api models saat modal pertama kali dibuka
   useEffect(() => {
     if (!isOpen) return;
-
     const loadModels = async () => {
       try {
-        // Pastikan path model sesuai dengan folder public/models
         const MODEL_URL = "/models";
         await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
         await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
-        // (Opsional) faceLandmark68Net untuk akurasi lebih, tapi tidak wajib
         await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
         setModelsLoaded(true);
         setError(null);
       } catch (err: any) {
         console.error(err);
-        setError("Gagal memuat model deteksi wajah. Periksa koneksi atau folder models.");
+        setError("Gagal memuat model deteksi wajah.");
       }
     };
-
     loadModels();
   }, [isOpen]);
 
-  // Fungsi untuk mendeteksi ekspresi dari satu frame webcam
   const detectExpression = async () => {
     if (!webcamRef.current || !modelsLoaded) return;
     const video = webcamRef.current.video;
     if (!video || video.readyState !== 4) return;
-
     setDetecting(true);
     setError(null);
-
     try {
       const detection = await faceapi
         .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
         .withFaceExpressions();
-
       if (detection) {
-        // Ambil ekspresi dengan skor tertinggi
         const expressions = detection.expressions;
         const topExpression = Object.entries(expressions).reduce((a, b) => (a[1] > b[1] ? a : b));
         const expressionName = topExpression[0];
@@ -132,7 +122,7 @@ function FaceCaptureModal({ isOpen, onClose, onCapture, isLoading }: FaceCapture
           setError("Ekspresi kurang jelas, coba hadap langsung ke kamera.");
         }
       } else {
-        setError("Tidak ada wajah terdeteksi. Pastikan wajah Anda terlihat jelas.");
+        setError("Tidak ada wajah terdeteksi.");
       }
     } catch (err: any) {
       setError("Gagal mendeteksi ekspresi: " + err.message);
@@ -141,7 +131,6 @@ function FaceCaptureModal({ isOpen, onClose, onCapture, isLoading }: FaceCapture
     }
   };
 
-  // Konfirmasi hasil ekspresi dan kirim ke parent
   const confirmExpression = () => {
     if (detectedExpression) {
       onCapture(detectedExpression);
@@ -154,20 +143,17 @@ function FaceCaptureModal({ isOpen, onClose, onCapture, isLoading }: FaceCapture
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 flex justify-between items-center">
+        <div className="bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] px-4 py-3 flex justify-between items-center">
           <div className="flex items-center gap-2 text-white">
             <ScanFace className="h-5 w-5" />
             <h3 className="font-semibold">Scan Wajah & Deteksi Ekspresi</h3>
           </div>
-          <button onClick={onClose} className="text-white/80 hover:text-white">
-            ✕
-          </button>
+          <button onClick={onClose} className="text-white/80 hover:text-white">✕</button>
         </div>
-
         <div className="p-4 space-y-4">
           {!modelsLoaded ? (
             <div className="flex flex-col items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              <Loader2 className="h-8 w-8 animate-spin text-[#2C5EAD]" />
               <p className="mt-2 text-sm text-slate-500">Memuat model deteksi wajah...</p>
             </div>
           ) : error && !detectedExpression ? (
@@ -176,7 +162,6 @@ function FaceCaptureModal({ isOpen, onClose, onCapture, isLoading }: FaceCapture
               <span>{error}</span>
             </div>
           ) : null}
-
           <div className="relative rounded-xl overflow-hidden bg-black/5">
             <Webcam
               ref={webcamRef}
@@ -192,7 +177,6 @@ function FaceCaptureModal({ isOpen, onClose, onCapture, isLoading }: FaceCapture
               </div>
             )}
           </div>
-
           {detectedExpression && (
             <div className="bg-emerald-50 rounded-xl p-3 flex items-center gap-3">
               <Smile className="h-6 w-6 text-emerald-600" />
@@ -202,12 +186,11 @@ function FaceCaptureModal({ isOpen, onClose, onCapture, isLoading }: FaceCapture
               </div>
             </div>
           )}
-
           <div className="flex gap-2">
             <Button
               onClick={detectExpression}
               disabled={detecting || !modelsLoaded}
-              className="flex-1 bg-blue-600 hover:bg-blue-700"
+              className="flex-1 bg-[#2C5EAD] hover:bg-[#2C5EAD]/80"
             >
               {detecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
               Deteksi Ekspresi
@@ -258,7 +241,7 @@ export default function StudentAttendance() {
   const scannerContainerId = "qr-reader";
 
   // Koordinat sekolah
-  const SCHOOL_COORD = { lat: -7.3104531, lng: 112.7239911};
+  const SCHOOL_COORD = { lat: -7.3104531, lng: 112.7239911 };
 
   // ==================== GREETING EFFECT ====================
   useEffect(() => {
@@ -266,7 +249,6 @@ export default function StudentAttendance() {
     if (hour < 12) setGreeting("Selamat Pagi");
     else if (hour < 18) setGreeting("Selamat Siang");
     else setGreeting("Selamat Malam");
-
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
@@ -390,12 +372,10 @@ export default function StudentAttendance() {
         resolve({ valid: false, message: "Browser tidak mendukung geolocation" });
         return;
       }
-
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude, accuracy, speed } = position.coords;
           const timestamp = position.timestamp;
-
           if (accuracy < 5) {
             resolve({ valid: false, message: "⚠️ Lokasi terdeteksi tidak wajar (akurasi terlalu tinggi)" });
             return;
@@ -413,16 +393,13 @@ export default function StudentAttendance() {
             resolve({ valid: false, message: "⚠️ Pergerakan tidak wajar terdeteksi" });
             return;
           }
-
           let targetCoord = SCHOOL_COORD;
           let targetName = "Sekolah";
-
           if (siswa?.id_pkl && siswa.koordinat_pkl) {
             const [pklLat, pklLng] = siswa.koordinat_pkl.split(",").map(Number);
             targetCoord = { lat: pklLat, lng: pklLng };
             targetName = siswa.tempat_pkl || "Tempat PKL";
           }
-
           const R = 6371;
           const dLat = (targetCoord.lat - latitude) * Math.PI / 180;
           const dLng = (targetCoord.lng - longitude) * Math.PI / 180;
@@ -432,7 +409,6 @@ export default function StudentAttendance() {
           const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
           const distance = R * c;
           const radius = 0.1; // 100 meter
-
           if (distance <= radius) {
             resolve({ valid: true, message: `✅ Berada di ${targetName} (jarak ${distance.toFixed(2)} km)` });
           } else {
@@ -442,11 +418,7 @@ export default function StudentAttendance() {
         (error) => {
           resolve({ valid: false, message: `Gagal mendapatkan lokasi: ${error.message}` });
         },
-        {
-          enableHighAccuracy: true,
-          maximumAge: 0,
-          timeout: 10000
-        }
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
       );
     });
   };
@@ -454,29 +426,17 @@ export default function StudentAttendance() {
   // ==================== PROSES PRESENSI DENGAN EKSPRESI ====================
   const prosesPresensiDenganEkspresi = async (ekspresi: string) => {
     if (!siswa || !pendingPresensiData) return;
-
     const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    const batasTerlambat = 7 * 60 + 30;
-    const currentMinutes = currentHour * 60 + currentMinute;
-    const status = pendingPresensiData.status; // "Hadir"/"Terlambat" untuk masuk, atau "Pulang"
-
+    const status = pendingPresensiData.status;
     try {
       const { error } = await supabase.from("presensi_harian").insert({
         id_siswa: siswa.id_siswa,
         status_presensi: status,
         waktu_presensi: now.toISOString(),
-        ekspresi: ekspresi, // Simpan ekspresi dari scan wajah
+        ekspresi: ekspresi,
       });
       if (error) throw error;
-
-      toast({
-        title: "Berhasil",
-        description: `✅ Presensi ${status === "Pulang" ? "pulang" : "masuk"} tercatat dengan ekspresi ${ekspresi}`,
-      });
-
-      // Refresh data hari ini
+      toast({ title: "Berhasil", description: `✅ Presensi ${status === "Pulang" ? "pulang" : "masuk"} tercatat dengan ekspresi ${ekspresi}` });
       const today = new Date().toISOString().split("T")[0];
       const start = `${today}T00:00:00`;
       const end = `${today}T23:59:59`;
@@ -497,12 +457,9 @@ export default function StudentAttendance() {
     }
   };
 
-  // ==================== HANDLE MASUK (Pertama: validasi lokasi, lalu buka kamera) ====================
   const handleMasuk = async () => {
     setIsSubmitting(true);
     setLocationStatus(null);
-
-    // Validasi lokasi dulu
     const { valid, message } = await validateLocation();
     if (!valid) {
       setLocationStatus({ verified: false, message });
@@ -511,31 +468,25 @@ export default function StudentAttendance() {
       return;
     }
     setLocationStatus({ verified: true, message });
-
-    // Tentukan status (Hadir/Terlambat) berdasarkan jam
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
     const batasTerlambat = 7 * 60 + 30;
     const currentMinutes = currentHour * 60 + currentMinute;
     const status = currentMinutes <= batasTerlambat ? "Hadir" : "Terlambat";
-
     setPendingPresensiData({ status });
     setPresensiType("masuk");
     setShowFaceModal(true);
     setIsSubmitting(false);
   };
 
-  // ==================== HANDLE PULANG (Validasi lokasi + cek sudah masuk) ====================
   const handlePulang = async () => {
     if (!todayPresensi.masuk) {
       toast({ title: "Belum masuk", description: "Silakan presensi masuk terlebih dahulu", variant: "destructive" });
       return;
     }
-
     setIsSubmitting(true);
     setLocationStatus(null);
-
     const { valid, message } = await validateLocation();
     if (!valid) {
       setLocationStatus({ verified: false, message });
@@ -544,14 +495,12 @@ export default function StudentAttendance() {
       return;
     }
     setLocationStatus({ verified: true, message });
-
     setPendingPresensiData({ status: "Pulang" });
     setPresensiType("pulang");
     setShowFaceModal(true);
     setIsSubmitting(false);
   };
 
-  // Callback dari modal face capture
   const handleFaceCaptured = (expression: string) => {
     prosesPresensiDenganEkspresi(expression);
   };
@@ -598,38 +547,31 @@ export default function StudentAttendance() {
     try {
       const payload = JSON.parse(qrData);
       const { id_jadwal, nonce, exp } = payload;
-
       if (!id_jadwal || !nonce || !exp) {
-        toast({ title: "QR tidak valid", description: "QR Code tidak dikenali (format tidak lengkap)", variant: "destructive" });
+        toast({ title: "QR tidak valid", description: "QR Code tidak dikenali", variant: "destructive" });
         return;
       }
-
       const now = Date.now();
       if (now > exp) {
-        toast({ title: "QR kadaluarsa", description: "QR Code sudah tidak berlaku (hanya 30 detik)", variant: "destructive" });
+        toast({ title: "QR kadaluarsa", description: "QR Code sudah tidak berlaku", variant: "destructive" });
         return;
       }
-
       const { data: existingNonce, error: nonceError } = await (supabase
         .from('active_qr_nonce') as any)
         .select("nonce, used")
         .eq("nonce", nonce)
         .single();
-
       if (nonceError || !existingNonce) {
         toast({ title: "QR tidak valid", description: "QR Code tidak dikenali oleh sistem", variant: "destructive" });
         return;
       }
-
       if (existingNonce.used) {
         toast({ title: "QR sudah digunakan", description: "QR Code ini sudah dipakai sebelumnya", variant: "destructive" });
         return;
       }
-
       await (supabase.from('active_qr_nonce') as any)
         .update({ used: true })
         .eq("nonce", nonce);
-
       const { data: jadwal, error: jadwalError } = await supabase
         .from("jadwal")
         .select(`
@@ -642,17 +584,14 @@ export default function StudentAttendance() {
         `)
         .eq("id_jadwal", id_jadwal)
         .single();
-
       if (jadwalError || !jadwal) {
         toast({ title: "Jadwal tidak ditemukan", variant: "destructive" });
         return;
       }
-
       if (jadwal.id_kelas !== siswa?.id_kelas) {
         toast({ title: "Tidak berhak", description: "Anda tidak terdaftar di kelas ini", variant: "destructive" });
         return;
       }
-
       const today = new Date();
       const daysMap = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
       const hariIni = daysMap[today.getDay()];
@@ -660,7 +599,6 @@ export default function StudentAttendance() {
         toast({ title: "Bukan hari ini", description: `Jadwal ini untuk hari ${jadwal.hari}`, variant: "destructive" });
         return;
       }
-
       const [startHour, startMin] = jadwal.jam.split(" - ")[0].split(":").map(Number);
       const startMinutes = startHour * 60 + startMin;
       const currentMinutes = today.getHours() * 60 + today.getMinutes();
@@ -668,20 +606,17 @@ export default function StudentAttendance() {
         toast({ title: "Di luar waktu", description: "Presensi hanya dapat dilakukan 15 menit sebelum hingga 45 menit setelah jadwal dimulai", variant: "destructive" });
         return;
       }
-
       const { valid, message } = await validateLocation();
       if (!valid) {
         toast({ title: "Lokasi tidak valid", description: message, variant: "destructive" });
         return;
       }
-
       const { error: insertError } = await supabase.from("presensi_siswa_mapel").insert({
         id_siswa: siswa!.id_siswa,
         id_jadwal: id_jadwal,
         status: "Hadir",
         waktu_presensi: new Date().toISOString(),
       });
-
       if (insertError) {
         if (insertError.code === "23505") {
           toast({ title: "Sudah presensi", description: "Anda sudah melakukan presensi untuk jadwal ini", variant: "destructive" });
@@ -741,142 +676,78 @@ export default function StudentAttendance() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="flex h-screen items-center justify-center bg-[#C4E2F5]">
         <div className="text-center space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto" />
-          <p className="text-slate-500">Memuat Presensi...</p>
+          <Loader2 className="h-12 w-12 animate-spin text-[#2C5EAD] mx-auto" />
+          <p className="text-[#2C5EAD] font-medium">Memuat Presensi...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* HEADER */}
-      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-2xl sm:rounded-3xl shadow-xl mx-3 sm:mx-4 mt-3 sm:mt-4">
-        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <Avatar className="h-10 w-10 sm:h-14 sm:w-14 border-2 border-white/30 rounded-xl sm:rounded-2xl">
-                <AvatarFallback className="bg-white/20 text-white text-base sm:text-xl font-bold rounded-xl sm:rounded-2xl">
+    <div className="min-h-screen bg-[#F0F7FC]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
+        {/* HEADER - Gradasi palette */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] shadow-xl">
+          <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
+          <div className="relative p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <Avatar className="h-14 w-14 sm:h-16 sm:w-16 border-2 border-white shadow-md">
+                <AvatarFallback className="bg-white/30 text-white text-xl font-bold">
                   {siswa?.nama?.charAt(0) || "S"}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  {greeting === "Selamat Pagi" ? <Sun className="h-3 w-3 sm:h-4 sm:w-4" /> :
-                    greeting === "Selamat Malam" ? <Moon className="h-3 w-3 sm:h-4 sm:w-4" /> :
-                      <Cloud className="h-3 w-3 sm:h-4 sm:w-4" />}
-                  <p className="text-xs sm:text-sm text-blue-100">{greeting}</p>
+                <div className="flex items-center gap-2 text-blue-100 text-sm">
+                  {greeting === "Selamat Pagi" ? <Sun className="h-4 w-4" /> : greeting === "Selamat Malam" ? <Moon className="h-4 w-4" /> : <Cloud className="h-4 w-4" />}
+                  <span>{greeting},</span>
                 </div>
-                <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold">Presensi Siswa</h1>
-                <p className="text-blue-100 text-xs sm:text-sm">
-                  {siswa?.nama} • {siswa?.nis}
-                </p>
+                <h1 className="text-2xl sm:text-3xl font-bold text-white">{siswa?.nama}</h1>
+                <p className="text-blue-100 text-sm">Presensi Kehadiran</p>
               </div>
             </div>
-
-            <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3">
-              <div className="bg-white/10 rounded-xl px-2 py-1 sm:px-4 sm:py-2 backdrop-blur-sm text-center">
-                <p className="text-[9px] sm:text-xs text-blue-100">{formatDate(currentTime)}</p>
-                <p className="text-xs sm:text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
+            <div className="flex items-center gap-3">
+              <div className="bg-[#2C5EAD] rounded-xl px-4 py-2 text-center shadow-md">
+                <div className="text-xs text-white/90">{formatDate(currentTime)}</div>
+                <div className="text-lg font-semibold text-white">{currentTime.toLocaleTimeString("id-ID")}</div>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="bg-white/10 hover:bg-white/20 text-white rounded-xl h-8 w-8 sm:h-10 sm:w-10"
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="bg-[#2C5EAD] hover:bg-[#2C5EAD]/80 text-white rounded-xl h-10 w-10 shadow-md"
                 onClick={handleRefresh}
                 disabled={refreshing}
               >
-                <RefreshCw className={`h-4 w-4 sm:h-5 sm:w-5 ${refreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
               </Button>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* MAIN CONTENT */}
-      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-4 sm:space-y-8">
-        {/* INFO CARDS */}
-        <div className="grid grid-cols-2 gap-3 sm:gap-4">
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] sm:text-xs text-blue-600 font-medium">NIS</p>
-                  <p className="text-sm sm:text-lg font-bold text-blue-900 truncate">{siswa?.nis}</p>
-                </div>
-                <User className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Status</p>
-                  <p className="text-sm sm:text-lg font-bold text-emerald-900">
-                    {siswa?.id_pkl ? "PKL" : "Sekolah"}
-                  </p>
-                </div>
-                {siswa?.id_pkl ? <Briefcase className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" /> : <School className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] sm:text-xs text-amber-600 font-medium">Presensi Masuk</p>
-                  <p className="text-sm sm:text-lg font-bold text-amber-900">
-                    {todayPresensi.masuk ? "Sudah" : "Belum"}
-                  </p>
-                </div>
-                <Calendar className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] sm:text-xs text-purple-600 font-medium">Progress Mapel</p>
-                  <p className="text-sm sm:text-lg font-bold text-purple-900">{attendanceProgress}%</p>
-                </div>
-                <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* PKL INFO */}
+        {/* PKL INFO (jika ada) */}
         {siswa?.id_pkl && siswa?.tempat_pkl && (
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-r from-indigo-500 to-purple-500 text-white">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-3">
-                <Briefcase className="h-6 w-6 sm:h-8 sm:w-8" />
-                <div>
-                  <p className="text-[10px] sm:text-sm opacity-90">Tempat PKL</p>
-                  <p className="text-xs sm:text-base font-semibold truncate">{siswa.tempat_pkl}</p>
-                </div>
+          <Card className="border-0 shadow-md rounded-xl bg-gradient-to-r from-[#2C5EAD]/5 to-[#1591DC]/5">
+            <CardContent className="p-3 sm:p-4 flex items-center gap-3">
+              <Briefcase className="h-8 w-8 text-[#1591DC]" />
+              <div>
+                <p className="text-xs text-gray-500">Tempat PKL</p>
+                <p className="font-semibold text-gray-800">{siswa.tempat_pkl}</p>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* MAIN TABS CARD */}
+        {/* MAIN CARD - Form Presensi */}
         <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-6">
+          <CardHeader className="bg-[#1591DC] text-white p-4 sm:p-6">
             <div className="flex items-center gap-3">
-              <div className="bg-white/10 p-1.5 sm:p-2 rounded-xl">
+              <div className="bg-white/20 p-1.5 sm:p-2 rounded-xl">
                 <Fingerprint className="h-5 w-5 sm:h-6 sm:w-6" />
               </div>
               <div>
                 <CardTitle className="text-base sm:text-xl">Form Presensi</CardTitle>
-                <CardDescription className="text-slate-300 text-[10px] sm:text-sm">
+                <CardDescription className="text-blue-100 text-xs sm:text-sm">
                   Lakukan presensi harian dan presensi mata pelajaran
                 </CardDescription>
               </div>
@@ -886,14 +757,12 @@ export default function StudentAttendance() {
           <CardContent className="p-4 sm:p-6">
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-4 sm:space-y-6">
               <div className="flex justify-center">
-                <TabsList className="bg-slate-100 p-1 rounded-xl w-full max-w-xs sm:max-w-md">
-                  <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-3 py-1">
-                    <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
-                    Presensi Harian
+                <TabsList className="bg-[#2C5EAD] p-1 rounded-xl">
+                  <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-4 py-1.5 text-sm gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+                    <Calendar className="h-4 w-4" /> Presensi Harian
                   </TabsTrigger>
-                  <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-3 py-1">
-                    <QrCode className="h-3 w-3 sm:h-4 sm:w-4" />
-                    Presensi Mapel
+                  <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-4 py-1.5 text-sm gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+                    <QrCode className="h-4 w-4" /> Presensi Mapel
                   </TabsTrigger>
                 </TabsList>
               </div>
@@ -935,7 +804,7 @@ export default function StudentAttendance() {
                         <Button
                           onClick={handleMasuk}
                           disabled={isSubmitting}
-                          className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-sm sm:text-base h-9 sm:h-10"
+                          className="w-full rounded-xl bg-[#2C5EAD] hover:bg-[#2C5EAD]/80 text-sm sm:text-base h-9 sm:h-10"
                         >
                           {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
                           Scan Wajah & Presensi Masuk
@@ -974,7 +843,7 @@ export default function StudentAttendance() {
                           onClick={handlePulang}
                           disabled={isSubmitting || !todayPresensi.masuk}
                           variant="outline"
-                          className="w-full rounded-xl text-sm sm:text-base h-9 sm:h-10"
+                          className="w-full rounded-xl text-sm sm:text-base h-9 sm:h-10 border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"
                         >
                           {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
                           Scan Wajah & Presensi Pulang
@@ -1014,11 +883,11 @@ export default function StudentAttendance() {
                 </div>
               </TabsContent>
 
-              {/* TAB PRESENSI MAPEL (tidak berubah) */}
+              {/* TAB PRESENSI MAPEL */}
               <TabsContent value="mapel" className="space-y-4 sm:space-y-6">
                 {isLoadingJadwal ? (
                   <div className="flex justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                    <Loader2 className="h-8 w-8 animate-spin text-[#2C5EAD]" />
                   </div>
                 ) : jadwalHariIni.length === 0 ? (
                   <div className="text-center py-12">
@@ -1036,9 +905,9 @@ export default function StudentAttendance() {
                           <Activity className="h-4 w-4 sm:h-5 sm:w-5 text-slate-600" />
                           <span className="font-medium text-slate-700 text-sm sm:text-base">Progress Presensi Hari Ini</span>
                         </div>
-                        <span className="text-xl sm:text-2xl font-bold text-blue-600">{attendanceProgress}%</span>
+                        <span className="text-xl sm:text-2xl font-bold text-[#2C5EAD]">{attendanceProgress}%</span>
                       </div>
-                      <Progress value={parseFloat(attendanceProgress as string)} className="h-2" />
+                      <Progress value={parseFloat(attendanceProgress as string)} className="h-2 [&>div]:bg-[#1591DC]" />
                       <p className="text-xs text-slate-500 mt-2">
                         {jadwalHariIni.filter(j => j.sudah_presensi).length} dari {jadwalHariIni.length} mata pelajaran sudah dipresensi
                       </p>
@@ -1046,7 +915,7 @@ export default function StudentAttendance() {
 
                     <div className="space-y-3">
                       <h3 className="text-base sm:text-lg font-semibold text-slate-800 flex items-center gap-2">
-                        <School className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+                        <School className="h-4 w-4 sm:h-5 sm:w-5 text-[#1591DC]" />
                         Jadwal Mata Pelajaran Hari Ini:
                       </h3>
                       <div className="grid gap-4">
@@ -1091,7 +960,7 @@ export default function StudentAttendance() {
                                   ) : (
                                     <Button
                                       onClick={() => startScanner(jadwal.id_jadwal)}
-                                      className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-xs sm:text-sm h-9 sm:h-10"
+                                      className="rounded-xl bg-[#2C5EAD] hover:bg-[#2C5EAD]/80 text-xs sm:text-sm h-9 sm:h-10"
                                     >
                                       <QrCode className="mr-2 h-4 w-4" /> Scan QR Code
                                     </Button>

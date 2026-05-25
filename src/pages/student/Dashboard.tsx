@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -13,7 +12,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { 
   Loader2, 
   User, 
-  GraduationCap, 
   Calendar, 
   Clock, 
   CheckCircle, 
@@ -22,10 +20,6 @@ import {
   BookOpen,
   TrendingUp,
   Activity,
-  Award,
-  Bell,
-  Home,
-  Briefcase,
   Star,
   FileText,
   School,
@@ -33,8 +27,124 @@ import {
   Moon,
   Cloud,
   RefreshCw,
-  Info
+  Info,
+  GraduationCap,
+  Home,
+  Briefcase,
+  ChevronDown,
+  Search
 } from "lucide-react";
+
+// Import untuk searchable select
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandInput, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
+
+// ==================== FUNGSI SINGKAT NAMA MAPEL ====================
+const shortenSubjectName = (name: string): string => {
+  const shortMap: Record<string, string> = {
+    "Pemrograman Web": "Pemweb",
+    "Pemrograman Desktop": "Pemdes",
+    "Pemrograman Mobile": "Pemob",
+    "Basis Data": "Basisdata",
+    "Bahasa Inggris": "B.Inggris",
+    "Bahasa Indonesia": "B.Indonesia",
+    "Matematika": "Mat",
+    "Fisika": "Fis",
+    "Kimia": "Kim",
+    "Biologi": "Bio",
+    "Sejarah": "Sej",
+    "Geografi": "Geo",
+    "Ekonomi": "Eko",
+    "Sosiologi": "Sos",
+    "Seni Budaya": "Seni",
+    "Pendidikan Agama": "PAI",
+    "Pendidikan Kewarganegaraan": "PKn",
+    "Produktif": "Produktif",
+    "Kewirausahaan": "KWU",
+    "Simulasi Digital": "Simdig",
+    "Komputer dan Jaringan Dasar": "KJD",
+    "Sistem Operasi": "SO",
+    "Pemrograman Dasar": "Pemdas",
+  };
+  if (shortMap[name]) return shortMap[name];
+  // Jika panjang > 15 karakter, coba ambil akronim dari huruf kapital
+  if (name.length > 15) {
+    const acronym = name.split(' ').map(word => word[0]?.toUpperCase()).join('');
+    if (acronym.length <= 5) return acronym;
+  }
+  return name;
+};
+
+// ==================== SEARCHABLE SELECT COMPONENT ====================
+interface SearchableSelectProps {
+  items: MataPelajaran[];
+  value: string;
+  onValueChange: (value: string) => void;
+  placeholder?: string;
+}
+
+function SearchableSelect({ items, value, onValueChange, placeholder = "Pilih Mapel" }: SearchableSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  
+  const filteredItems = useMemo(() => {
+    if (!search) return items;
+    return items.filter(item => 
+      item.nama.toLowerCase().includes(search.toLowerCase()) ||
+      shortenSubjectName(item.nama).toLowerCase().includes(search.toLowerCase())
+    );
+  }, [items, search]);
+  
+  const selectedItem = items.find(item => item.id_mapel.toString() === value);
+  const displayValue = selectedItem ? shortenSubjectName(selectedItem.nama) : "Semua Mata Pelajaran";
+  
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-[180px] justify-between bg-[#2C5EAD] text-white border-none hover:bg-[#2C5EAD]/90 focus:ring-0"
+        >
+          {value === "all" ? "Semua Mapel" : displayValue}
+          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[220px] p-0">
+        <Command>
+          <CommandInput placeholder="Cari mapel..." className="h-9" />
+          <CommandEmpty>Tidak ditemukan.</CommandEmpty>
+          <CommandGroup>
+            <CommandItem
+              value="all"
+              onSelect={() => {
+                onValueChange("all");
+                setOpen(false);
+              }}
+              className="cursor-pointer"
+            >
+              <span>Semua Mata Pelajaran</span>
+            </CommandItem>
+            {filteredItems.map((item) => (
+              <CommandItem
+                key={item.id_mapel}
+                value={item.id_mapel.toString()}
+                onSelect={() => {
+                  onValueChange(item.id_mapel.toString());
+                  setOpen(false);
+                }}
+                className="cursor-pointer"
+              >
+                <span>{shortenSubjectName(item.nama)}</span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 // ==================== INTERFACES ====================
 interface SiswaData {
@@ -67,52 +177,38 @@ interface PresensiMapel {
 export default function StudentDashboard() {
   const { user } = useAuth();
   
-  // ==================== STATE ====================
+  // STATE (tetap sama)
   const [siswa, setSiswa] = useState<SiswaData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  
   const [statsHarian, setStatsHarian] = useState({ hadir: 0, terlambat: 0, izin: 0, sakit: 0, alfa: 0 });
   const [recentHarian, setRecentHarian] = useState<PresensiHarian[]>([]);
-  
   const [mapelList, setMapelList] = useState<MataPelajaran[]>([]);
   const [selectedMapel, setSelectedMapel] = useState<string>("all");
   const [statsMapel, setStatsMapel] = useState({ hadir: 0, izin: 0, sakit: 0, alfa: 0 });
   const [recentMapel, setRecentMapel] = useState<PresensiMapel[]>([]);
-  
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
 
-  // ==================== HELPER FUNCTIONS ====================
+  // Helper functions (sama)
   const formatDate = useCallback((date: Date) => {
-    return date.toLocaleDateString("id-ID", { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
+    return date.toLocaleDateString("id-ID", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   }, []);
-
   const formatTime = useCallback((date: Date) => {
-    return date.toLocaleTimeString("id-ID", { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      second: '2-digit'
-    });
+    return date.toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   }, []);
 
-  // ==================== GREETING EFFECT ====================
+  // Greeting effect
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour < 12) setGreeting("Selamat Pagi");
     else if (hour < 18) setGreeting("Selamat Siang");
     else setGreeting("Selamat Malam");
-
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // ==================== GET STATUS STYLES ====================
+  // Status styles
   const getStatusColor = useCallback((status: string) => {
     const colors: Record<string, string> = {
       "Hadir": "bg-emerald-100 text-emerald-700",
@@ -123,7 +219,6 @@ export default function StudentDashboard() {
     };
     return colors[status] || "bg-gray-100 text-gray-700";
   }, []);
-
   const getStatusIcon = useCallback((status: string) => {
     switch(status) {
       case "Hadir": return <CheckCircle className="h-3 w-3" />;
@@ -135,7 +230,7 @@ export default function StudentDashboard() {
     }
   }, []);
 
-  // ==================== FETCH DATA ====================
+  // Fetch data (sama, tidak diubah)
   useEffect(() => {
     const fetchData = async () => {
       if (!user?.id_siswa) return;
@@ -165,10 +260,7 @@ export default function StudentDashboard() {
             const uniqueMapel = new Map();
             jadwalData.forEach((item: any) => {
               if (item.mapel && !uniqueMapel.has(item.mapel.id_mapel)) {
-                uniqueMapel.set(item.mapel.id_mapel, { 
-                  id_mapel: item.mapel.id_mapel, 
-                  nama: item.mapel.nama 
-                });
+                uniqueMapel.set(item.mapel.id_mapel, { id_mapel: item.mapel.id_mapel, nama: item.mapel.nama });
               }
             });
             setMapelList(Array.from(uniqueMapel.values()));
@@ -212,7 +304,6 @@ export default function StudentDashboard() {
     fetchData();
   }, [user]);
 
-  // ==================== FETCH PRESENSI MAPEL ====================
   useEffect(() => {
     const fetchPresensiMapel = async () => {
       if (!user?.id_siswa || loading) return;
@@ -257,473 +348,348 @@ export default function StudentDashboard() {
     fetchPresensiMapel();
   }, [selectedMapel, user, loading]);
 
-  // ==================== CALCULATIONS ====================
   const totalAttendance = useMemo(() => {
     const total = statsHarian.hadir + statsHarian.terlambat + statsHarian.izin + statsHarian.sakit + statsHarian.alfa;
     if (total === 0) return 0;
     return ((statsHarian.hadir + statsHarian.terlambat) / total * 100).toFixed(1);
   }, [statsHarian]);
 
-  // ==================== HANDLE REFRESH ====================
   const handleRefresh = () => {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 1500);
   };
 
-  // ==================== GET MAPEL NAME ====================
   const getMapelName = useCallback((mapelId: string): string => {
     if (mapelId === "all") return "semua mata pelajaran";
     const found = mapelList.find(m => m.id_mapel.toString() === mapelId);
-    return found?.nama || "mata pelajaran terpilih";
+    return found ? shortenSubjectName(found.nama) : "mata pelajaran terpilih";
   }, [mapelList]);
 
-  // ==================== LOADING STATE ====================
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="flex h-screen items-center justify-center bg-[#C4E2F5]">
         <div className="text-center space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto" />
-          <p className="text-slate-500">Memuat Dashboard...</p>
+          <Loader2 className="h-12 w-12 animate-spin text-[#2C5EAD] mx-auto" />
+          <p className="text-[#2C5EAD] font-medium">Memuat Dashboard...</p>
         </div>
       </div>
     );
   }
 
-  // ==================== MAIN RENDER ====================
+  // ==================== RENDER UTAMA DENGAN DESAIN BARU ====================
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      
-      {/* HEADER - RESPONSIF MOBILE */}
-      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-2xl sm:rounded-3xl shadow-xl mx-3 sm:mx-4 mt-3 sm:mt-4">
-        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <Avatar className="h-10 w-10 sm:h-14 sm:w-14 border-2 border-white/30 rounded-xl sm:rounded-2xl">
-                <AvatarFallback className="bg-white/20 text-white text-base sm:text-xl font-bold rounded-xl sm:rounded-2xl">
+    <div className="min-h-screen bg-[#F0F7FC]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
+        
+        {/* HEADER - Gradasi palette */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] shadow-xl">
+          <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
+          <div className="relative p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <Avatar className="h-14 w-14 sm:h-16 sm:w-16 border-2 border-white shadow-md">
+                <AvatarFallback className="bg-white/30 text-white text-xl font-bold">
                   {siswa?.nama?.charAt(0) || "S"}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  {greeting === "Selamat Pagi" ? <Sun className="h-3 w-3 sm:h-4 sm:w-4" /> : 
-                   greeting === "Selamat Malam" ? <Moon className="h-3 w-3 sm:h-4 sm:w-4" /> : 
-                   <Cloud className="h-3 w-3 sm:h-4 sm:w-4" />}
-                  <p className="text-xs sm:text-sm text-blue-100">{greeting}</p>
+                <div className="flex items-center gap-2 text-blue-100 text-sm">
+                  {greeting === "Selamat Pagi" ? <Sun className="h-4 w-4" /> : greeting === "Selamat Malam" ? <Moon className="h-4 w-4" /> : <Cloud className="h-4 w-4" />}
+                  <span>{greeting},</span>
                 </div>
-                <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold">Dashboard Siswa</h1>
-                <p className="text-blue-100 text-xs sm:text-sm">
-                  Selamat datang kembali, <span className="font-semibold">{siswa?.nama}</span>
-                </p>
+                <h1 className="text-2xl sm:text-3xl font-bold text-white">{siswa?.nama}</h1>
+                <p className="text-blue-100 text-sm">Dashboard Akademik & Kehadiran</p>
               </div>
             </div>
-            
-            <div className="flex items-center justify-between sm:justify-end gap-3">
-              <div className="bg-white/10 rounded-xl px-3 py-1.5 sm:px-4 sm:py-2 backdrop-blur-sm text-center">
-                <p className="text-[10px] sm:text-xs text-blue-100">{formatDate(currentTime)}</p>
-                <p className="text-sm sm:text-xl font-semibold">{formatTime(currentTime)}</p>
+            {/* Jam dan Refresh dengan background #2C5EAD */}
+            <div className="flex items-center gap-3">
+              <div className="bg-[#2C5EAD] rounded-xl px-4 py-2 text-center shadow-md">
+                <div className="text-xs text-white/90">{formatDate(currentTime)}</div>
+                <div className="text-lg font-semibold text-white">{formatTime(currentTime)}</div>
               </div>
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="bg-white/10 hover:bg-white/20 text-white rounded-xl h-8 w-8 sm:h-10 sm:w-10"
+                className="bg-[#2C5EAD] hover:bg-[#2C5EAD]/80 text-white rounded-xl h-10 w-10 shadow-md"
                 onClick={handleRefresh}
               >
-                <RefreshCw className={`h-4 w-4 sm:h-5 sm:w-5 ${refreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
               </Button>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* MAIN CONTENT */}
-      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-4 sm:space-y-8">
-        
-        {/* INFO CARDS - Responsif grid 2 kolom */}
-        <div className="grid grid-cols-2 gap-3 sm:gap-4">
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] sm:text-xs text-blue-600 font-medium">NIS</p>
-                  <p className="text-base sm:text-xl font-bold text-blue-900 truncate">{siswa?.nis}</p>
+        {/* INFO CARDS - Compact */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {[
+            { label: "NIS", value: siswa?.nis, icon: User, color: "#2C5EAD" },
+            { label: "Kelas", value: siswa?.kelas_nama, icon: School, color: "#1591DC" },
+            { label: "Status", value: siswa?.id_pkl ? "PKL" : "Sekolah", icon: siswa?.id_pkl ? Briefcase : Home, color: "#4BB8FA" },
+            { label: "Kehadiran", value: `${totalAttendance}%`, icon: Activity, color: "#2C5EAD" }
+          ].map((item, idx) => (
+            <Card key={idx} className="border-0 shadow-md rounded-xl hover:shadow-lg transition-all duration-200">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{item.label}</p>
+                    <p className="text-base sm:text-lg font-bold text-gray-800 truncate">{item.value}</p>
+                  </div>
+                  <div className="p-2 rounded-full" style={{ backgroundColor: `${item.color}15` }}>
+                    <item.icon className="h-5 w-5" style={{ color: item.color }} />
+                  </div>
                 </div>
-                <User className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" />
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Kelas</p>
-                  <p className="text-base sm:text-xl font-bold text-emerald-900 truncate">{siswa?.kelas_nama}</p>
-                </div>
-                <School className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] sm:text-xs text-purple-600 font-medium">Status</p>
-                  <p className="text-base sm:text-xl font-bold text-purple-900">
-                    {siswa?.id_pkl ? "PKL" : "Sekolah"}
-                  </p>
-                </div>
-                {siswa?.id_pkl ? <Briefcase className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" /> : <Home className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" />}
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] sm:text-xs text-amber-600 font-medium">Kehadiran</p>
-                  <p className="text-base sm:text-xl font-bold text-amber-900">{totalAttendance}%</p>
-                </div>
-                <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
-        {/* PKL INFO */}
+        {/* PKL Info */}
         {siswa?.id_pkl && siswa?.tempat_pkl && (
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-r from-indigo-500 to-purple-500 text-white">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-3">
-                <Briefcase className="h-6 w-6 sm:h-8 sm:w-8" />
-                <div>
-                  <p className="text-[10px] sm:text-sm opacity-90">Tempat PKL</p>
-                  <p className="text-xs sm:text-base font-semibold truncate">{siswa.tempat_pkl}</p>
-                </div>
+          <Card className="border-0 shadow-md rounded-xl bg-gradient-to-r from-[#2C5EAD]/5 to-[#1591DC]/5">
+            <CardContent className="p-3 sm:p-4 flex items-center gap-3">
+              <Briefcase className="h-8 w-8 text-[#1591DC]" />
+              <div>
+                <p className="text-xs text-gray-500">Tempat PKL</p>
+                <p className="font-semibold text-gray-800">{siswa.tempat_pkl}</p>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* STATS GRID - di mobile jadi 1 kolom */}
-        <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
-          
-          {/* PRESENSI HARIAN CARD */}
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white p-4 sm:p-5">
-              <div className="flex items-center justify-between flex-wrap gap-2">
+        {/* DUA CARD STATISTIK UTAMA - Header dengan #1591DC */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Statistik Presensi Harian */}
+          <Card className="border-0 shadow-md rounded-xl overflow-hidden">
+            <CardHeader className="bg-[#1591DC] text-white pb-3">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
-                  <CardTitle className="text-sm sm:text-lg">Presensi Harian (30 hari)</CardTitle>
+                  <Calendar className="h-5 w-5 text-white" />
+                  <CardTitle className="text-base sm:text-lg text-white">Presensi Harian</CardTitle>
                 </div>
-                <div className="bg-white/20 px-2 py-0.5 sm:px-3 sm:py-1 rounded-xl text-center">
-                  <p className="text-sm sm:text-lg font-bold">{totalAttendance}%</p>
-                  <p className="text-[8px] sm:text-[10px]">Kehadiran</p>
-                </div>
+                {/* Badge 30 hari terakhir diubah background #2C5EAD */}
+                <Badge variant="outline" className="border-white/30 bg-[#2C5EAD] text-white">30 hari terakhir</Badge>
               </div>
-              <CardDescription className="text-emerald-100 text-[10px] sm:text-xs">
-                Ringkasan kehadiran Anda dalam 30 hari terakhir
+              <CardDescription className="text-blue-100">
+                Ringkasan kehadiran harian Anda
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-4 sm:p-5">
-              <div className="grid grid-cols-5 gap-2 sm:gap-3">
-                <div className="text-center space-y-1">
-                  <div className="bg-emerald-100 p-1.5 sm:p-2 rounded-xl">
-                    <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 mx-auto" />
-                    <div className="text-base sm:text-xl font-bold text-emerald-700">{statsHarian.hadir}</div>
+            <CardContent className="p-4 space-y-4">
+              <div className="grid grid-cols-5 gap-2 text-center">
+                {[
+                  { name: "Hadir", value: statsHarian.hadir, icon: CheckCircle, color: "emerald" },
+                  { name: "Terlambat", value: statsHarian.terlambat, icon: Clock, color: "amber" },
+                  { name: "Izin", value: statsHarian.izin, icon: FileText, color: "sky" },
+                  { name: "Sakit", value: statsHarian.sakit, icon: Activity, color: "violet" },
+                  { name: "Alfa", value: statsHarian.alfa, icon: XCircle, color: "rose" }
+                ].map((item) => (
+                  <div key={item.name} className="space-y-1">
+                    <div className={`bg-${item.color}-100 p-2 rounded-xl inline-block w-full`}>
+                      <item.icon className={`h-4 w-4 text-${item.color}-600 mx-auto`} />
+                      <div className={`text-sm font-bold text-${item.color}-700`}>{item.value}</div>
+                    </div>
+                    <p className={`text-[10px] font-medium text-${item.color}-600`}>{item.name}</p>
                   </div>
-                  <p className="text-[8px] sm:text-[10px] font-medium text-emerald-600">Hadir</p>
-                </div>
-                <div className="text-center space-y-1">
-                  <div className="bg-amber-100 p-1.5 sm:p-2 rounded-xl">
-                    <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 mx-auto" />
-                    <div className="text-base sm:text-xl font-bold text-amber-700">{statsHarian.terlambat}</div>
-                  </div>
-                  <p className="text-[8px] sm:text-[10px] font-medium text-amber-600">Terlambat</p>
-                </div>
-                <div className="text-center space-y-1">
-                  <div className="bg-sky-100 p-1.5 sm:p-2 rounded-xl">
-                    <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-sky-600 mx-auto" />
-                    <div className="text-base sm:text-xl font-bold text-sky-700">{statsHarian.izin}</div>
-                  </div>
-                  <p className="text-[8px] sm:text-[10px] font-medium text-sky-600">Izin</p>
-                </div>
-                <div className="text-center space-y-1">
-                  <div className="bg-violet-100 p-1.5 sm:p-2 rounded-xl">
-                    <Activity className="h-4 w-4 sm:h-5 sm:w-5 text-violet-600 mx-auto" />
-                    <div className="text-base sm:text-xl font-bold text-violet-700">{statsHarian.sakit}</div>
-                  </div>
-                  <p className="text-[8px] sm:text-[10px] font-medium text-violet-600">Sakit</p>
-                </div>
-                <div className="text-center space-y-1">
-                  <div className="bg-rose-100 p-1.5 sm:p-2 rounded-xl">
-                    <XCircle className="h-4 w-4 sm:h-5 sm:w-5 text-rose-600 mx-auto" />
-                    <div className="text-base sm:text-xl font-bold text-rose-700">{statsHarian.alfa}</div>
-                  </div>
-                  <p className="text-[8px] sm:text-[10px] font-medium text-rose-600">Alfa</p>
-                </div>
+                ))}
               </div>
-              
-              <Separator className="my-3 sm:my-4" />
-              
               <div className="space-y-1">
-                <div className="flex justify-between text-[10px] sm:text-xs">
-                  <span className="text-slate-500">Total Kehadiran</span>
-                  <span className="font-semibold text-emerald-600">{totalAttendance}%</span>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Total Kehadiran Efektif</span>
+                  <span className="font-bold text-[#2C5EAD]">{totalAttendance}%</span>
                 </div>
-                <Progress value={parseFloat(totalAttendance as string)} className="h-1.5 sm:h-2" />
+                <Progress value={parseFloat(totalAttendance as string)} className="h-2 [&>div]:bg-[#1591DC]" />
               </div>
             </CardContent>
           </Card>
 
-          {/* PRESENSI MAPEL CARD */}
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white p-4 sm:p-5">
+          {/* Statistik Presensi Mata Pelajaran dengan SearchableSelect */}
+          <Card className="border-0 shadow-md rounded-xl overflow-hidden">
+            <CardHeader className="bg-[#1591DC] text-white pb-3">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                  <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
-                  <CardTitle className="text-sm sm:text-lg">Presensi Mata Pelajaran</CardTitle>
+                  <BookOpen className="h-5 w-5 text-white" />
+                  <CardTitle className="text-base sm:text-lg text-white">Presensi Mapel</CardTitle>
                 </div>
-                <Select value={selectedMapel} onValueChange={setSelectedMapel}>
-                  <SelectTrigger className="w-[130px] sm:w-[160px] bg-white/20 border-white/30 text-white rounded-xl text-xs sm:text-sm h-8 sm:h-9">
-                    <SelectValue placeholder="Semua Mapel" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl">
-                    <SelectItem value="all">Semua Mata Pelajaran</SelectItem>
-                    {mapelList.map((mapel) => (
-                      <SelectItem key={mapel.id_mapel} value={mapel.id_mapel.toString()}>
-                        {mapel.nama}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect 
+                  items={mapelList}
+                  value={selectedMapel}
+                  onValueChange={setSelectedMapel}
+                  placeholder="Pilih Mapel"
+                />
               </div>
-              <CardDescription className="text-blue-100 text-[10px] sm:text-xs">
-                Ringkasan kehadiran per mata pelajaran (30 hari)
+              <CardDescription className="text-blue-100">
+                Ringkasan per mata pelajaran (30 hari)
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-4 sm:p-5">
-              <div className="grid grid-cols-4 gap-2 sm:gap-3">
-                <div className="text-center space-y-1">
-                  <div className="bg-emerald-100 p-1.5 sm:p-2 rounded-xl">
-                    <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 mx-auto" />
-                    <div className="text-base sm:text-xl font-bold text-emerald-700">{statsMapel.hadir}</div>
+            <CardContent className="p-4 space-y-4">
+              <div className="grid grid-cols-4 gap-2 text-center">
+                {[
+                  { name: "Hadir", value: statsMapel.hadir, icon: CheckCircle, color: "emerald" },
+                  { name: "Izin", value: statsMapel.izin, icon: FileText, color: "sky" },
+                  { name: "Sakit", value: statsMapel.sakit, icon: Activity, color: "violet" },
+                  { name: "Alfa", value: statsMapel.alfa, icon: XCircle, color: "rose" }
+                ].map((item) => (
+                  <div key={item.name} className="space-y-1">
+                    <div className={`bg-${item.color}-100 p-2 rounded-xl`}>
+                      <item.icon className={`h-4 w-4 text-${item.color}-600 mx-auto`} />
+                      <div className={`text-sm font-bold text-${item.color}-700`}>{item.value}</div>
+                    </div>
+                    <p className={`text-[10px] font-medium text-${item.color}-600`}>{item.name}</p>
                   </div>
-                  <p className="text-[8px] sm:text-[10px] font-medium text-emerald-600">Hadir</p>
-                </div>
-                <div className="text-center space-y-1">
-                  <div className="bg-sky-100 p-1.5 sm:p-2 rounded-xl">
-                    <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-sky-600 mx-auto" />
-                    <div className="text-base sm:text-xl font-bold text-sky-700">{statsMapel.izin}</div>
-                  </div>
-                  <p className="text-[8px] sm:text-[10px] font-medium text-sky-600">Izin</p>
-                </div>
-                <div className="text-center space-y-1">
-                  <div className="bg-violet-100 p-1.5 sm:p-2 rounded-xl">
-                    <Activity className="h-4 w-4 sm:h-5 sm:w-5 text-violet-600 mx-auto" />
-                    <div className="text-base sm:text-xl font-bold text-violet-700">{statsMapel.sakit}</div>
-                  </div>
-                  <p className="text-[8px] sm:text-[10px] font-medium text-violet-600">Sakit</p>
-                </div>
-                <div className="text-center space-y-1">
-                  <div className="bg-rose-100 p-1.5 sm:p-2 rounded-xl">
-                    <XCircle className="h-4 w-4 sm:h-5 sm:w-5 text-rose-600 mx-auto" />
-                    <div className="text-base sm:text-xl font-bold text-rose-700">{statsMapel.alfa}</div>
-                  </div>
-                  <p className="text-[8px] sm:text-[10px] font-medium text-rose-600">Alfa</p>
-                </div>
+                ))}
               </div>
-              
-              <Separator className="my-3 sm:my-4" />
-              
-              <div className="bg-slate-50 rounded-xl p-2 sm:p-3">
-                <p className="text-[10px] sm:text-xs text-slate-500 flex items-center gap-1">
-                  <Info className="h-3 w-3" />
-                  Menampilkan data untuk {getMapelName(selectedMapel)}
+              <div className="bg-[#C4E2F5]/30 rounded-lg p-2 text-center">
+                <p className="text-xs text-gray-600 flex items-center justify-center gap-1">
+                  <Info className="h-3 w-3" /> Menampilkan data untuk {getMapelName(selectedMapel)}
                 </p>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* TABS SECTION - Responsif */}
-        <Tabs defaultValue="harian" className="space-y-4 sm:space-y-5">
+        {/* TABEL RIWAYAT DENGAN TABS - Background tabs diubah menjadi #2C5EAD */}
+        <Tabs defaultValue="harian" className="space-y-4">
           <div className="flex justify-center">
-            <TabsList className="bg-slate-100 p-1 rounded-xl w-full max-w-xs sm:max-w-md">
-              <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-3 py-1">
-                <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
-                Presensi Harian
+            <TabsList className="bg-[#2C5EAD] p-1 rounded-xl">
+              <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-4 py-1.5 text-sm gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+                <Calendar className="h-4 w-4" /> Riwayat Harian
               </TabsTrigger>
-              <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-3 py-1">
-                <BookOpen className="h-3 w-3 sm:h-4 sm:w-4" />
-                Presensi Mapel
+              <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-4 py-1.5 text-sm gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+                <BookOpen className="h-4 w-4" /> Riwayat Mapel
               </TabsTrigger>
             </TabsList>
           </div>
-          
-          {/* TAB PRESENSI HARIAN */}
+
+          {/* TAB PRESENSI HARIAN TERBARU - Header #4BB8FA */}
           <TabsContent value="harian">
-            <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-5">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
-                  <CardTitle className="text-sm sm:text-lg">Riwayat Presensi Harian Terbaru</CardTitle>
-                </div>
-                <CardDescription className="text-slate-300 text-[10px] sm:text-xs">
-                  5 data presensi terakhir Anda
+            <Card className="border-0 shadow-md rounded-xl overflow-hidden">
+              <CardHeader className="bg-[#4BB8FA] text-white pb-3">
+                <CardTitle className="text-base flex items-center gap-2 text-white">
+                  <Clock className="h-4 w-4 text-white" /> Presensi Harian Terbaru
+                </CardTitle>
+                <CardDescription className="text-blue-50">
+                  5 data terakhir dari 30 hari
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-slate-50">
-                        <TableHead className="font-semibold text-xs sm:text-sm">Tanggal</TableHead>
-                        <TableHead className="font-semibold text-xs sm:text-sm">Status</TableHead>
-                        <TableHead className="font-semibold text-xs sm:text-sm">Waktu</TableHead>
+                      <TableRow className="bg-gray-50">
+                        <TableHead className="text-xs font-semibold">Tanggal</TableHead>
+                        <TableHead className="text-xs font-semibold">Status</TableHead>
+                        <TableHead className="text-xs font-semibold">Waktu</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {recentHarian.map((p, idx) => (
-                        <TableRow key={idx} className="hover:bg-slate-50 transition-colors">
-                          <TableCell className="font-medium text-xs sm:text-sm">{p.tanggal}</TableCell>
+                        <TableRow key={idx} className="hover:bg-gray-50/50">
+                          <TableCell className="text-sm">{p.tanggal}</TableCell>
                           <TableCell>
-                            <Badge className={`${getStatusColor(p.status)} border-0 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full flex items-center gap-1 w-fit text-[10px] sm:text-xs`}>
-                              {getStatusIcon(p.status)}
-                              {p.status}
+                            <Badge className={`${getStatusColor(p.status)} border-0 rounded-full px-2 py-0.5 text-xs flex items-center gap-1 w-fit`}>
+                              {getStatusIcon(p.status)} {p.status}
                             </Badge>
                           </TableCell>
-                          <TableCell className="font-mono text-xs sm:text-sm">{p.waktu}</TableCell>
+                          <TableCell className="font-mono text-xs">{p.waktu}</TableCell>
                         </TableRow>
                       ))}
                       {recentHarian.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={3} className="text-center py-6 sm:py-8 text-slate-500 text-xs sm:text-sm">
-                            Belum ada data presensi
-                          </TableCell>
-                        </TableRow>
+                        <TableRow><TableCell colSpan={3} className="text-center py-6 text-gray-500">Belum ada data</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>
                 </div>
               </CardContent>
-              <CardFooter className="bg-slate-50 py-2 sm:py-3 px-4 sm:px-5">
-                <p className="text-[10px] sm:text-xs text-slate-500 flex items-center gap-1">
-                  <Info className="h-3 w-3" />
-                  Menampilkan 5 data terbaru dari 30 hari terakhir
-                </p>
-              </CardFooter>
             </Card>
           </TabsContent>
-          
-          {/* TAB PRESENSI MAPEL */}
+
+          {/* TAB PRESENSI MAPEL TERBARU - Header #4BB8FA */}
           <TabsContent value="mapel">
-            <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-5">
-                <div className="flex items-center gap-2">
-                  <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
-                  <CardTitle className="text-sm sm:text-lg">Riwayat Presensi Mata Pelajaran Terbaru</CardTitle>
-                </div>
-                <CardDescription className="text-slate-300 text-[10px] sm:text-xs">
-                  5 data presensi mata pelajaran terakhir Anda
+            <Card className="border-0 shadow-md rounded-xl overflow-hidden">
+              <CardHeader className="bg-[#4BB8FA] text-white pb-3">
+                <CardTitle className="text-base flex items-center gap-2 text-white">
+                  <BookOpen className="h-4 w-4 text-white" /> Presensi Mapel Terbaru
+                </CardTitle>
+                <CardDescription className="text-blue-50">
+                  5 data terakhir untuk {getMapelName(selectedMapel)}
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-slate-50">
-                        <TableHead className="font-semibold text-xs sm:text-sm">Tanggal</TableHead>
-                        <TableHead className="font-semibold text-xs sm:text-sm">Mata Pelajaran</TableHead>
-                        <TableHead className="font-semibold text-xs sm:text-sm">Status</TableHead>
+                      <TableRow className="bg-gray-50">
+                        <TableHead className="text-xs font-semibold">Tanggal</TableHead>
+                        <TableHead className="text-xs font-semibold">Mata Pelajaran</TableHead>
+                        <TableHead className="text-xs font-semibold">Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {recentMapel.map((p, idx) => (
-                        <TableRow key={idx} className="hover:bg-slate-50 transition-colors">
-                          <TableCell className="font-medium text-xs sm:text-sm">{p.tanggal}</TableCell>
-                          <TableCell className="text-xs sm:text-sm">{p.mapel}</TableCell>
+                        <TableRow key={idx} className="hover:bg-gray-50/50">
+                          <TableCell className="text-sm">{p.tanggal}</TableCell>
+                          <TableCell className="text-sm">{shortenSubjectName(p.mapel)}</TableCell>
                           <TableCell>
-                            <Badge className={`${getStatusColor(p.status)} border-0 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full flex items-center gap-1 w-fit text-[10px] sm:text-xs`}>
-                              {getStatusIcon(p.status)}
-                              {p.status}
+                            <Badge className={`${getStatusColor(p.status)} border-0 rounded-full px-2 py-0.5 text-xs flex items-center gap-1 w-fit`}>
+                              {getStatusIcon(p.status)} {p.status}
                             </Badge>
                           </TableCell>
                         </TableRow>
                       ))}
                       {recentMapel.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={3} className="text-center py-6 sm:py-8 text-slate-500 text-xs sm:text-sm">
-                            Belum ada data presensi mata pelajaran
-                          </TableCell>
-                        </TableRow>
+                        <TableRow><TableCell colSpan={3} className="text-center py-6 text-gray-500">Belum ada data</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>
                 </div>
               </CardContent>
-              <CardFooter className="bg-slate-50 py-2 sm:py-3 px-4 sm:px-5">
-                <p className="text-[10px] sm:text-xs text-slate-500 flex items-center gap-1">
-                  <Info className="h-3 w-3" />
-                  Menampilkan data untuk {getMapelName(selectedMapel)}
-                </p>
-              </CardFooter>
             </Card>
           </TabsContent>
         </Tabs>
 
-        {/* BOTTOM CARDS - Responsif */}
-        <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-orange-50">
-            <CardHeader className="pb-2 sm:pb-3 p-4 sm:p-5">
-              <CardTitle className="text-sm sm:text-lg flex items-center gap-2">
-                <Star className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
-                Pencapaian
+        {/* BOTTOM CARDS: Pencapaian & Rekomendasi */}
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card className="border-0 shadow-md rounded-xl bg-white">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Star className="h-5 w-5 text-[#1591DC]" /> Pencapaian
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 sm:p-5 pt-0">
-              <div className="space-y-2 sm:space-y-3">
-                <div className="flex items-center justify-between p-2 sm:p-3 bg-white/50 rounded-xl">
-                  <span className="text-xs sm:text-sm">Kehadiran &gt; 90%</span>
-                  {parseFloat(totalAttendance as string) > 90 ? (
-                    <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-500" />
-                  ) : (
-                    <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500" />
-                  )}
-                </div>
-                <div className="flex items-center justify-between p-2 sm:p-3 bg-white/50 rounded-xl">
-                  <span className="text-xs sm:text-sm">Tidak Ada Alfa</span>
-                  {statsHarian.alfa === 0 ? (
-                    <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-500" />
-                  ) : (
-                    <XCircle className="h-4 w-4 sm:h-5 sm:w-5 text-rose-500" />
-                  )}
-                </div>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-[#C4E2F5]/30 rounded-xl">
+                <span className="text-sm font-medium">Kehadiran &gt; 90%</span>
+                {parseFloat(totalAttendance as string) > 90 ? 
+                  <CheckCircle className="h-5 w-5 text-emerald-500" /> : 
+                  <Clock className="h-5 w-5 text-amber-500" />
+                }
+              </div>
+              <div className="flex items-center justify-between p-3 bg-[#C4E2F5]/30 rounded-xl">
+                <span className="text-sm font-medium">Tidak Ada Alfa</span>
+                {statsHarian.alfa === 0 ? 
+                  <CheckCircle className="h-5 w-5 text-emerald-500" /> : 
+                  <XCircle className="h-5 w-5 text-rose-500" />
+                }
               </div>
             </CardContent>
           </Card>
 
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-sky-50 to-blue-50">
-            <CardHeader className="pb-2 sm:pb-3 p-4 sm:p-5">
-              <CardTitle className="text-sm sm:text-lg flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-sky-600" />
-                Rekomendasi
+          <Card className="border-0 shadow-md rounded-xl bg-white">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-[#1591DC]" /> Rekomendasi
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 sm:p-5 pt-0">
+            <CardContent>
               <div className="space-y-2">
                 {statsHarian.terlambat > 3 && (
-                  <p className="text-xs sm:text-sm text-amber-700 p-2 bg-amber-50 rounded-xl">⚠️ Tingkatkan kedisiplinan waktu datang</p>
+                  <p className="text-sm text-amber-700 p-2 bg-amber-50 rounded-lg">⚠️ Tingkatkan kedisiplinan waktu datang</p>
                 )}
                 {statsHarian.alfa > 0 && (
-                  <p className="text-xs sm:text-sm text-rose-700 p-2 bg-rose-50 rounded-xl">⚠️ Hindari ketidakhadiran tanpa keterangan</p>
+                  <p className="text-sm text-rose-700 p-2 bg-rose-50 rounded-lg">⚠️ Hindari ketidakhadiran tanpa keterangan</p>
                 )}
                 {parseFloat(totalAttendance as string) > 90 && (
-                  <p className="text-xs sm:text-sm text-emerald-700 p-2 bg-emerald-50 rounded-xl">✅ Pertahankan kehadiran Anda!</p>
+                  <p className="text-sm text-emerald-700 p-2 bg-emerald-50 rounded-lg">✅ Pertahankan kehadiran Anda!</p>
                 )}
                 {statsHarian.terlambat <= 3 && statsHarian.alfa === 0 && parseFloat(totalAttendance as string) <= 90 && (
-                  <p className="text-xs sm:text-sm text-sky-700 p-2 bg-sky-50 rounded-xl">📚 Tingkatkan kehadiran untuk hasil lebih baik</p>
+                  <p className="text-sm text-sky-700 p-2 bg-sky-50 rounded-lg">📚 Tingkatkan kehadiran untuk hasil lebih baik</p>
                 )}
               </div>
             </CardContent>
@@ -731,11 +697,9 @@ export default function StudentDashboard() {
         </div>
 
         {/* FOOTER */}
-        <div className="text-center pt-3 sm:pt-4">
-          <Separator className="mb-3 sm:mb-4" />
-          <p className="text-[10px] sm:text-xs text-slate-400">
-            © {new Date().getFullYear()} Student Dashboard - Sistem Informasi Akademik
-          </p>
+        <div className="text-center pt-4">
+          <Separator className="mb-4" />
+          <p className="text-xs text-gray-400">© {new Date().getFullYear()} Student Dashboard - Sistem Informasi Akademik</p>
         </div>
       </div>
     </div>
