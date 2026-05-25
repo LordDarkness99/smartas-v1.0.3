@@ -1,4 +1,4 @@
-// src/pages/report/AttendanceReport.tsx
+// src/pages/report/AttendanceReport.tsx (dengan 4 kotak dihapus, summary card bg putih teks hitam)
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,6 +58,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { isAdminJurusan, isBK, isAdmin } from "@/lib/utils";
+import { Separator } from "@/components/ui/separator";
 
 interface RekapHarian {
   id_siswa: number;
@@ -688,32 +689,33 @@ export default function AttendanceReport() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 overflow-x-hidden">
-      {/* Header */}
-      <div className="print:hidden bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
-        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+    <div className="min-h-screen bg-[#F0F7FC] overflow-x-hidden">
+      {/* Header dengan gradasi palette */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] shadow-xl mx-4 mt-4 print:hidden">
+        <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
+        <div className="relative container mx-auto px-4 sm:px-6 py-4 sm:py-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-3 sm:gap-4">
-              <div className="bg-white/20 p-2 sm:p-3 rounded-2xl backdrop-blur-sm">
-                <FileText className="h-6 w-6 sm:h-8 sm:w-8" />
+              <div className="bg-white/20 p-2 sm:p-3 rounded-xl backdrop-blur-sm">
+                <FileText className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 text-blue-100 text-sm">
                   {greeting === "Selamat Pagi" ? <Sun className="h-3 w-3 sm:h-4 sm:w-4" /> : 
                    greeting === "Selamat Malam" ? <Moon className="h-3 w-3 sm:h-4 sm:w-4" /> : 
                    <Cloud className="h-3 w-3 sm:h-4 sm:w-4" />}
-                  <p className="text-xs sm:text-sm text-blue-100">{greeting}</p>
+                  <p className="text-xs sm:text-sm">{greeting}</p>
                 </div>
-                <h1 className="text-base sm:text-2xl lg:text-3xl font-bold">Laporan Presensi</h1>
+                <h1 className="text-base sm:text-2xl lg:text-3xl font-bold text-white">Laporan Presensi</h1>
                 <p className="text-blue-100 text-xs sm:text-sm">
                   Rekap presensi harian dan mata pelajaran dalam rentang waktu tertentu
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="bg-white/10 rounded-xl px-3 py-1 sm:px-4 sm:py-2 backdrop-blur-sm text-center">
-                <p className="text-[10px] sm:text-xs text-blue-100">{formatDateHeader(currentTime)}</p>
-                <p className="text-base sm:text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
+              <div className="bg-[#2C5EAD] rounded-xl px-3 py-1 sm:px-4 sm:py-2 text-center shadow-md">
+                <p className="text-[10px] sm:text-xs text-white/90">{formatDateHeader(currentTime)}</p>
+                <p className="text-base sm:text-xl font-semibold text-white">{currentTime.toLocaleTimeString("id-ID")}</p>
               </div>
             </div>
           </div>
@@ -722,58 +724,30 @@ export default function AttendanceReport() {
 
       <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8 print:px-0 print:py-0">
         
-        {/* Stats Cards */}
-        <div className="print:hidden grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div><p className="text-[10px] sm:text-xs text-blue-600 font-medium">Total Kelas (Mapel)</p><p className="text-lg sm:text-2xl font-bold text-blue-900">{kelasListMapel.length}</p></div>
-                <School className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div><p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Total Mapel</p><p className="text-lg sm:text-2xl font-bold text-emerald-900">{jadwalList.length}</p></div>
-                <BookOpen className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div><p className="text-[10px] sm:text-xs text-purple-600 font-medium">Periode</p><p className="text-[10px] sm:text-xs font-bold text-purple-900">{formatDate(startDate)}<br />s.d.<br />{formatDate(endDate)}</p></div>
-                <Calendar className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div><p className="text-[10px] sm:text-xs text-amber-600 font-medium">Total Presensi</p><p className="text-lg sm:text-2xl font-bold text-amber-900">{totalPresensi}</p></div>
-                <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        {/* 4 KARTU STATISTIK TELAH DIHAPUS */}
 
         {/* Filter Card */}
         <div className="print:hidden">
           <Card className="rounded-xl border-0 shadow-xl overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-6">
+            <CardHeader className="bg-[#1591DC] text-white p-4 sm:p-6">
               <div className="flex items-center gap-2 sm:gap-3">
-                <div className="bg-white/10 p-1.5 sm:p-2 rounded-xl"><CalendarRange className="h-5 w-5 sm:h-6 sm:w-6" /></div>
-                <div><CardTitle className="text-base sm:text-xl">Filter Laporan</CardTitle><CardDescription className="text-slate-300 text-[10px] sm:text-sm">Pilih kriteria untuk menampilkan laporan presensi</CardDescription></div>
+                <div className="bg-white/20 p-1.5 sm:p-2 rounded-xl"><CalendarRange className="h-5 w-5 sm:h-6 sm:w-6" /></div>
+                <div><CardTitle className="text-base sm:text-xl">Filter Laporan</CardTitle><CardDescription className="text-blue-100 text-[10px] sm:text-sm">Pilih kriteria untuk menampilkan laporan presensi</CardDescription></div>
               </div>
             </CardHeader>
             <CardContent className="p-4 sm:p-6">
               <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "harian" | "mapel" | "evaluasi")} className="space-y-4 sm:space-y-6">
                 <div className="flex justify-center">
-                  <TabsList className="bg-slate-100 p-1 rounded-xl w-auto inline-flex">
-                    <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2 px-3 sm:px-4 py-1 text-xs sm:text-sm"><Calendar className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Presensi Harian</TabsTrigger>
-                    <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2 px-3 sm:px-4 py-1 text-xs sm:text-sm"><BookOpen className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Presensi Mapel</TabsTrigger>
-                    <TabsTrigger value="evaluasi" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2 px-3 sm:px-4 py-1 text-xs sm:text-sm"><Brain className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Evaluasi Pembelajaran</TabsTrigger>
+                  <TabsList className="bg-[#2C5EAD] p-1 rounded-xl">
+                    <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-3 sm:px-4 py-1.5 text-xs sm:text-sm gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+                      <Calendar className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Presensi Harian
+                    </TabsTrigger>
+                    <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-3 sm:px-4 py-1.5 text-xs sm:text-sm gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+                      <BookOpen className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Presensi Mapel
+                    </TabsTrigger>
+                    <TabsTrigger value="evaluasi" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-3 sm:px-4 py-1.5 text-xs sm:text-sm gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+                      <Brain className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Evaluasi Pembelajaran
+                    </TabsTrigger>
                   </TabsList>
                 </div>
 
@@ -799,7 +773,7 @@ export default function AttendanceReport() {
                             <div className="p-2 border-b bg-slate-50">
                               <div className="flex gap-1 mb-2">
                                 {["all", "X", "XI", "XII"].map(jenjang => (
-                                  <Button key={jenjang} variant={kelasJenjangFilter === jenjang ? "default" : "ghost"} size="sm" className={`h-7 px-2 text-xs rounded-md ${kelasJenjangFilter === jenjang ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"}`} onClick={() => setKelasJenjangFilter(jenjang)}>
+                                  <Button key={jenjang} variant={kelasJenjangFilter === jenjang ? "default" : "ghost"} size="sm" className={`h-7 px-2 text-xs rounded-md ${kelasJenjangFilter === jenjang ? "bg-[#2C5EAD] text-white" : "text-slate-600 hover:bg-slate-100"}`} onClick={() => setKelasJenjangFilter(jenjang)}>
                                     {jenjang === "all" ? "Semua" : jenjang}
                                   </Button>
                                 ))}
@@ -812,7 +786,7 @@ export default function AttendanceReport() {
                             </div>
                             <div className="max-h-60 overflow-y-auto">
                               {filteredKelasOptionsHarian.length === 0 ? <div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada kelas yang cocok</div> : filteredKelasOptionsHarian.map(kelas => (
-                                <button key={kelas.id_kelas} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${selectedKelasHarian === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-700"}`} onClick={() => { setSelectedKelasHarian(kelas.id_kelas.toString()); setPopoverKelasOpen(false); setKelasSearchQuery(""); setKelasJenjangFilter("all"); }}>
+                                <button key={kelas.id_kelas} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${selectedKelasHarian === kelas.id_kelas.toString() ? "bg-[#C4E2F5] text-[#2C5EAD] font-medium" : "text-slate-700"}`} onClick={() => { setSelectedKelasHarian(kelas.id_kelas.toString()); setPopoverKelasOpen(false); setKelasSearchQuery(""); setKelasJenjangFilter("all"); }}>
                                   {kelas.nama}
                                 </button>
                               ))}
@@ -823,10 +797,10 @@ export default function AttendanceReport() {
                       <div className="w-full sm:w-40"><Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Awal</Label><Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm" /></div>
                       <div className="w-full sm:w-40"><Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Akhir</Label><Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm" /></div>
                       <div className="flex gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
-                        <Button onClick={generateLaporanHarian} disabled={isLoading || !selectedKelasHarian} className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600 flex-1 sm:flex-initial">
+                        <Button onClick={generateLaporanHarian} disabled={isLoading || !selectedKelasHarian} className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm bg-[#2C5EAD] hover:bg-[#2C5EAD]/80 flex-1 sm:flex-initial">
                           {isLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <CalendarRange className="mr-1.5 h-3.5 w-3.5" />} Tampilkan
                         </Button>
-                        <Button variant="outline" onClick={handlePrint} disabled={rekapHarian.length === 0} className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-initial"><Printer className="mr-1.5 h-3.5 w-3.5" /> Cetak</Button>
+                        <Button variant="outline" onClick={handlePrint} disabled={rekapHarian.length === 0} className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-initial border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"><Printer className="mr-1.5 h-3.5 w-3.5" /> Cetak</Button>
                       </div>
                     </div>
                   )}
@@ -848,7 +822,7 @@ export default function AttendanceReport() {
                           <div className="p-2 border-b bg-slate-50">
                             <div className="flex gap-1 mb-2">
                               {["all", "X", "XI", "XII"].map(jenjang => (
-                                <Button key={jenjang} variant={kelasJenjangFilter === jenjang ? "default" : "ghost"} size="sm" className={`h-7 px-2 text-xs rounded-md ${kelasJenjangFilter === jenjang ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"}`} onClick={() => setKelasJenjangFilter(jenjang)}>
+                                <Button key={jenjang} variant={kelasJenjangFilter === jenjang ? "default" : "ghost"} size="sm" className={`h-7 px-2 text-xs rounded-md ${kelasJenjangFilter === jenjang ? "bg-[#2C5EAD] text-white" : "text-slate-600 hover:bg-slate-100"}`} onClick={() => setKelasJenjangFilter(jenjang)}>
                                   {jenjang === "all" ? "Semua" : jenjang}
                                 </Button>
                               ))}
@@ -861,7 +835,7 @@ export default function AttendanceReport() {
                           </div>
                           <div className="max-h-60 overflow-y-auto">
                             {filteredKelasOptionsMapel.length === 0 ? <div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada kelas yang cocok</div> : filteredKelasOptionsMapel.map(kelas => (
-                              <button key={kelas.id_kelas} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${selectedKelasMapel === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-700"}`} onClick={() => { setSelectedKelasMapel(kelas.id_kelas.toString()); setPopoverKelasOpen(false); setKelasSearchQuery(""); setKelasJenjangFilter("all"); }}>
+                              <button key={kelas.id_kelas} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${selectedKelasMapel === kelas.id_kelas.toString() ? "bg-[#C4E2F5] text-[#2C5EAD] font-medium" : "text-slate-700"}`} onClick={() => { setSelectedKelasMapel(kelas.id_kelas.toString()); setPopoverKelasOpen(false); setKelasSearchQuery(""); setKelasJenjangFilter("all"); }}>
                                 {kelas.nama}
                               </button>
                             ))}
@@ -886,10 +860,10 @@ export default function AttendanceReport() {
                     <div className="w-full sm:w-40"><Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Awal</Label><Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm" /></div>
                     <div className="w-full sm:w-40"><Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Akhir</Label><Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm" /></div>
                     <div className="flex gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
-                      <Button onClick={generateLaporanMapel} disabled={isLoading || !selectedKelasMapel} className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600 flex-1 sm:flex-initial">
+                      <Button onClick={generateLaporanMapel} disabled={isLoading || !selectedKelasMapel} className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm bg-[#2C5EAD] hover:bg-[#2C5EAD]/80 flex-1 sm:flex-initial">
                         {isLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <CalendarRange className="mr-1.5 h-3.5 w-3.5" />} Tampilkan
                       </Button>
-                      <Button variant="outline" onClick={handlePrint} disabled={rekapMapel.length === 0} className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-initial"><Printer className="mr-1.5 h-3.5 w-3.5" /> Cetak</Button>
+                      <Button variant="outline" onClick={handlePrint} disabled={rekapMapel.length === 0} className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-initial border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"><Printer className="mr-1.5 h-3.5 w-3.5" /> Cetak</Button>
                     </div>
                   </div>
                 </TabsContent>
@@ -917,7 +891,7 @@ export default function AttendanceReport() {
                               <div className="p-2 border-b bg-slate-50">
                                 <div className="flex gap-1 mb-2">
                                   {["all", "X", "XI", "XII"].map(jenjang => (
-                                    <Button key={jenjang} variant={kelasJenjangFilter === jenjang ? "default" : "ghost"} size="sm" className={`h-7 px-2 text-xs rounded-md ${kelasJenjangFilter === jenjang ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"}`} onClick={() => setKelasJenjangFilter(jenjang)}>
+                                    <Button key={jenjang} variant={kelasJenjangFilter === jenjang ? "default" : "ghost"} size="sm" className={`h-7 px-2 text-xs rounded-md ${kelasJenjangFilter === jenjang ? "bg-[#2C5EAD] text-white" : "text-slate-600 hover:bg-slate-100"}`} onClick={() => setKelasJenjangFilter(jenjang)}>
                                       {jenjang === "all" ? "Semua" : jenjang}
                                     </Button>
                                   ))}
@@ -930,7 +904,7 @@ export default function AttendanceReport() {
                               </div>
                               <div className="max-h-60 overflow-y-auto">
                                 {filteredKelasOptionsEvaluasi.length === 0 ? <div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada kelas yang cocok</div> : filteredKelasOptionsEvaluasi.map(kelas => (
-                                  <button key={kelas.id_kelas} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${selectedKelasEvaluasi === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-700"}`} onClick={() => { setSelectedKelasEvaluasi(kelas.id_kelas.toString()); setPopoverKelasOpen(false); setKelasSearchQuery(""); setKelasJenjangFilter("all"); }}>
+                                  <button key={kelas.id_kelas} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${selectedKelasEvaluasi === kelas.id_kelas.toString() ? "bg-[#C4E2F5] text-[#2C5EAD] font-medium" : "text-slate-700"}`} onClick={() => { setSelectedKelasEvaluasi(kelas.id_kelas.toString()); setPopoverKelasOpen(false); setKelasSearchQuery(""); setKelasJenjangFilter("all"); }}>
                                     {kelas.nama}
                                   </button>
                                 ))}
@@ -941,7 +915,7 @@ export default function AttendanceReport() {
                         <div className="w-full sm:w-40"><Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Awal</Label><Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm" /></div>
                         <div className="w-full sm:w-40"><Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Akhir</Label><Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm" /></div>
                         <div className="flex gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
-                          <Button onClick={generateEvaluasiPembelajaran} disabled={isLoading || !selectedKelasEvaluasi} className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-purple-600 to-indigo-600 flex-1 sm:flex-initial">
+                          <Button onClick={generateEvaluasiPembelajaran} disabled={isLoading || !selectedKelasEvaluasi} className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm bg-[#1591DC] hover:bg-[#1591DC]/80 flex-1 sm:flex-initial">
                             {isLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Brain className="mr-1.5 h-3.5 w-3.5" />} Analisis Ekspresi
                           </Button>
                         </div>
@@ -1091,7 +1065,7 @@ export default function AttendanceReport() {
 
                           {/* Tombol Cetak Evaluasi */}
                           <div className="flex justify-end">
-                            <Button onClick={handlePrint} variant="outline" className="rounded-lg">
+                            <Button onClick={handlePrint} variant="outline" className="rounded-lg border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">
                               <Printer className="mr-2 h-4 w-4" /> Cetak Evaluasi
                             </Button>
                           </div>
@@ -1105,29 +1079,50 @@ export default function AttendanceReport() {
           </Card>
         </div>
 
-        {/* Summary Card (hanya untuk tab harian dan mapel) */}
+        {/* Summary Card (hanya untuk tab harian dan mapel) - dengan background putih, teks hitam */}
         {(rekapHarian.length > 0 || rekapMapel.length > 0) && activeTab !== "evaluasi" && (
           <div className="print:hidden">
-            <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-r from-slate-700 to-slate-800 text-white">
+            <Card className="rounded-xl border-0 shadow-lg bg-white">
               <CardContent className="p-4 sm:p-5">
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
-                  <div className="text-center"><p className="text-[10px] sm:text-xs text-slate-300">Hadir</p><p className="text-lg sm:text-2xl font-bold text-emerald-300">{totalHadir}</p></div>
-                  <div className="text-center"><p className="text-[10px] sm:text-xs text-slate-300">Terlambat</p><p className="text-lg sm:text-2xl font-bold text-amber-300">{totalTerlambat}</p></div>
-                  <div className="text-center"><p className="text-[10px] sm:text-xs text-slate-300">Izin</p><p className="text-lg sm:text-2xl font-bold text-sky-300">{totalIzin}</p></div>
-                  <div className="text-center"><p className="text-[10px] sm:text-xs text-slate-300">Sakit</p><p className="text-lg sm:text-2xl font-bold text-violet-300">{totalSakit}</p></div>
-                  <div className="text-center"><p className="text-[10px] sm:text-xs text-slate-300">Alfa</p><p className="text-lg sm:text-2xl font-bold text-rose-300">{totalAlfa}</p></div>
+                  <div className="text-center">
+                    <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Hadir</p>
+                    <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalHadir}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Terlambat</p>
+                    <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalTerlambat}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Izin</p>
+                    <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalIzin}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Sakit</p>
+                    <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalSakit}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Alfa</p>
+                    <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalAlfa}</p>
+                  </div>
                 </div>
-                <hr className="my-3 sm:my-4 border-slate-600" />
+                <hr className="my-3 sm:my-4 border-slate-200" />
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2"><TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-slate-300" /><span className="text-xs sm:text-sm text-slate-300">Total Kehadiran</span></div>
-                  <div className="flex items-center gap-2"><span className="text-lg sm:text-2xl font-bold text-emerald-300">{persenHadir}%</span><span className="text-[10px] sm:text-xs text-slate-400">dari {totalPresensi} presensi</span></div>
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-slate-500" />
+                    <span className="text-xs sm:text-sm text-slate-600">Total Kehadiran</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg sm:text-2xl font-bold text-slate-800">{persenHadir}%</span>
+                    <span className="text-[10px] sm:text-xs text-slate-400">dari {totalPresensi} presensi</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* Tabel Laporan (harian dan mapel) */}
+        {/* Tabel Laporan (harian dan mapel) - sama seperti sebelumnya */}
         {(rekapHarian.length > 0 || rekapMapel.length > 0) && activeTab !== "evaluasi" && (
           <div className="print:mt-0 print:p-0">
             <div className="hidden print:block text-center mb-6" style={{ pageBreakInside: 'avoid' }}>
@@ -1147,7 +1142,7 @@ export default function AttendanceReport() {
                 </>
               )}
             </div>
-            <div className="border rounded-lg overflow-x-auto print:border-0 print:overflow-visible">
+            <div className="border rounded-lg overflow-x-auto print:border-0 print:overflow-visible shadow-sm">
               <Table className="min-w-[700px] print:min-w-full print:w-full print:border-collapse">
                 <TableHeader>
                   <TableRow className="bg-slate-50 print:bg-gray-100">
@@ -1221,7 +1216,7 @@ export default function AttendanceReport() {
           </div>
         )}
 
-        {/* Evaluasi Pembelajaran Print Version */}
+        {/* Evaluasi Pembelajaran Print Version (tidak diubah) */}
         {evaluasiPembelajaran && activeTab === "evaluasi" && (
           <div className="print:block hidden">
             <div className="text-center mb-6">
@@ -1271,17 +1266,17 @@ export default function AttendanceReport() {
 
         {/* Tips */}
         <div className="print:hidden">
-          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50 max-w-3xl mx-auto">
+          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-[#C4E2F5]/50 to-[#4BB8FA]/20 max-w-3xl mx-auto">
             <CardContent className="p-4 sm:p-5">
               <div className="flex items-start gap-3 sm:gap-4">
-                <div className="bg-indigo-100 p-2 sm:p-3 rounded-xl flex-shrink-0"><Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" /></div>
+                <div className="bg-[#2C5EAD]/10 p-2 sm:p-3 rounded-xl flex-shrink-0"><Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-[#2C5EAD]" /></div>
                 <div><h3 className="font-semibold text-slate-800 text-sm sm:text-base mb-1">Tips Laporan Presensi</h3><p className="text-xs sm:text-sm text-slate-600">Pilih kelas dan rentang waktu yang diinginkan, lalu klik tombol "Tampilkan" untuk melihat laporan. Gunakan tombol "Cetak" untuk mencetak laporan dalam format yang rapi. Fitur Evaluasi Pembelajaran menganalisis ekspresi wajah siswa untuk memberikan rekomendasi metode pembelajaran.</p></div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <div className="print:hidden text-center pt-4"><hr className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Laporan Presensi - SmartAS</p><p className="text-[10px] text-slate-300 mt-1">Sistem Informasi Akademik</p></div>
+        <div className="print:hidden text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Laporan Presensi - SmartAS</p><p className="text-[10px] text-slate-300 mt-1">Sistem Informasi Akademik</p></div>
       </div>
 
       <style>{`

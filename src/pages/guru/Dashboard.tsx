@@ -1,4 +1,4 @@
-// src/pages/guru/Dashboard.tsx (REDESAIN MODERN + RESPONSIF MOBILE)
+// src/pages/guru/Dashboard.tsx (REDESAIN FINAL)
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -333,36 +333,37 @@ export default function GuruDashboard() {
   // ==================== LOADING STATE ====================
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="flex h-screen items-center justify-center bg-[#C4E2F5]">
         <div className="text-center space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto" />
-          <p className="text-slate-500">Memuat Dashboard...</p>
+          <Loader2 className="h-12 w-12 animate-spin text-[#2C5EAD] mx-auto" />
+          <p className="text-[#2C5EAD] font-medium">Memuat Dashboard...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+    <div className="min-h-screen bg-[#F0F7FC]">
       
-      {/* HEADER SECTION - Responsif Mobile */}
-      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
-        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+      {/* HEADER SECTION - dengan gradasi palette */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] shadow-xl mx-4 mt-4">
+        <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
+        <div className="relative container mx-auto px-4 sm:px-6 py-4 sm:py-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-3 sm:gap-4">
-              <Avatar className="h-12 w-12 sm:h-14 sm:w-14 border-2 border-white/30 rounded-2xl">
-                <AvatarFallback className="bg-white/20 text-white text-lg sm:text-xl font-bold rounded-2xl">
+              <Avatar className="h-12 w-12 sm:h-14 sm:w-14 border-2 border-white shadow-md rounded-xl sm:rounded-2xl">
+                <AvatarFallback className="bg-white/30 text-white text-lg sm:text-xl font-bold rounded-xl sm:rounded-2xl">
                   {user?.nama?.charAt(0) || "G"}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 text-blue-100 text-sm">
                   {greeting === "Selamat Pagi" ? <Sun className="h-3 w-3 sm:h-4 sm:w-4" /> : 
                    greeting === "Selamat Malam" ? <Moon className="h-3 w-3 sm:h-4 sm:w-4" /> : 
                    <Cloud className="h-3 w-3 sm:h-4 sm:w-4" />}
-                  <p className="text-xs sm:text-sm text-blue-100">{greeting}</p>
+                  <p className="text-xs sm:text-sm">{greeting}</p>
                 </div>
-                <h1 className="text-base sm:text-2xl lg:text-3xl font-bold">Dashboard Guru</h1>
+                <h1 className="text-base sm:text-2xl lg:text-3xl font-bold text-white">Dashboard Guru</h1>
                 <p className="text-blue-100 text-xs sm:text-sm">
                   Selamat datang kembali, <span className="font-semibold">{user?.nama}</span>
                 </p>
@@ -370,14 +371,14 @@ export default function GuruDashboard() {
             </div>
             
             <div className="flex items-center gap-3">
-              <div className="bg-white/10 rounded-xl px-3 py-1 sm:px-4 sm:py-2 backdrop-blur-sm text-center">
-                <p className="text-[10px] sm:text-xs text-blue-100">{formatDate(currentTime)}</p>
-                <p className="text-base sm:text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
+              <div className="bg-[#2C5EAD] rounded-xl px-3 py-1 sm:px-4 sm:py-2 text-center shadow-md">
+                <p className="text-[10px] sm:text-xs text-white/90">{formatDate(currentTime)}</p>
+                <p className="text-base sm:text-xl font-semibold text-white">{currentTime.toLocaleTimeString("id-ID")}</p>
               </div>
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="bg-white/10 hover:bg-white/20 text-white rounded-xl"
+                className="bg-[#2C5EAD] hover:bg-[#2C5EAD]/80 text-white rounded-xl shadow-md"
                 onClick={handleRefresh}
                 disabled={refreshing}
               >
@@ -403,16 +404,16 @@ export default function GuruDashboard() {
           </Card>
         ) : (
           <>
-            {/* CLASS SELECTOR - Responsif Mobile */}
+            {/* CLASS SELECTOR */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-white rounded-2xl shadow-lg border border-slate-100">
               <div className="flex items-center gap-2">
-                <div className="bg-blue-100 p-2 rounded-xl">
-                  <School className="h-5 w-5 text-blue-600" />
+                <div className="bg-[#C4E2F5] p-2 rounded-xl">
+                  <School className="h-5 w-5 text-[#2C5EAD]" />
                 </div>
                 <label className="text-xs sm:text-sm font-semibold text-slate-700">Pilih Kelas:</label>
               </div>
               <Select value={selectedKelas} onValueChange={setSelectedKelas}>
-                <SelectTrigger className="w-full sm:w-56 rounded-xl border-slate-200 h-8 sm:h-9 text-xs sm:text-sm">
+                <SelectTrigger className="w-full sm:w-56 rounded-xl border-slate-200 h-8 sm:h-9 text-xs sm:text-sm focus:ring-[#1591DC]">
                   <SelectValue placeholder="Pilih Kelas" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
@@ -425,74 +426,82 @@ export default function GuruDashboard() {
               </Select>
             </div>
 
-            {/* STATS CARDS - grid 2 kolom di HP */}
+            {/* 4 STATS CARDS - Background putih, shadow tebal, tanpa gradasi */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-              <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+              <Card className="rounded-xl sm:rounded-2xl border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-shadow duration-200">
                 <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[10px] sm:text-xs text-blue-600 font-medium">Total Siswa</p>
-                      <p className="text-lg sm:text-2xl font-bold text-blue-900">{siswaList.length}</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Total Siswa</p>
+                      <p className="text-lg sm:text-2xl font-bold text-slate-800">{siswaList.length}</p>
                     </div>
-                    <Users className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" />
+                    <div className="p-2 rounded-full bg-[#C4E2F5]">
+                      <Users className="h-5 w-5 sm:h-6 sm:w-6 text-[#2C5EAD]" />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
+              <Card className="rounded-xl sm:rounded-2xl border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-shadow duration-200">
                 <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Hadir Hari Ini</p>
-                      <p className="text-lg sm:text-2xl font-bold text-emerald-900">{presentToday}</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Hadir Hari Ini</p>
+                      <p className="text-lg sm:text-2xl font-bold text-slate-800">{presentToday}</p>
                     </div>
-                    <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />
+                    <div className="p-2 rounded-full bg-emerald-100">
+                      <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-600" />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+              <Card className="rounded-xl sm:rounded-2xl border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-shadow duration-200">
                 <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[10px] sm:text-xs text-purple-600 font-medium">Kehadiran 30 Hari</p>
-                      <p className="text-lg sm:text-2xl font-bold text-purple-900">{attendancePercentage}%</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Kehadiran 30 Hari</p>
+                      <p className="text-lg sm:text-2xl font-bold text-[#2C5EAD]">{attendancePercentage}%</p>
                     </div>
-                    <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" />
+                    <div className="p-2 rounded-full bg-[#C4E2F5]">
+                      <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-[#1591DC]" />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
+              <Card className="rounded-xl sm:rounded-2xl border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-shadow duration-200">
                 <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[10px] sm:text-xs text-amber-600 font-medium">Mapel Hari Ini</p>
-                      <p className="text-lg sm:text-2xl font-bold text-amber-900">{jadwalHariIni.length}</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Mapel Hari Ini</p>
+                      <p className="text-lg sm:text-2xl font-bold text-slate-800">{jadwalHariIni.length}</p>
                     </div>
-                    <BookOpen className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" />
+                    <div className="p-2 rounded-full bg-amber-100">
+                      <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* STATISTICS GRID - 1 kolom di HP, 2 di lg */}
+            {/* STATISTICS GRID */}
             <div className="grid gap-6 lg:grid-cols-2">
               
-              {/* Statistik Presensi Harian Card */}
+              {/* Statistik Presensi Harian Card - Header solid #1591DC */}
               <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white p-4 sm:p-5">
+                <CardHeader className="bg-[#1591DC] text-white p-4 sm:p-5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
                       <CardTitle className="text-sm sm:text-lg">Statistik Presensi Harian (30 hari)</CardTitle>
                     </div>
                     <div className="bg-white/20 px-2 sm:px-3 py-0.5 sm:py-1 rounded-xl text-center">
-                      <p className="text-base sm:text-lg font-bold">{attendancePercentage}%</p>
-                      <p className="text-[8px] sm:text-[10px]">Kehadiran</p>
+                      <p className="text-base sm:text-lg font-bold text-white">{attendancePercentage}%</p>
+                      <p className="text-[8px] sm:text-[10px] text-white/80">Kehadiran</p>
                     </div>
                   </div>
-                  <CardDescription className="text-emerald-100 text-[10px] sm:text-xs">
+                  <CardDescription className="text-blue-100 text-[10px] sm:text-xs">
                     Ringkasan kehadiran siswa dalam 30 hari terakhir
                   </CardDescription>
                 </CardHeader>
@@ -540,9 +549,9 @@ export default function GuruDashboard() {
                   <div className="space-y-1">
                     <div className="flex justify-between text-[10px] sm:text-xs">
                       <span className="text-slate-500">Total Kehadiran</span>
-                      <span className="font-semibold text-emerald-600">{attendancePercentage}%</span>
+                      <span className="font-semibold text-[#2C5EAD]">{attendancePercentage}%</span>
                     </div>
-                    <Progress value={parseFloat(attendancePercentage as string)} className="h-1.5 sm:h-2" />
+                    <Progress value={parseFloat(attendancePercentage as string)} className="h-1.5 sm:h-2 [&>div]:bg-[#1591DC]" />
                   </div>
                   <p className="text-[10px] sm:text-xs text-slate-400 text-center mt-3">
                     Total presensi: {statsHarian.total}
@@ -550,17 +559,17 @@ export default function GuruDashboard() {
                 </CardContent>
               </Card>
 
-              {/* Statistik Presensi Mapel Card */}
+              {/* Statistik Presensi Mapel Card - Header solid #1591DC */}
               <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white p-4 sm:p-5">
+                <CardHeader className="bg-[#1591DC] text-white p-4 sm:p-5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
                       <CardTitle className="text-sm sm:text-lg">Statistik Presensi Mapel (30 hari)</CardTitle>
                     </div>
                     <div className="bg-white/20 px-2 sm:px-3 py-0.5 sm:py-1 rounded-xl text-center">
-                      <p className="text-base sm:text-lg font-bold">{mapelPercentage}%</p>
-                      <p className="text-[8px] sm:text-[10px]">Kehadiran</p>
+                      <p className="text-base sm:text-lg font-bold text-white">{mapelPercentage}%</p>
+                      <p className="text-[8px] sm:text-[10px] text-white/80">Kehadiran</p>
                     </div>
                   </div>
                   <CardDescription className="text-blue-100 text-[10px] sm:text-xs">
@@ -604,9 +613,9 @@ export default function GuruDashboard() {
                   <div className="space-y-1">
                     <div className="flex justify-between text-[10px] sm:text-xs">
                       <span className="text-slate-500">Total Kehadiran Mapel</span>
-                      <span className="font-semibold text-blue-600">{mapelPercentage}%</span>
+                      <span className="font-semibold text-[#2C5EAD]">{mapelPercentage}%</span>
                     </div>
-                    <Progress value={parseFloat(mapelPercentage as string)} className="h-1.5 sm:h-2" />
+                    <Progress value={parseFloat(mapelPercentage as string)} className="h-1.5 sm:h-2 [&>div]:bg-[#1591DC]" />
                   </div>
                   <p className="text-[10px] sm:text-xs text-slate-400 text-center mt-3">
                     Total presensi: {statsMapel.total}
@@ -615,17 +624,17 @@ export default function GuruDashboard() {
               </Card>
             </div>
 
-            {/* JADWAL & RECENT PRESENSI GRID - 1 kolom di HP */}
+            {/* JADWAL & RECENT PRESENSI GRID - Header solid #4BB8FA */}
             <div className="grid gap-6 lg:grid-cols-2">
               
               {/* Jadwal Hari Ini Card */}
               <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-5">
+                <CardHeader className="bg-[#4BB8FA] text-white p-4 sm:p-5">
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
                     <CardTitle className="text-sm sm:text-lg">Jadwal Mengajar Hari Ini</CardTitle>
                   </div>
-                  <CardDescription className="text-slate-300 text-[10px] sm:text-xs">
+                  <CardDescription className="text-blue-50 text-[10px] sm:text-xs">
                     {formatDate(currentTime)}
                   </CardDescription>
                 </CardHeader>
@@ -654,7 +663,7 @@ export default function GuruDashboard() {
                                 <span className="font-medium text-slate-800 text-xs sm:text-sm">{j.mapel}</span>
                               </div>
                             </div>
-                            <Badge className="bg-emerald-100 text-emerald-700 rounded-full text-[10px] sm:text-xs w-fit">
+                            <Badge className="bg-white/20 text-white rounded-full text-[10px] sm:text-xs w-fit">
                               <Users className="h-3 w-3 mr-1" />
                               {j.kelas}
                             </Badge>
@@ -668,12 +677,12 @@ export default function GuruDashboard() {
 
               {/* Presensi Harian Terbaru Card */}
               <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-5">
+                <CardHeader className="bg-[#4BB8FA] text-white p-4 sm:p-5">
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
                     <CardTitle className="text-sm sm:text-lg">Presensi Harian Terbaru</CardTitle>
                   </div>
-                  <CardDescription className="text-slate-300 text-[10px] sm:text-xs">
+                  <CardDescription className="text-blue-50 text-[10px] sm:text-xs">
                     5 data presensi terakhir
                   </CardDescription>
                 </CardHeader>
@@ -715,14 +724,14 @@ export default function GuruDashboard() {
               </Card>
             </div>
 
-            {/* MAIN PRESENSI SISWA TABLE - overflow-x-auto */}
+            {/* MAIN PRESENSI SISWA TABLE - Header solid #4BB8FA */}
             <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-5">
+              <CardHeader className="bg-[#4BB8FA] text-white p-4 sm:p-5">
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 sm:h-5 sm:w-5" />
                   <CardTitle className="text-sm sm:text-lg">Presensi Siswa Hari Ini</CardTitle>
                 </div>
-                <CardDescription className="text-slate-300 text-[10px] sm:text-xs">
+                <CardDescription className="text-blue-50 text-[10px] sm:text-xs">
                   Daftar presensi harian dan mapel terakhir siswa
                 </CardDescription>
               </CardHeader>
@@ -771,12 +780,12 @@ export default function GuruDashboard() {
               </CardContent>
             </Card>
 
-            {/* TIPS SECTION - Responsif */}
-            <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50">
+            {/* TIPS SECTION */}
+            <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-[#C4E2F5]/50 to-[#4BB8FA]/20">
               <CardContent className="p-4 sm:p-5">
                 <div className="flex items-start gap-3 sm:gap-4">
-                  <div className="bg-indigo-100 p-2 sm:p-3 rounded-xl">
-                    <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" />
+                  <div className="bg-[#2C5EAD]/10 p-2 sm:p-3 rounded-xl">
+                    <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-[#2C5EAD]" />
                   </div>
                   <div>
                     <h3 className="font-semibold text-slate-800 text-sm sm:text-base mb-1">Tips untuk Guru</h3>
