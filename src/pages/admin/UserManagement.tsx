@@ -1,5 +1,5 @@
 // src/pages/admin/UserManagement.tsx
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -165,22 +165,6 @@ type KelasWithGuru = {
   id_jurusan?: number | null;
 };
 
-interface GuruUpdateData {
-  nama: string;
-  gender: string;
-  aktif: boolean;
-  nik?: number;
-  id_jurusan?: number | null;
-}
-
-interface SiswaUpdateData {
-  nama: string;
-  gender: string;
-  aktif: boolean;
-  nis?: number;
-  id_kelas?: number | null;
-}
-
 export default function UserManagement() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -211,10 +195,9 @@ export default function UserManagement() {
   const [showFilter, setShowFilter] = useState(false);
   const [filterSearchQuery, setFilterSearchQuery] = useState("");
 
-  // Pagination
+  // Pagination (client-side)
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
-  const [totalData, setTotalData] = useState(0);
   const [userList, setUserList] = useState<UserItem[]>([]);
   const [isFetching, setIsFetching] = useState(false);
 
@@ -328,7 +311,6 @@ export default function UserManagement() {
   // ========== FETCH TOTAL COUNTS ==========
   const fetchTotalCounts = useCallback(async () => {
     try {
-      // Total Guru (semua, tidak peduli aktif/nonaktif untuk statistik)
       const { count: guruCount } = await supabase
         .from("guru")
         .select("*", { count: "exact", head: true });
@@ -355,27 +337,26 @@ export default function UserManagement() {
     }
   }, []);
 
-  // ========== FETCH DATA UNIFIED ==========
+  // ========== FETCH DATA (TANPA PAGINATION DI DB) ==========
   const fetchData = useCallback(async () => {
     setIsFetching(true);
     try {
       let data: UserItem[] = [];
-      let total = 0;
       const jurusanFilter = isAdminJurusan && user?.id_jurusan ? user.id_jurusan : null;
 
       if (userType === "guru") {
         if (!isAdminSuper && !isAdminJurusan) {
-          setUserList([]); setTotalData(0); setIsFetching(false); return;
+          setUserList([]);
+          setIsFetching(false);
+          return;
         }
         let query = supabase
           .from("guru")
-          .select("id_guru, nama, nik, gender, aktif, id_jurusan", { count: "exact" })
-          .order("nama", { ascending: true })
-          .range((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage - 1);
+          .select("id_guru, nama, nik, gender, aktif, id_jurusan")
+          .order("nama", { ascending: true });
         if (jurusanFilter) query = query.or(`id_jurusan.eq.${jurusanFilter},id_jurusan.is.null`);
-        const { data: guruData, count, error } = await query;
+        const { data: guruData, error } = await query;
         if (error) throw error;
-        total = count || 0;
         const guruIds = guruData?.map(g => g.id_guru) || [];
         const { data: akunData } = await supabase.from("akun").select("id_guru, username").in("id_guru", guruIds);
         const usernameMap = new Map<number, string>();
@@ -392,13 +373,14 @@ export default function UserManagement() {
         }));
       } else if (userType === "siswa") {
         if (!isAdminSuper && !isAdminJurusan) {
-          setUserList([]); setTotalData(0); setIsFetching(false); return;
+          setUserList([]);
+          setIsFetching(false);
+          return;
         }
         let siswaQuery = supabase
           .from("siswa")
-          .select("id_siswa, nama, nis, gender, aktif, id_kelas", { count: "exact" })
-          .order("nama", { ascending: true })
-          .range((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage - 1);
+          .select("id_siswa, nama, nis, gender, aktif, id_kelas")
+          .order("nama", { ascending: true });
         if (filterKelas !== "all") {
           if (filterKelas === "unassigned") siswaQuery = siswaQuery.is("id_kelas", null);
           else siswaQuery = siswaQuery.eq("id_kelas", parseInt(filterKelas));
@@ -406,12 +388,15 @@ export default function UserManagement() {
         if (jurusanFilter) {
           const { data: kelasDiJurusan } = await supabase.from("kelas").select("id_kelas").eq("id_jurusan", jurusanFilter);
           const kelasIds = kelasDiJurusan?.map(k => k.id_kelas) || [];
-          if (kelasIds.length === 0) { setUserList([]); setTotalData(0); setIsFetching(false); return; }
+          if (kelasIds.length === 0) {
+            setUserList([]);
+            setIsFetching(false);
+            return;
+          }
           siswaQuery = siswaQuery.in("id_kelas", kelasIds);
         }
-        const { data: siswaData, count, error } = await siswaQuery;
+        const { data: siswaData, error } = await siswaQuery;
         if (error) throw error;
-        total = count || 0;
         const siswaIds = siswaData?.map(s => s.id_siswa) || [];
         const { data: akunData } = await supabase.from("akun").select("id_siswa, username").in("id_siswa", siswaIds);
         const usernameMap = new Map<number, string>();
@@ -434,16 +419,17 @@ export default function UserManagement() {
           nama_kelas: s.id_kelas ? kelasMap.get(s.id_kelas) || null : null,
         }));
       } else if (userType === "admin_jurusan") {
-        if (!isAdminSuper) { setUserList([]); setTotalData(0); setIsFetching(false); return; }
-        let query = supabase
+        if (!isAdminSuper) {
+          setUserList([]);
+          setIsFetching(false);
+          return;
+        }
+        const { data: akunData, error } = await supabase
           .from("akun")
-          .select("id_akun, nama, username, peran, aktif, id_jurusan", { count: "exact" })
+          .select("id_akun, nama, username, peran, aktif, id_jurusan")
           .eq("peran", "admin_jurusan")
-          .order("nama", { ascending: true })
-          .range((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage - 1);
-        const { data: akunData, count, error } = await query;
+          .order("nama", { ascending: true });
         if (error) throw error;
-        total = count || 0;
         const jurusanIds = akunData?.map(a => a.id_jurusan).filter(Boolean) as number[];
         const jurusanMap = new Map<number, string>();
         if (jurusanIds.length) {
@@ -460,16 +446,17 @@ export default function UserManagement() {
           jurusan_nama: a.id_jurusan ? jurusanMap.get(a.id_jurusan) || "-" : "-",
         }));
       } else if (userType === "bk") {
-        if (!isAdminSuper) { setUserList([]); setTotalData(0); setIsFetching(false); return; }
-        let query = supabase
+        if (!isAdminSuper) {
+          setUserList([]);
+          setIsFetching(false);
+          return;
+        }
+        const { data: akunData, error } = await supabase
           .from("akun")
-          .select("id_akun, nama, username, peran, aktif", { count: "exact" })
+          .select("id_akun, nama, username, peran, aktif")
           .eq("peran", "bk")
-          .order("nama", { ascending: true })
-          .range((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage - 1);
-        const { data: akunData, count, error } = await query;
+          .order("nama", { ascending: true });
         if (error) throw error;
-        total = count || 0;
         data = (akunData || []).map(a => ({
           id: a.id_akun,
           nama: a.nama,
@@ -479,13 +466,13 @@ export default function UserManagement() {
         }));
       }
       setUserList(data);
-      setTotalData(total);
+      setCurrentPage(1);
     } catch (error: any) {
       toast({ title: "Kesalahan", description: error.message, variant: "destructive" });
     } finally {
       setIsFetching(false);
     }
-  }, [userType, currentPage, itemsPerPage, filterKelas, isAdminSuper, isAdminJurusan, user?.id_jurusan, toast]);
+  }, [userType, filterKelas, isAdminSuper, isAdminJurusan, user?.id_jurusan, toast]);
 
   // ========== FETCH KELAS, GURU, JURUSAN ==========
   const fetchGuruOptions = useCallback(async () => {
@@ -543,24 +530,64 @@ export default function UserManagement() {
     resetPagination();
   }, [searchQuery, filterKelas, userType, itemsPerPage]);
 
-  // ========== UTILITIES ==========
-  const filteredUserList = userList.filter(userItem => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return userItem.nama.toLowerCase().includes(q) || userItem.username.toLowerCase().includes(q);
-  });
+  // ========== FILTER, SORT, & PAGINATION (CLIENT-SIDE) ==========
+  const filteredUserList = useMemo(() => {
+    let filtered = [...userList];
+    
+    // 1. Filter berdasarkan pencarian
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(userItem => {
+        if (userItem.nama.toLowerCase().includes(q)) return true;
+        if (userItem.username.toLowerCase().includes(q)) return true;
+        if (userType === "guru") {
+          const guru = userItem as GuruData;
+          if (guru.nik && guru.nik.toLowerCase().includes(q)) return true;
+        }
+        if (userType === "siswa") {
+          const siswa = userItem as SiswaData;
+          if (siswa.nis && siswa.nis.toLowerCase().includes(q)) return true;
+          if (siswa.nama_kelas && siswa.nama_kelas.toLowerCase().includes(q)) return true;
+        }
+        return false;
+      });
+    }
+    
+    // 2. Sorting: Aktif (true) di atas, Nonaktif (false) di bawah, masing-masing terurut nama A-Z
+    filtered.sort((a, b) => {
+      if (a.aktif !== b.aktif) {
+        return a.aktif ? -1 : 1; // aktif lebih dulu
+      }
+      return a.nama.localeCompare(b.nama);
+    });
+    
+    return filtered;
+  }, [userList, searchQuery, userType]);
 
-  const totalPages = Math.ceil(totalData / itemsPerPage);
-  const paginatedUserList = filteredUserList.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalFiltered = filteredUserList.length;
+  const totalPages = Math.ceil(totalFiltered / itemsPerPage);
+  const paginatedUserList = filteredUserList.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
-  const resetFilters = () => { setSearchQuery(""); setFilterKelas("all"); setFilterSearchQuery(""); resetPagination(); };
   const goToFirstPage = () => setCurrentPage(1);
   const goToPreviousPage = () => setCurrentPage(prev => Math.max(1, prev - 1));
   const goToNextPage = () => setCurrentPage(prev => Math.min(totalPages, prev + 1));
   const goToLastPage = () => setCurrentPage(totalPages);
-  const handleItemsPerPageChange = (value: string) => { setItemsPerPage(parseInt(value)); setCurrentPage(1); };
+  const handleItemsPerPageChange = (value: string) => {
+    setItemsPerPage(parseInt(value));
+    setCurrentPage(1);
+  };
 
-  // ========== CRUD UNIFIED ==========
+  const resetFilters = () => {
+    setSearchQuery("");
+    setFilterKelas("all");
+    setFilterSearchQuery("");
+    setCurrentPage(1);
+  };
+
+  // ========== CRUD UNIFIED (sama seperti sebelumnya) ==========
   const openAddDialog = () => {
     setAddForm({ nama: "", username: "", password: "", gender: "", nik: "", nis: "", kelas_id: "", peran: userType, id_jurusan: "" });
     setAddDialogOpen(true);
@@ -1234,7 +1261,7 @@ export default function UserManagement() {
       toast({ title: "Berhasil", description: `${addedCount} jurusan berhasil ditambahkan.` });
       setMissingJurusanDialogOpen(false);
       setImportJurusanMissing([]);
-      await handleImport(); // ulangi import setelah jurusan ditambahkan
+      await handleImport();
     } catch (error: any) {
       toast({ title: "Gagal", description: error.message, variant: "destructive" });
     } finally {
@@ -1268,7 +1295,7 @@ export default function UserManagement() {
       </div>
 
       <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8">
-        {/* STATS CARDS - TOTAL KESELURUHAN */}
+        {/* STATS CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
             <CardContent className="p-3 sm:p-4">
@@ -1348,10 +1375,30 @@ export default function UserManagement() {
                     <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full"><Upload className="mr-1 h-3 w-3" /> Impor</Button>
                     <Button variant="outline" onClick={refreshAll} disabled={isFetching} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full"><RefreshCw className={`mr-1 h-3 w-3 ${isFetching ? "animate-spin" : ""}`} /> Segarkan</Button>
                   </div>
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400" />
-                    <Input placeholder="Cari nama atau username..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 pr-8 rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full" />
-                    {searchQuery && <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2"><X className="h-3.5 w-3.5" /></button>}
+                  {/* Desain search yang diperindah */}
+                  <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-200"></div>
+                    <div className="relative bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-200">
+                      <div className="flex items-center p-1">
+                        <div className="pl-3 pr-1">
+                          <Search className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                        </div>
+                        <Input 
+                          placeholder="Cari berdasarkan nama, username, NIK, NIS, atau kelas..." 
+                          value={searchQuery} 
+                          onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} 
+                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none rounded-xl h-9 sm:h-10 text-xs sm:text-sm w-full bg-transparent"
+                        />
+                        {searchQuery && (
+                          <button 
+                            onClick={() => { setSearchQuery(""); setCurrentPage(1); }} 
+                            className="mr-2 p-1 rounded-full hover:bg-slate-100 transition-colors"
+                          >
+                            <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400 hover:text-slate-600" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2 items-center justify-between">
                     <Button variant={selectMode ? "default" : "outline"} onClick={toggleSelectMode} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full sm:w-auto">{selectMode ? "Batalkan Mode Pilih" : "Mode Pilih"}</Button>
@@ -1397,16 +1444,50 @@ export default function UserManagement() {
                     </div>
                   </div>
                 )}
-                {totalData > 0 && (
-                  <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
-                    <div className="flex items-center gap-2"><span className="text-xs">Tampilkan</span><Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}><SelectTrigger className="w-[70px] h-7 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="20">20</SelectItem><SelectItem value="50">50</SelectItem><SelectItem value="100">100</SelectItem></SelectContent></Select><span className="text-xs">per halaman</span></div>
-                    <div className="flex gap-1"><Button variant="outline" size="sm" onClick={goToFirstPage} disabled={currentPage === 1}><ChevronsLeft className="h-3.5 w-3.5" /></Button><Button variant="outline" size="sm" onClick={goToPreviousPage} disabled={currentPage === 1}><ChevronLeft className="h-3.5 w-3.5" /></Button><div className="px-2 text-sm"><span className="font-medium">{currentPage}</span><span className="text-slate-400"> / {totalPages || 1}</span></div><Button variant="outline" size="sm" onClick={goToNextPage} disabled={currentPage === totalPages || totalPages === 0}><ChevronRight className="h-3.5 w-3.5" /></Button><Button variant="outline" size="sm" onClick={goToLastPage} disabled={currentPage === totalPages || totalPages === 0}><ChevronsRight className="h-3.5 w-3.5" /></Button></div>
-                    <div className="text-xs">Menampilkan {(currentPage-1)*itemsPerPage+1} - {Math.min(currentPage*itemsPerPage, totalData)} dari {totalData} data</div>
+                {totalFiltered > 0 && (
+                  <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 bg-white rounded-xl p-3 shadow-sm border">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-600">Tampilkan</span>
+                      <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
+                        <SelectTrigger className="w-[70px] h-8 text-xs bg-white border-slate-200">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="10">10</SelectItem>
+                          <SelectItem value="20">20</SelectItem>
+                          <SelectItem value="50">50</SelectItem>
+                          <SelectItem value="100">100</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <span className="text-xs text-slate-600">per halaman</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={goToFirstPage} disabled={currentPage === 1} className="h-8 w-8 p-0 rounded-lg border-slate-200 hover:bg-slate-100">
+                        <ChevronsLeft className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={goToPreviousPage} disabled={currentPage === 1} className="h-8 w-8 p-0 rounded-lg border-slate-200 hover:bg-slate-100">
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                      </Button>
+                      <div className="flex items-center gap-1 px-2">
+                        <span className="text-sm font-medium text-slate-700">{currentPage}</span>
+                        <span className="text-xs text-slate-400">/</span>
+                        <span className="text-sm text-slate-500">{totalPages || 1}</span>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={goToNextPage} disabled={currentPage === totalPages || totalPages === 0} className="h-8 w-8 p-0 rounded-lg border-slate-200 hover:bg-slate-100">
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={goToLastPage} disabled={currentPage === totalPages || totalPages === 0} className="h-8 w-8 p-0 rounded-lg border-slate-200 hover:bg-slate-100">
+                        <ChevronsRight className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Menampilkan <span className="font-medium text-slate-700">{totalFiltered === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</span> - <span className="font-medium text-slate-700">{Math.min(currentPage * itemsPerPage, totalFiltered)}</span> dari <span className="font-medium text-slate-700">{totalFiltered}</span> data
+                    </div>
                   </div>
                 )}
               </TabsContent>
 
-              {/* TAB KELAS (sama seperti sebelumnya, hanya refreshAll dipanggil) */}
+              {/* TAB KELAS */}
               <TabsContent value="kelas" className="space-y-4 sm:space-y-6">
                 <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
                   <div className="flex flex-wrap gap-2 justify-center sm:justify-start"><Button onClick={handleAddKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600"><Plus className="mr-1 h-3 w-3" /> Tambah Kelas</Button><Button variant="outline" onClick={() => setImportKelasDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><Upload className="mr-1 h-3 w-3" /> Impor Excel</Button></div>
@@ -1440,7 +1521,7 @@ export default function UserManagement() {
         <div className="text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Manajemen Pengguna &amp; Kelas - SmartAS</p></div>
       </div>
 
-      {/* DIALOGS (sama seperti sebelumnya, hanya sesuaikan refreshAll) */}
+      {/* DIALOGS (sama seperti sebelumnya, tidak ada perubahan) */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent className="rounded-2xl max-w-md">
           <DialogHeader><DialogTitle><Plus className="h-5 w-5 inline mr-2 text-emerald-600" /> Tambah {addForm.peran === "guru" ? "Guru" : addForm.peran === "siswa" ? "Siswa" : addForm.peran === "admin_jurusan" ? "Admin Jurusan" : "BK"}</DialogTitle><DialogDescription>Isi data pengguna baru. Kata sandi default "password123".</DialogDescription></DialogHeader>

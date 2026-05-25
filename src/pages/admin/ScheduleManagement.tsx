@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+// src/pages/admin/UserManagement.tsx
+import { useState, useCallback, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import * as XLSX from "xlsx";
+import * as bcrypt from 'bcryptjs';
 import {
   Card,
   CardContent,
@@ -12,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Table,
   TableBody,
@@ -37,926 +40,1246 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Plus,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Upload,
+  Download,
+  AlertCircle,
+  Loader2,
   Edit,
   RefreshCw,
-  Loader2,
-  AlertCircle,
-  Calendar,
-  BookOpen,
-  User,
-  School,
+  Plus,
   Sun,
   Moon,
   Cloud,
+  Users,
+  School,
+  User,
+  UserCheck,
   Sparkles,
+  Shield,
+  GraduationCap,
   Search,
+  X,
+  Filter,
   UserMinus,
   UserPlus,
-  Upload,
-  Download,
-  X,
-  ChevronDown,
-  Eye,
+  Building2,
 } from "lucide-react";
-import { isBK, isAdminJurusan, isAdmin } from "@/lib/utils";
+
+// ==================== TYPES ====================
+interface GuruImportData {
+  nama: string;
+  nik: string;
+  username: string;
+  gender: string;
+  password?: string;
+  nama_jurusan?: string;
+}
+
+interface SiswaImportData {
+  nama: string;
+  nis: string;
+  username: string;
+  gender: string;
+  kelas: string;
+  password?: string;
+}
+
+interface BaseUser {
+  id: string | number;
+  nama: string;
+  username: string;
+  peran: string;
+  aktif: boolean;
+}
+
+interface GuruData extends BaseUser {
+  id: number;
+  nik: string;
+  gender: string;
+  peran: "guru";
+  id_jurusan?: number | null;
+}
+
+interface SiswaData extends BaseUser {
+  id: number;
+  nis: string;
+  gender: string;
+  id_kelas: number | null;
+  nama_kelas: string | null;
+  peran: "siswa";
+}
+
+interface AdminJurusanData extends BaseUser {
+  id: string;
+  id_jurusan: number | null;
+  jurusan_nama: string;
+  peran: "admin_jurusan";
+}
+
+interface BKData extends BaseUser {
+  id: string;
+  peran: "bk";
+}
+
+type UserItem = GuruData | SiswaData | AdminJurusanData | BKData;
 
 interface Kelas {
   id_kelas: number;
   nama: string;
   aktif: boolean;
-  id_jurusan: number | null;
+  dibuat_pada: string;
+  id_guru: number | null;
+  guru_nama?: string | null;
+  id_jurusan?: number | null;
 }
 
-interface MataPelajaran {
-  id_mapel: number;
+interface GuruSimple {
+  id_guru: number;
+  nama: string;
+  nik: string;
+  id_jurusan?: number | null;
+}
+
+interface Jurusan {
+  id_jurusan: number;
+  nama_jurusan: string;
+}
+
+type ExcelRow = Record<string, string | number | boolean | null | undefined>;
+
+type KelasWithGuru = {
+  id_kelas: number;
   nama: string;
   aktif: boolean;
   dibuat_pada: string;
-}
-
-interface Guru {
-  id_guru: number;
-  nama: string;
-  nik?: number | string;
-  aktif: boolean;
-}
-
-interface Jadwal {
-  id_jadwal: number;
-  id_kelas: number;
-  id_mapel: number;
-  id_guru: number;
-  hari: string;
-  jam: string;
-  aktif: boolean;
-  kelas?: { nama: string };
-  mapel?: { nama: string; aktif: boolean };
-  guru?: { nama: string; aktif: boolean };
-}
-
-interface StatistikJadwal {
-  totalJadwal: number;
-  totalKelas: number;
-  totalMapel: number;
-  totalGuru: number;
-  hariTersibuk: string;
-  jamTersibuk: string;
-  guruTersibuk: string;
-}
-
-const HARI = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-
-const convertToMinutes = (timeStr: string): number => {
-  const [hours, minutes] = timeStr.split(":").map(Number);
-  return hours * 60 + minutes;
+  id_guru: number | null;
+  guru: { nama: string } | null;
+  id_jurusan?: number | null;
 };
 
-function isTimeOverlap(jam1: string, jam2: string): boolean {
-  const parseRange = (jam: string) => {
-    const [start, end] = jam.split(" - ");
-    return { start: convertToMinutes(start), end: convertToMinutes(end) };
-  };
-  const t1 = parseRange(jam1);
-  const t2 = parseRange(jam2);
-  return t1.start < t2.end && t2.start < t1.end;
+interface GuruUpdateData {
+  nama: string;
+  gender: string;
+  aktif: boolean;
+  nik?: number;
+  id_jurusan?: number | null;
 }
 
-const LayoutGrid = (props: any) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
-  </svg>
-);
+interface SiswaUpdateData {
+  nama: string;
+  gender: string;
+  aktif: boolean;
+  nis?: number;
+  id_kelas?: number | null;
+}
 
-const ListIcon = (props: any) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
-  </svg>
-);
-
-export default function ScheduleManagement() {
+export default function UserManagement() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<"jadwal" | "mapel">("jadwal");
+  const [activeTab, setActiveTab] = useState<"list" | "kelas">("list");
+  const [userType, setUserType] = useState<"guru" | "siswa" | "admin_jurusan" | "bk">("guru");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [viewMode, setViewMode] = useState<"table" | "card">("table");
-
-  const userRole = user?.peran;
-  const isRoleBK = isBK(user);
-  const isRoleAdminJurusan = isAdminJurusan(user);
-  const canWrite = !isRoleBK;
-
-  const [jadwalList, setJadwalList] = useState<Jadwal[]>([]);
-  const [kelasList, setKelasList] = useState<Kelas[]>([]);
-  const [guruList, setGuruList] = useState<Guru[]>([]);
-  const [selectedKelas, setSelectedKelas] = useState<string>("");
-  const [selectedHari, setSelectedHari] = useState<string>("Senin");
-  const [isFetchingJadwal, setIsFetchingJadwal] = useState(false);
-  const [statistik, setStatistik] = useState<StatistikJadwal>({
-    totalJadwal: 0,
-    totalKelas: 0,
-    totalMapel: 0,
-    totalGuru: 0,
-    hariTersibuk: "-",
-    jamTersibuk: "-",
-    guruTersibuk: "-",
-  });
-
-  const [popoverKelasOpen, setPopoverKelasOpen] = useState(false);
-  const [kelasSearchQuery, setKelasSearchQuery] = useState("");
-  const [kelasJenjangFilter, setKelasJenjangFilter] = useState<string>("all");
-
-  const filteredKelasOptions = kelasList.filter((kelas) => {
-    if (kelasJenjangFilter !== "all") {
-      const pattern = new RegExp(`^${kelasJenjangFilter}(\\s|$)`);
-      if (!pattern.test(kelas.nama)) return false;
+  
+  const isAdminSuper = user?.peran === "admin";
+  const isAdminJurusan = user?.peran === "admin_jurusan";
+  
+  useEffect(() => {
+    if (isAdminJurusan && (userType === "admin_jurusan" || userType === "bk")) {
+      setUserType("guru");
     }
-    if (kelasSearchQuery) {
-      return kelas.nama.toLowerCase().includes(kelasSearchQuery.toLowerCase());
-    }
-    return true;
-  });
+  }, [isAdminJurusan, userType]);
 
-  const [jadwalDialogOpen, setJadwalDialogOpen] = useState(false);
-  const [editingJadwal, setEditingJadwal] = useState<Jadwal | null>(null);
-  const [jadwalForm, setJadwalForm] = useState({
-    id_kelas: "",
-    id_mapel: "",
-    id_guru: "",
-    hari: "Senin",
-    jam: "",
-  });
-  const [isSavingJadwal, setIsSavingJadwal] = useState(false);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  // Total counts (untuk statistik)
+  const [totalGuru, setTotalGuru] = useState(0);
+  const [totalSiswa, setTotalSiswa] = useState(0);
+  const [totalAdminJurusan, setTotalAdminJurusan] = useState(0);
+  const [totalBK, setTotalBK] = useState(0);
 
-  const [toggleJadwalDialogOpen, setToggleJadwalDialogOpen] = useState(false);
-  const [togglingJadwal, setTogglingJadwal] = useState<Jadwal | null>(null);
-  const [isActivatingJadwalMode, setIsActivatingJadwalMode] = useState(false);
+  // Search & filter
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchKelasQuery, setSearchKelasQuery] = useState("");
+  const [filterKelas, setFilterKelas] = useState<string>("all");
+  const [showFilter, setShowFilter] = useState(false);
+  const [filterSearchQuery, setFilterSearchQuery] = useState("");
 
-  const [mapelData, setMapelData] = useState<MataPelajaran[]>([]);
-  const [isFetchingMapel, setIsFetchingMapel] = useState(false);
-  const [mapelDialogOpen, setMapelDialogOpen] = useState(false);
-  const [editingMapel, setEditingMapel] = useState<MataPelajaran | null>(null);
-  const [mapelForm, setMapelForm] = useState({ nama: "" });
-  const [isSavingMapel, setIsSavingMapel] = useState(false);
-  const [mapelSearchTerm, setMapelSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"semua" | "aktif" | "nonaktif">("semua");
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [totalData, setTotalData] = useState(0);
+  const [userList, setUserList] = useState<UserItem[]>([]);
+  const [isFetching, setIsFetching] = useState(false);
 
-  const [toggleMapelDialogOpen, setToggleMapelDialogOpen] = useState(false);
-  const [togglingMapel, setTogglingMapel] = useState<MataPelajaran | null>(null);
-  const [isActivatingMapelMode, setIsActivatingMapelMode] = useState(false);
-
+  // Import user
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [previewData, setPreviewData] = useState<any[]>([]);
-  const [isImporting, setIsImporting] = useState(false);
+  const [previewData, setPreviewData] = useState<ExcelRow[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [importStep, setImportStep] = useState<"upload" | "preview">("upload");
+  const [importRawData, setImportRawData] = useState<ExcelRow[]>([]);
 
-  const [importJadwalDialogOpen, setImportJadwalDialogOpen] = useState(false);
-  const [importJadwalRawData, setImportJadwalRawData] = useState<any[]>([]);
-  const [importJadwalPreviewRows, setImportJadwalPreviewRows] = useState<any[]>([]);
-  const [importJadwalMissingMapels, setImportJadwalMissingMapels] = useState<string[]>([]);
-  const [isImportingJadwal, setIsImportingJadwal] = useState(false);
-  const [importJadwalUploadError, setImportJadwalUploadError] = useState<string | null>(null);
-  const [missingMapelDialogOpen, setMissingMapelDialogOpen] = useState(false);
-  const [isAddingMissingMapels, setIsAddingMissingMapels] = useState(false);
-  const [importJadwalStep, setImportJadwalStep] = useState<"upload" | "preview">("upload");
+  // Add manual
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [addForm, setAddForm] = useState({
+    nama: "",
+    username: "",
+    password: "",
+    gender: "",
+    nik: "",
+    nis: "",
+    kelas_id: "",
+    peran: "guru" as "guru" | "siswa" | "admin_jurusan" | "bk",
+    id_jurusan: "",
+  });
 
+  // Kelas related
+  const [kelasList, setKelasList] = useState<Kelas[]>([]);
+  const [isFetchingKelas, setIsFetchingKelas] = useState(false);
+  const [guruOptions, setGuruOptions] = useState<GuruSimple[]>([]);
+  const [jurusanList, setJurusanList] = useState<Jurusan[]>([]);
+
+  // Edit
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserItem | null>(null);
+  const [editForm, setEditForm] = useState({
+    nama: "",
+    username: "",
+    password: "",
+    gender: "",
+    nik: "",
+    nis: "",
+    kelas_id: "",
+    peran: "guru" as "guru" | "siswa" | "admin_jurusan" | "bk",
+    id_jurusan: "",
+    aktif: true,
+  });
+
+  // Deactivate/Activate
+  const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
+  const [deactivatingUser, setDeactivatingUser] = useState<UserItem | null>(null);
+  const [deactivateConstraints, setDeactivateConstraints] = useState<string[]>([]);
+  const [isActivatingMode, setIsActivatingMode] = useState(false);
+
+  // Kelas CRUD
+  const [kelasDialogOpen, setKelasDialogOpen] = useState(false);
+  const [editingKelas, setEditingKelas] = useState<Kelas | null>(null);
+  const [kelasForm, setKelasForm] = useState({ nama: "", id_guru: "" });
+  const [isSavingKelas, setIsSavingKelas] = useState(false);
+  const [toggleKelasDialogOpen, setToggleKelasDialogOpen] = useState(false);
+  const [togglingKelas, setTogglingKelas] = useState<Kelas | null>(null);
+  const [isActivatingKelasMode, setIsActivatingKelasMode] = useState(false);
+
+  // Import Kelas
+  const [importKelasDialogOpen, setImportKelasDialogOpen] = useState(false);
+  const [importKelasRawData, setImportKelasRawData] = useState<ExcelRow[]>([]);
+  const [importKelasPreviewRows, setImportKelasPreviewRows] = useState<any[]>([]);
+  const [importKelasMissingGurus, setImportKelasMissingGurus] = useState<Set<string>>(new Set());
+  const [isImportingKelas, setIsImportingKelas] = useState(false);
+  const [importKelasUploadError, setImportKelasUploadError] = useState<string | null>(null);
+  const [missingGuruDialogOpen, setMissingGuruDialogOpen] = useState(false);
+  const [importKelasStep, setImportKelasStep] = useState<"upload" | "preview">("upload");
+
+  // Bulk actions
   const [selectMode, setSelectMode] = useState(false);
-  const [selectedMapelIds, setSelectedMapelIds] = useState<number[]>([]);
+  const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
+  const [isProcessingSelected, setIsProcessingSelected] = useState(false);
   const [bulkActionDialogOpen, setBulkActionDialogOpen] = useState(false);
-  const [bulkActionType, setBulkActionType] = useState<"aktifkan" | "nonaktifkan">("aktifkan");
-  const [isProcessingBulk, setIsProcessingBulk] = useState(false);
-  const [mapelCurrentPage, setMapelCurrentPage] = useState(1);
-  const mapelItemsPerPage = 10;
+  const [bulkActionType, setBulkActionType] = useState<"activate" | "deactivate">("deactivate");
+  const [bulkActionData, setBulkActionData] = useState<{
+    users: { id: string | number; nama: string; aktif: boolean }[];
+    cannotProcess: { id: string | number; nama: string; reasons: string[] }[];
+    canProcessIds: (string | number)[];
+  } | null>(null);
 
+  // State untuk missing jurusan saat import admin_jurusan
+  const [importJurusanMissing, setImportJurusanMissing] = useState<string[]>([]);
+  const [missingJurusanDialogOpen, setMissingJurusanDialogOpen] = useState(false);
+  const [isAddingMissingJurusan, setIsAddingMissingJurusan] = useState(false);
+
+  // ========== GREETING ==========
   useEffect(() => {
     const hour = new Date().getHours();
-    if (hour < 4) setGreeting("Selamat Malam");
-    else if (hour < 11) setGreeting("Selamat Pagi");
-    else if (hour < 15) setGreeting("Selamat Siang");
-    else if (hour < 19) setGreeting("Selamat Sore");
+    if (hour < 12) setGreeting("Selamat Pagi");
+    else if (hour < 18) setGreeting("Selamat Siang");
     else setGreeting("Selamat Malam");
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const formatDate = useCallback((date: Date) => {
-    return date.toLocaleDateString("id-ID", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  }, []);
-
-  const getGreetingIcon = () => {
-    if (greeting === "Selamat Pagi") return <Sun className="h-4 w-4" />;
-    if (greeting === "Selamat Siang" || greeting === "Selamat Sore") return <Cloud className="h-4 w-4" />;
-    return <Moon className="h-4 w-4" />;
-  };
-
-  const getStatusColor = (aktif: boolean) => aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700";
-  const getHariColor = (hari: string) => {
-    const colors: Record<string, string> = {
-      "Senin": "bg-blue-100 text-blue-700", "Selasa": "bg-teal-100 text-teal-700",
-      "Rabu": "bg-emerald-100 text-emerald-700", "Kamis": "bg-amber-100 text-amber-700",
-      "Jumat": "bg-purple-100 text-purple-700", "Sabtu": "bg-rose-100 text-rose-700",
-    };
-    return colors[hari] || "bg-slate-100 text-slate-700";
-  };
-
-  // FETCH DATA (with role filter)
-  const fetchKelas = async () => {
-    let query = supabase
-      .from("kelas")
-      .select("id_kelas, nama, aktif, id_jurusan")
-      .eq("aktif", true)
-      .order("nama");
-    if (isRoleAdminJurusan && user?.id_jurusan) {
-      query = query.eq("id_jurusan", user.id_jurusan);
-    }
-    const { data, error } = await query;
-    if (!error) setKelasList(data || []);
-  };
-
-  const fetchGuru = async () => {
-    let query = supabase
-      .from("guru")
-      .select("id_guru, nama, nik, aktif")
-      .eq("aktif", true)
-      .order("nama");
-    const { data, error } = await query;
-    if (!error) setGuruList(data || []);
-  };
-
-  const fetchMapel = async () => {
-    setIsFetchingMapel(true);
-    const { data, error } = await supabase.from("mata_pelajaran").select("*").order("nama");
-    if (!error) setMapelData(data || []);
-    setIsFetchingMapel(false);
-  };
-
-  const fetchJadwal = async () => {
-    if (!selectedKelas) return;
-    setIsFetchingJadwal(true);
-    try {
-      const query = supabase
-        .from("jadwal")
-        .select(`
-          id_jadwal, id_kelas, id_mapel, id_guru, hari, jam, aktif,
-          kelas:kelas (nama),
-          mapel:mata_pelajaran (nama, aktif),
-          guru:guru (nama, aktif)
-        `)
-        .eq("id_kelas", parseInt(selectedKelas))
-        .eq("hari", selectedHari);
-      // Use "as any" to avoid deep type inference issue
-      const { data, error } = await (query as any);
-      if (error) throw error;
-      setJadwalList(data || []);
-      
-      const activeJadwal = data?.filter((j: any) => j.aktif === true) || [];
-      const totalKelas = new Set(activeJadwal.map((j: any) => j.id_kelas)).size;
-      const totalMapel = new Set(activeJadwal.map((j: any) => j.id_mapel)).size;
-      const totalGuru = new Set(activeJadwal.map((j: any) => j.id_guru)).size;
-      const hariCount: Record<string, number> = {};
-      const jamCount: Record<string, number> = {};
-      const guruCount: Record<string, number> = {};
-      activeJadwal.forEach((j: any) => {
-        hariCount[j.hari] = (hariCount[j.hari] || 0) + 1;
-        const jamMulai = j.jam.split(" - ")[0];
-        jamCount[jamMulai] = (jamCount[jamMulai] || 0) + 1;
-        guruCount[(j.guru as any)?.nama || "-"] = (guruCount[(j.guru as any)?.nama || "-"] || 0) + 1;
-      });
-      setStatistik({
-        totalJadwal: activeJadwal.length,
-        totalKelas, totalMapel, totalGuru,
-        hariTersibuk: Object.entries(hariCount).sort((a,b)=>b[1]-a[1])[0]?.[0] || "-",
-        jamTersibuk: Object.entries(jamCount).sort((a,b)=>b[1]-a[1])[0]?.[0] || "-",
-        guruTersibuk: Object.entries(guruCount).sort((a,b)=>b[1]-a[1])[0]?.[0] || "-",
-      });
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } finally {
-      setIsFetchingJadwal(false);
-    }
-  };
-
-  useEffect(() => {
-    const init = async () => {
-      setLoading(true);
-      await Promise.all([fetchKelas(), fetchGuru(), fetchMapel()]);
-      setLoading(false);
-    };
-    init();
-  }, []);
-
-  useEffect(() => {
-    if (activeTab === "jadwal" && selectedKelas) fetchJadwal();
-  }, [selectedKelas, selectedHari, activeTab]);
-
-  // OVERLAP CHECKS
-  const checkOverlapJadwal = async (kelasId: number, mapelId: number, hari: string, jam: string, excludeId?: number): Promise<boolean> => {
-    let query = supabase
-      .from("jadwal")
-      .select("id_jadwal, jam")
-      .eq("id_kelas", kelasId)
-      .eq("id_mapel", mapelId)
-      .eq("hari", hari)
-      .eq("aktif", true);
-    if (excludeId) query = query.neq("id_jadwal", excludeId);
-    const { data } = await query;
-    return data?.some(j => isTimeOverlap(j.jam, jam)) || false;
-  };
-
-  const checkGuruOverlap = async (guruId: number, hari: string, jam: string, excludeId?: number): Promise<boolean> => {
-    let query = supabase
-      .from("jadwal")
-      .select("id_jadwal, jam")
-      .eq("id_guru", guruId)
-      .eq("hari", hari)
-      .eq("aktif", true);
-    if (excludeId) query = query.neq("id_jadwal", excludeId);
-    const { data } = await query;
-    return data?.some(j => isTimeOverlap(j.jam, jam)) || false;
-  };
-
-  // CRUD JADWAL
-  const openAddJadwal = () => {
-    if (!canWrite) return;
-    setEditingJadwal(null);
-    setFormErrors({});
-    setJadwalForm({ id_kelas: selectedKelas || "", id_mapel: "", id_guru: "", hari: selectedHari, jam: "" });
-    setJadwalDialogOpen(true);
-  };
-
-  const openEditJadwal = (jadwal: Jadwal) => {
-    if (!canWrite) return;
-    setEditingJadwal(jadwal);
-    setFormErrors({});
-    setJadwalForm({
-      id_kelas: jadwal.id_kelas.toString(),
-      id_mapel: jadwal.id_mapel.toString(),
-      id_guru: jadwal.id_guru.toString(),
-      hari: jadwal.hari,
-      jam: jadwal.jam,
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString("id-ID", {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     });
-    setJadwalDialogOpen(true);
   };
 
-  const validateJadwalForm = (): boolean => {
-    const errors: Record<string, string> = {};
-    if (!jadwalForm.id_kelas) errors.id_kelas = "Kelas harus dipilih";
-    if (!jadwalForm.id_mapel) errors.id_mapel = "Mata pelajaran harus dipilih";
-    if (!jadwalForm.id_guru) errors.id_guru = "Guru harus dipilih";
-    if (!jadwalForm.jam) errors.jam = "Jam harus diisi";
-    if (jadwalForm.jam && !/^\d{2}:\d{2} - \d{2}:\d{2}$/.test(jadwalForm.jam)) errors.jam = "Format jam harus 'HH:MM - HH:MM'";
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
+  const resetPagination = () => setCurrentPage(1);
 
-  const handleSaveJadwal = async () => {
-    if (!canWrite) return;
-    if (!validateJadwalForm()) return;
-    const kelasId = parseInt(jadwalForm.id_kelas), mapelId = parseInt(jadwalForm.id_mapel), guruId = parseInt(jadwalForm.id_guru);
-    const hari = jadwalForm.hari, jam = jadwalForm.jam, excludeId = editingJadwal?.id_jadwal;
-    setIsSavingJadwal(true);
+  // ========== FETCH TOTAL COUNTS ==========
+  const fetchTotalCounts = useCallback(async () => {
     try {
-      if (await checkOverlapJadwal(kelasId, mapelId, hari, jam, excludeId)) {
-        toast({ title: "Error", description: `Jadwal untuk kelas dan mata pelajaran ini sudah ada pada jam yang tumpang tindih di hari ${hari}.`, variant: "destructive" });
-        return;
-      }
-      if (await checkGuruOverlap(guruId, hari, jam, excludeId)) {
-        toast({ title: "Error", description: `Guru sudah memiliki jadwal lain di hari ${hari} pada jam yang tumpang tindih.`, variant: "destructive" });
-        return;
-      }
-      const data = { id_kelas: kelasId, id_mapel: mapelId, id_guru: guruId, hari, jam, aktif: true, dibuat_pada: new Date().toISOString() };
-      if (editingJadwal) {
-        await supabase.from("jadwal").update(data).eq("id_jadwal", editingJadwal.id_jadwal);
-        toast({ title: "Berhasil", description: "Jadwal berhasil diperbarui" });
-      } else {
-        await supabase.from("jadwal").insert(data);
-        toast({ title: "Berhasil", description: "Jadwal baru ditambahkan" });
-      }
-      setJadwalDialogOpen(false);
-      fetchJadwal();
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } finally {
-      setIsSavingJadwal(false);
+      // Total Guru (semua, tidak peduli aktif/nonaktif untuk statistik)
+      const { count: guruCount } = await supabase
+        .from("guru")
+        .select("*", { count: "exact", head: true });
+      setTotalGuru(guruCount || 0);
+
+      const { count: siswaCount } = await supabase
+        .from("siswa")
+        .select("*", { count: "exact", head: true });
+      setTotalSiswa(siswaCount || 0);
+
+      const { count: adminJurusanCount } = await supabase
+        .from("akun")
+        .select("*", { count: "exact", head: true })
+        .eq("peran", "admin_jurusan");
+      setTotalAdminJurusan(adminJurusanCount || 0);
+
+      const { count: bkCount } = await supabase
+        .from("akun")
+        .select("*", { count: "exact", head: true })
+        .eq("peran", "bk");
+      setTotalBK(bkCount || 0);
+    } catch (error) {
+      console.error("Error fetching total counts:", error);
     }
-  };
+  }, []);
 
-  const confirmToggleJadwal = (jadwal: Jadwal, isActivating: boolean) => {
-    if (!canWrite) return;
-    setTogglingJadwal(jadwal);
-    setIsActivatingJadwalMode(isActivating);
-    setToggleJadwalDialogOpen(true);
-  };
-
-  const executeToggleJadwal = async () => {
-    if (!canWrite || !togglingJadwal) return;
-    setIsSavingJadwal(true);
-    setToggleJadwalDialogOpen(false);
+  // ========== FETCH DATA UNIFIED (TANPA PAGINATION DI DATABASE) ==========
+  const fetchData = useCallback(async () => {
+    setIsFetching(true);
     try {
-      const newStatus = !togglingJadwal.aktif;
-      if (newStatus === true) {
-        const isOverlapMapel = await checkOverlapJadwal(
-          togglingJadwal.id_kelas,
-          togglingJadwal.id_mapel,
-          togglingJadwal.hari,
-          togglingJadwal.jam,
-          togglingJadwal.id_jadwal
-        );
-        if (isOverlapMapel) {
-          toast({ title: "Error", description: `Tidak dapat mengaktifkan karena jadwal tumpang tindih dengan jadwal aktif lainnya di kelas yang sama.`, variant: "destructive" });
-          return;
+      let data: UserItem[] = [];
+      let total = 0;
+      const jurusanFilter = isAdminJurusan && user?.id_jurusan ? user.id_jurusan : null;
+
+      if (userType === "guru") {
+        if (!isAdminSuper && !isAdminJurusan) {
+          setUserList([]); setTotalData(0); setIsFetching(false); return;
         }
-        const isGuruOverlap = await checkGuruOverlap(
-          togglingJadwal.id_guru,
-          togglingJadwal.hari,
-          togglingJadwal.jam,
-          togglingJadwal.id_jadwal
-        );
-        if (isGuruOverlap) {
-          toast({ title: "Error", description: `Tidak dapat mengaktifkan karena guru sudah memiliki jadwal aktif di jam yang sama.`, variant: "destructive" });
-          return;
+        let query = supabase
+          .from("guru")
+          .select("id_guru, nama, nik, gender, aktif, id_jurusan", { count: "exact" })
+          .order("nama", { ascending: true });
+          
+        if (jurusanFilter) query = query.or(`id_jurusan.eq.${jurusanFilter},id_jurusan.is.null`);
+        
+        const { data: guruData, count, error } = await query;
+        if (error) throw error;
+        total = count || 0;
+        const guruIds = guruData?.map(g => g.id_guru) || [];
+        const { data: akunData } = await supabase.from("akun").select("id_guru, username").in("id_guru", guruIds);
+        const usernameMap = new Map<number, string>();
+        akunData?.forEach(akun => usernameMap.set(akun.id_guru, akun.username));
+        data = (guruData || []).map(g => ({
+          id: g.id_guru,
+          nama: g.nama,
+          username: usernameMap.get(g.id_guru) || "",
+          peran: "guru" as const,
+          aktif: g.aktif,
+          nik: g.nik?.toString() || "",
+          gender: g.gender,
+          id_jurusan: g.id_jurusan,
+        }));
+      } else if (userType === "siswa") {
+        if (!isAdminSuper && !isAdminJurusan) {
+          setUserList([]); setTotalData(0); setIsFetching(false); return;
         }
+        let siswaQuery = supabase
+          .from("siswa")
+          .select("id_siswa, nama, nis, gender, aktif, id_kelas", { count: "exact" })
+          .order("nama", { ascending: true });
+          
+        if (filterKelas !== "all") {
+          if (filterKelas === "unassigned") siswaQuery = siswaQuery.is("id_kelas", null);
+          else siswaQuery = siswaQuery.eq("id_kelas", parseInt(filterKelas));
+        }
+        if (jurusanFilter) {
+          const { data: kelasDiJurusan } = await supabase.from("kelas").select("id_kelas").eq("id_jurusan", jurusanFilter);
+          const kelasIds = kelasDiJurusan?.map(k => k.id_kelas) || [];
+          if (kelasIds.length === 0) { setUserList([]); setTotalData(0); setIsFetching(false); return; }
+          siswaQuery = siswaQuery.in("id_kelas", kelasIds);
+        }
+        
+        const { data: siswaData, count, error } = await siswaQuery;
+        if (error) throw error;
+        total = count || 0;
+        const siswaIds = siswaData?.map(s => s.id_siswa) || [];
+        const { data: akunData } = await supabase.from("akun").select("id_siswa, username").in("id_siswa", siswaIds);
+        const usernameMap = new Map<number, string>();
+        akunData?.forEach(akun => usernameMap.set(akun.id_siswa, akun.username));
+        const kelasIds = siswaData?.map(s => s.id_kelas).filter(Boolean) as number[];
+        const kelasMap = new Map<number, string>();
+        if (kelasIds.length) {
+          const { data: kelasData } = await supabase.from("kelas").select("id_kelas, nama").in("id_kelas", kelasIds);
+          kelasData?.forEach(k => kelasMap.set(k.id_kelas, k.nama));
+        }
+        data = (siswaData || []).map(s => ({
+          id: s.id_siswa,
+          nama: s.nama,
+          username: usernameMap.get(s.id_siswa) || "",
+          peran: "siswa" as const,
+          aktif: s.aktif,
+          nis: s.nis?.toString() || "",
+          gender: s.gender,
+          id_kelas: s.id_kelas,
+          nama_kelas: s.id_kelas ? kelasMap.get(s.id_kelas) || null : null,
+        }));
+      } else if (userType === "admin_jurusan") {
+        if (!isAdminSuper) { setUserList([]); setTotalData(0); setIsFetching(false); return; }
+        let query = supabase
+          .from("akun")
+          .select("id_akun, nama, username, peran, aktif, id_jurusan", { count: "exact" })
+          .eq("peran", "admin_jurusan")
+          .order("nama", { ascending: true });
+          
+        const { data: akunData, count, error } = await query;
+        if (error) throw error;
+        total = count || 0;
+        const jurusanIds = akunData?.map(a => a.id_jurusan).filter(Boolean) as number[];
+        const jurusanMap = new Map<number, string>();
+        if (jurusanIds.length) {
+          const { data: jurusanData } = await supabase.from("jurusan").select("id_jurusan, nama_jurusan").in("id_jurusan", jurusanIds);
+          jurusanData?.forEach(j => jurusanMap.set(j.id_jurusan, j.nama_jurusan));
+        }
+        data = (akunData || []).map(a => ({
+          id: a.id_akun,
+          nama: a.nama,
+          username: a.username,
+          peran: "admin_jurusan" as const,
+          aktif: a.aktif,
+          id_jurusan: a.id_jurusan,
+          jurusan_nama: a.id_jurusan ? jurusanMap.get(a.id_jurusan) || "-" : "-",
+        }));
+      } else if (userType === "bk") {
+        if (!isAdminSuper) { setUserList([]); setTotalData(0); setIsFetching(false); return; }
+        let query = supabase
+          .from("akun")
+          .select("id_akun, nama, username, peran, aktif", { count: "exact" })
+          .eq("peran", "bk")
+          .order("nama", { ascending: true });
+          
+        const { data: akunData, count, error } = await query;
+        if (error) throw error;
+        total = count || 0;
+        data = (akunData || []).map(a => ({
+          id: a.id_akun,
+          nama: a.nama,
+          username: a.username,
+          peran: "bk" as const,
+          aktif: a.aktif,
+        }));
       }
-      await supabase.from("jadwal").update({ aktif: newStatus }).eq("id_jadwal", togglingJadwal.id_jadwal);
-      toast({ title: "Berhasil", description: `Jadwal ${togglingJadwal.mapel?.nama || "ini"} telah ${newStatus ? "diaktifkan" : "dinonaktifkan"}.` });
-      fetchJadwal();
+      setUserList(data);
+      setTotalData(total);
+      setCurrentPage(1); // Reset ke halaman pertama setelah fetch data baru
     } catch (error: any) {
       toast({ title: "Kesalahan", description: error.message, variant: "destructive" });
     } finally {
-      setIsSavingJadwal(false);
-      setTogglingJadwal(null);
+      setIsFetching(false);
     }
+  }, [userType, filterKelas, isAdminSuper, isAdminJurusan, user?.id_jurusan, toast]);
+
+  // ========== FETCH KELAS, GURU, JURUSAN ==========
+  const fetchGuruOptions = useCallback(async () => {
+    try {
+      let query = supabase.from("guru").select("id_guru, nama, nik, id_jurusan").eq("aktif", true).order("nama");
+      if (isAdminJurusan && user?.id_jurusan) query = query.or(`id_jurusan.eq.${user.id_jurusan},id_jurusan.is.null`);
+      const { data, error } = await query;
+      if (error) throw error;
+      const formatted: GuruSimple[] = (data || []).map((g: any) => ({ id_guru: g.id_guru, nama: g.nama, nik: g.nik?.toString() || "", id_jurusan: g.id_jurusan }));
+      setGuruOptions(formatted);
+    } catch (error) { console.error(error); }
+  }, [isAdminJurusan, user?.id_jurusan]);
+
+  const fetchKelas = useCallback(async () => {
+    setIsFetchingKelas(true);
+    try {
+      let query = supabase.from("kelas").select(`*, guru:guru (nama), id_jurusan`).order("nama");
+      if (isAdminJurusan && user?.id_jurusan) query = query.eq("id_jurusan", user.id_jurusan);
+      const { data, error } = await query;
+      if (error) throw error;
+      const formatted: Kelas[] = (data || []).map((item: KelasWithGuru) => ({
+        id_kelas: item.id_kelas, nama: item.nama, aktif: item.aktif, dibuat_pada: item.dibuat_pada,
+        id_guru: item.id_guru, guru_nama: item.guru?.nama || null, id_jurusan: item.id_jurusan,
+      }));
+      setKelasList(formatted);
+    } catch (error) {
+      toast({ title: "Kesalahan", description: error instanceof Error ? error.message : "Gagal mengambil data kelas", variant: "destructive" });
+    } finally {
+      setIsFetchingKelas(false);
+    }
+  }, [isAdminJurusan, user?.id_jurusan, toast]);
+
+  const fetchJurusan = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.from("jurusan").select("id_jurusan, nama_jurusan").eq("aktif", true).order("nama_jurusan");
+      if (error) throw error;
+      setJurusanList(data || []);
+    } catch (error) { console.error(error); }
+  }, []);
+
+  // ========== REFRESH ALL DATA ==========
+  const refreshAll = useCallback(() => {
+    fetchTotalCounts();
+    fetchData();
+    fetchGuruOptions();
+    fetchKelas();
+  }, [fetchTotalCounts, fetchData, fetchGuruOptions, fetchKelas]);
+
+  // ========== DEPENDENCY EFFECTS ==========
+  useEffect(() => {
+    refreshAll();
+  }, [refreshAll]);
+
+  useEffect(() => {
+    resetPagination();
+  }, [searchQuery, filterKelas, userType, itemsPerPage]);
+
+  // ========== UTILITIES ==========
+  // Apply search filter AFTER fetching from database (client-side filtering)
+  const getFilteredUserList = () => {
+    let filtered = [...userList];
+    
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(userItem => {
+        // Search by name or username
+        if (userItem.nama.toLowerCase().includes(q) || userItem.username.toLowerCase().includes(q)) {
+          return true;
+        }
+        // For students, also search by class name
+        if (userType === "siswa" && (userItem as SiswaData).nama_kelas) {
+          if ((userItem as SiswaData).nama_kelas!.toLowerCase().includes(q)) {
+            return true;
+          }
+        }
+        // For teachers, also search by NIK
+        if (userType === "guru" && (userItem as GuruData).nik) {
+          if ((userItem as GuruData).nik.toLowerCase().includes(q)) {
+            return true;
+          }
+        }
+        // For students, also search by NIS
+        if (userType === "siswa" && (userItem as SiswaData).nis) {
+          if ((userItem as SiswaData).nis.toLowerCase().includes(q)) {
+            return true;
+          }
+        }
+        return false;
+      });
+    }
+    
+    return filtered;
   };
 
-  // CRUD MAPEL
-  const openAddMapel = () => {
-    if (!canWrite) return;
-    setEditingMapel(null);
-    setMapelForm({ nama: "" });
-    setMapelDialogOpen(true);
-  };
-  const openEditMapel = (mapel: MataPelajaran) => {
-    if (!canWrite) return;
-    setEditingMapel(mapel);
-    setMapelForm({ nama: mapel.nama });
-    setMapelDialogOpen(true);
+  const filteredUserList = getFilteredUserList();
+  const totalFilteredData = filteredUserList.length;
+  const totalPages = Math.ceil(totalFilteredData / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedUserList = filteredUserList.slice(startIndex, endIndex);
+
+  const resetFilters = () => { setSearchQuery(""); setFilterKelas("all"); setFilterSearchQuery(""); resetPagination(); };
+  const goToFirstPage = () => setCurrentPage(1);
+  const goToPreviousPage = () => setCurrentPage(prev => Math.max(1, prev - 1));
+  const goToNextPage = () => setCurrentPage(prev => Math.min(totalPages, prev + 1));
+  const goToLastPage = () => setCurrentPage(totalPages);
+  const handleItemsPerPageChange = (value: string) => { setItemsPerPage(parseInt(value)); setCurrentPage(1); };
+
+  // ========== CRUD UNIFIED ==========
+  const openAddDialog = () => {
+    setAddForm({ nama: "", username: "", password: "", gender: "", nik: "", nis: "", kelas_id: "", peran: userType, id_jurusan: "" });
+    setAddDialogOpen(true);
   };
 
-  const handleSaveMapel = async () => {
-    if (!canWrite) return;
-    if (!mapelForm.nama.trim()) {
-      toast({ title: "Error", description: "Nama mata pelajaran tidak boleh kosong", variant: "destructive" });
+  const getNextId = async (table: "guru" | "siswa"): Promise<number> => {
+    const idField = table === "guru" ? "id_guru" : "id_siswa";
+    const { data, error } = await supabase.from(table).select(idField).order(idField, { ascending: false }).limit(1);
+    if (error) throw error;
+    let currentMax = 0;
+    if (data && data.length) currentMax = data[0][idField];
+    return currentMax + 1;
+  };
+
+  const handleAddUser = async () => {
+    if (!addForm.nama.trim() || !addForm.username.trim()) {
+      toast({ title: "Error", description: "Nama dan Username harus diisi", variant: "destructive" });
       return;
     }
-    setIsSavingMapel(true);
+    if (addForm.peran === "guru" && !addForm.nik.trim()) {
+      toast({ title: "Error", description: "NIK harus diisi untuk guru", variant: "destructive" });
+      return;
+    }
+    if (addForm.peran === "siswa" && !addForm.nis.trim()) {
+      toast({ title: "Error", description: "NIS harus diisi untuk siswa", variant: "destructive" });
+      return;
+    }
+    if (addForm.peran === "admin_jurusan" && !addForm.id_jurusan) {
+      toast({ title: "Error", description: "Pilih jurusan untuk admin jurusan", variant: "destructive" });
+      return;
+    }
+    if (addForm.peran !== "bk" && !addForm.gender && addForm.peran !== "admin_jurusan") {
+      toast({ title: "Error", description: "Jenis kelamin harus dipilih", variant: "destructive" });
+      return;
+    }
+    if ((addForm.peran === "admin_jurusan" || addForm.peran === "bk") && !isAdminSuper) {
+      toast({ title: "Error", description: "Hanya admin super yang dapat menambahkan pengguna sistem", variant: "destructive" });
+      return;
+    }
+
+    setIsLoading(true);
     try {
-      if (editingMapel) {
-        await supabase.from("mata_pelajaran").update({ nama: mapelForm.nama.trim() }).eq("id_mapel", editingMapel.id_mapel);
-        toast({ title: "Berhasil", description: "Mata pelajaran diperbarui" });
-      } else {
-        await supabase.from("mata_pelajaran").insert({ nama: mapelForm.nama.trim(), aktif: true, dibuat_pada: new Date().toISOString() });
-        toast({ title: "Berhasil", description: "Mata pelajaran ditambahkan" });
+      const { data: existingUsername } = await supabase.from("akun").select("username").eq("username", addForm.username).maybeSingle();
+      if (existingUsername) throw new Error("Username sudah digunakan");
+
+      const hashedPassword = await bcrypt.hash(addForm.password || "password123", 10);
+      const now = new Date().toISOString();
+
+      if (addForm.peran === "guru") {
+        const { data: existingNik } = await supabase.from("guru").select("nik").eq("nik", parseInt(addForm.nik)).maybeSingle();
+        if (existingNik) throw new Error("NIK sudah digunakan");
+        const nextId = await getNextId("guru");
+        let jurusanId = null;
+        if (isAdminJurusan && user?.id_jurusan) jurusanId = user.id_jurusan;
+        else if (addForm.id_jurusan) jurusanId = parseInt(addForm.id_jurusan);
+        await supabase.from("guru").insert({ id_guru: nextId, nama: addForm.nama, nik: parseInt(addForm.nik), gender: addForm.gender.toUpperCase(), aktif: true, dibuat_pada: now, id_jurusan: jurusanId });
+        await supabase.from("akun").insert({ nama: addForm.nama, username: addForm.username, peran: "guru", aktif: true, dibuat_pada: now, id_guru: nextId, id_siswa: null, kata_sandi: hashedPassword });
+      } else if (addForm.peran === "siswa") {
+        const { data: existingNis } = await supabase.from("siswa").select("nis").eq("nis", parseInt(addForm.nis)).maybeSingle();
+        if (existingNis) throw new Error("NIS sudah digunakan");
+        let kelasId = null;
+        if (addForm.kelas_id && addForm.kelas_id !== "none") {
+          kelasId = parseInt(addForm.kelas_id);
+          if (isAdminJurusan && user?.id_jurusan) {
+            const { data: kelas } = await supabase.from("kelas").select("id_jurusan").eq("id_kelas", kelasId).single();
+            if (!kelas || kelas.id_jurusan !== user.id_jurusan) throw new Error("Kelas tidak berada dalam jurusan Anda");
+          }
+        }
+        const nextId = await getNextId("siswa");
+        await supabase.from("siswa").insert({ id_siswa: nextId, nama: addForm.nama, nis: parseInt(addForm.nis), gender: addForm.gender.toUpperCase(), aktif: true, dibuat_pada: now, id_kelas: kelasId });
+        await supabase.from("akun").insert({ nama: addForm.nama, username: addForm.username, peran: "siswa", aktif: true, dibuat_pada: now, id_guru: null, id_siswa: nextId, kata_sandi: hashedPassword });
+      } else if (addForm.peran === "admin_jurusan") {
+        await supabase.from("akun").insert({ nama: addForm.nama, username: addForm.username, peran: "admin_jurusan", aktif: true, dibuat_pada: now, id_guru: null, id_siswa: null, id_jurusan: parseInt(addForm.id_jurusan), kata_sandi: hashedPassword });
+      } else if (addForm.peran === "bk") {
+        await supabase.from("akun").insert({ nama: addForm.nama, username: addForm.username, peran: "bk", aktif: true, dibuat_pada: now, id_guru: null, id_siswa: null, id_jurusan: null, kata_sandi: hashedPassword });
       }
-      setMapelDialogOpen(false);
-      fetchMapel();
+      toast({ title: "Berhasil", description: "Pengguna berhasil ditambahkan" });
+      setAddDialogOpen(false);
+      refreshAll();
     } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Gagal", description: error.message, variant: "destructive" });
     } finally {
-      setIsSavingMapel(false);
+      setIsLoading(false);
     }
   };
 
-  const confirmToggleMapel = (mapel: MataPelajaran, isActivating: boolean) => {
-    if (!canWrite) return;
-    if (!isActivating) {
-      const isUsed = jadwalList.some(j => j.id_mapel === mapel.id_mapel && j.aktif === true);
-      if (isUsed) {
-        toast({ title: "Tidak bisa menonaktifkan", description: `Mata pelajaran "${mapel.nama}" masih digunakan di jadwal aktif. Nonaktifkan jadwal terlebih dahulu.`, variant: "destructive" });
-        return;
-      }
+  const openEditDialog = (userItem: UserItem) => {
+    if ((userItem.peran === "admin_jurusan" || userItem.peran === "bk") && !isAdminSuper) {
+      toast({ title: "Error", description: "Hanya admin super yang dapat mengedit akun sistem", variant: "destructive" });
+      return;
     }
-    setTogglingMapel(mapel);
-    setIsActivatingMapelMode(isActivating);
-    setToggleMapelDialogOpen(true);
+    setEditingUser(userItem);
+    if (userItem.peran === "guru") {
+      const guru = userItem as GuruData;
+      setEditForm({ nama: guru.nama, username: guru.username, password: "", gender: guru.gender, nik: guru.nik, nis: "", kelas_id: "", peran: "guru", id_jurusan: guru.id_jurusan?.toString() || "", aktif: guru.aktif });
+    } else if (userItem.peran === "siswa") {
+      const siswa = userItem as SiswaData;
+      setEditForm({ nama: siswa.nama, username: siswa.username, password: "", gender: siswa.gender, nik: "", nis: siswa.nis, kelas_id: siswa.id_kelas?.toString() || "", peran: "siswa", id_jurusan: "", aktif: siswa.aktif });
+    } else if (userItem.peran === "admin_jurusan") {
+      const adminJur = userItem as AdminJurusanData;
+      setEditForm({ nama: adminJur.nama, username: adminJur.username, password: "", gender: "", nik: "", nis: "", kelas_id: "", peran: "admin_jurusan", id_jurusan: adminJur.id_jurusan?.toString() || "", aktif: adminJur.aktif });
+    } else if (userItem.peran === "bk") {
+      const bk = userItem as BKData;
+      setEditForm({ nama: bk.nama, username: bk.username, password: "", gender: "", nik: "", nis: "", kelas_id: "", peran: "bk", id_jurusan: "", aktif: bk.aktif });
+    }
+    setEditDialogOpen(true);
   };
 
-  const executeToggleMapel = async () => {
-    if (!canWrite || !togglingMapel) return;
-    setIsSavingMapel(true);
-    setToggleMapelDialogOpen(false);
+  const handleUpdateUser = async () => {
+    if (!editingUser) return;
+    if ((editForm.peran === "admin_jurusan" || editForm.peran === "bk") && !isAdminSuper) {
+      toast({ title: "Error", description: "Hanya admin super yang dapat mengubah ke role sistem", variant: "destructive" });
+      return;
+    }
+    setIsLoading(true);
     try {
-      const newStatus = !togglingMapel.aktif;
-      await supabase.from("mata_pelajaran").update({ aktif: newStatus }).eq("id_mapel", togglingMapel.id_mapel);
-      toast({ title: "Berhasil", description: `Mata pelajaran ${togglingMapel.nama} telah ${newStatus ? "diaktifkan" : "dinonaktifkan"}.` });
-      fetchMapel();
-      if (activeTab === "jadwal" && selectedKelas) fetchJadwal();
+      let query = supabase.from("akun").select("id_akun").eq("username", editForm.username);
+      if (editingUser.peran === "guru") query = query.neq("id_guru", editingUser.id as number);
+      else if (editingUser.peran === "siswa") query = query.neq("id_siswa", editingUser.id as number);
+      else query = query.neq("id_akun", editingUser.id as string);
+      const { data: existingUsername } = await query;
+      if (existingUsername && existingUsername.length) throw new Error("Username sudah digunakan oleh pengguna lain");
+
+      const updateData: any = { nama: editForm.nama, username: editForm.username, aktif: editForm.aktif };
+      if (editForm.password.trim()) updateData.kata_sandi = await bcrypt.hash(editForm.password, 10);
+
+      if (editingUser.peran === "guru") {
+        const guruUser = editingUser as GuruData;
+        if (editForm.nik && editForm.nik !== guruUser.nik) {
+          const { data: existingNik } = await supabase.from("guru").select("nik").eq("nik", parseInt(editForm.nik)).neq("id_guru", guruUser.id).maybeSingle();
+          if (existingNik) throw new Error("NIK sudah digunakan oleh guru lain");
+          await supabase.from("guru").update({ nik: parseInt(editForm.nik) }).eq("id_guru", guruUser.id);
+        }
+        let jurusanId = null;
+        if (editForm.id_jurusan && editForm.id_jurusan !== "none") jurusanId = parseInt(editForm.id_jurusan);
+        else if (isAdminJurusan && user?.id_jurusan) jurusanId = user.id_jurusan;
+        await supabase.from("guru").update({ nama: editForm.nama, gender: editForm.gender.toUpperCase(), aktif: editForm.aktif, id_jurusan: jurusanId }).eq("id_guru", guruUser.id);
+        await supabase.from("akun").update(updateData).eq("id_guru", guruUser.id);
+      } else if (editingUser.peran === "siswa") {
+        const siswaUser = editingUser as SiswaData;
+        if (editForm.nis && editForm.nis !== siswaUser.nis) {
+          const { data: existingNis } = await supabase.from("siswa").select("nis").eq("nis", parseInt(editForm.nis)).neq("id_siswa", siswaUser.id).maybeSingle();
+          if (existingNis) throw new Error("NIS sudah digunakan oleh siswa lain");
+          await supabase.from("siswa").update({ nis: parseInt(editForm.nis) }).eq("id_siswa", siswaUser.id);
+        }
+        let kelasId = null;
+        if (editForm.kelas_id && editForm.kelas_id !== "none") {
+          kelasId = parseInt(editForm.kelas_id);
+          if (isAdminJurusan && user?.id_jurusan) {
+            const { data: kelas } = await supabase.from("kelas").select("id_jurusan").eq("id_kelas", kelasId).single();
+            if (!kelas || kelas.id_jurusan !== user.id_jurusan) throw new Error("Kelas tidak berada dalam jurusan Anda");
+          }
+        }
+        await supabase.from("siswa").update({ nama: editForm.nama, gender: editForm.gender.toUpperCase(), aktif: editForm.aktif, id_kelas: kelasId }).eq("id_siswa", siswaUser.id);
+        await supabase.from("akun").update(updateData).eq("id_siswa", siswaUser.id);
+      } else if (editingUser.peran === "admin_jurusan") {
+        if (editForm.peran !== "admin_jurusan") {
+          await supabase.from("akun").update({ ...updateData, peran: editForm.peran, id_jurusan: null }).eq("id_akun", editingUser.id);
+        } else {
+          const data: any = { ...updateData, peran: "admin_jurusan" };
+          if (editForm.id_jurusan) data.id_jurusan = parseInt(editForm.id_jurusan);
+          else data.id_jurusan = null;
+          await supabase.from("akun").update(data).eq("id_akun", editingUser.id);
+        }
+      } else if (editingUser.peran === "bk") {
+        if (editForm.peran !== "bk") {
+          await supabase.from("akun").update({ ...updateData, peran: editForm.peran, id_jurusan: null }).eq("id_akun", editingUser.id);
+        } else {
+          await supabase.from("akun").update({ ...updateData, peran: "bk", id_jurusan: null }).eq("id_akun", editingUser.id);
+        }
+      }
+      toast({ title: "Berhasil", description: "Data pengguna berhasil diperbarui" });
+      setEditDialogOpen(false);
+      refreshAll();
     } catch (error: any) {
       toast({ title: "Kesalahan", description: error.message, variant: "destructive" });
     } finally {
-      setIsSavingMapel(false);
-      setTogglingMapel(null);
+      setIsLoading(false);
     }
   };
 
-  // IMPORT MAPEL
-  const downloadTemplateMapel = () => {
-    const headers = ["nama"];
-    const data = [["Matematika"], ["Fisika"], ["Kimia"], ["Biologi"], ["Bahasa Indonesia"]];
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Template_Mapel");
-    XLSX.writeFile(wb, "template_impor_mapel.xlsx");
+  // ========== DEACTIVATE / ACTIVATE ==========
+  const checkUserRelatedData = async (userItem: UserItem): Promise<string[]> => {
+    const related: string[] = [];
+    if (userItem.peran === "guru") {
+      const id = userItem.id as number;
+      const { data: jadwalData } = await supabase.from("jadwal").select("id_jadwal").eq("id_guru", id);
+      if (jadwalData?.length) related.push(`📚 Memiliki ${jadwalData.length} jadwal mengajar`);
+      const { data: kelasData } = await supabase.from("kelas").select("id_kelas").eq("id_guru", id);
+      if (kelasData?.length) related.push(`🏫 Menjadi wali kelas untuk ${kelasData.length} kelas`);
+      const { data: pklData } = await supabase.from("pkl").select("id_pkl").eq("id_guru", id);
+      if (pklData?.length) related.push(`🏢 Membimbing ${pklData.length} PKL`);
+    } else if (userItem.peran === "siswa") {
+      const id = userItem.id as number;
+      const { data: presHarian } = await supabase.from("presensi_harian").select("id_presensi_harian").eq("id_siswa", id);
+      if (presHarian?.length) related.push(`📅 Memiliki ${presHarian.length} data presensi harian`);
+      const { data: presMapel } = await supabase.from("presensi_siswa_mapel").select("id_pre_siswa").eq("id_siswa", id);
+      if (presMapel?.length) related.push(`📖 Memiliki ${presMapel.length} data presensi mata pelajaran`);
+    }
+    return related;
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!canWrite) return;
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setUploadError(null);
-    setIsImporting(true);
+  const confirmDeactivate = async (userItem: UserItem) => {
+    const constraints = await checkUserRelatedData(userItem);
+    setDeactivatingUser(userItem);
+    setDeactivateConstraints(constraints);
+    setIsActivatingMode(false);
+    setDeactivateDialogOpen(true);
+  };
+
+  const confirmActivate = (userItem: UserItem) => {
+    setDeactivatingUser(userItem);
+    setDeactivateConstraints([]);
+    setIsActivatingMode(true);
+    setDeactivateDialogOpen(true);
+  };
+
+  const executeToggleActive = async () => {
+    if (!deactivatingUser) return;
+    setIsLoading(true);
+    setDeactivateDialogOpen(false);
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const workbook = XLSX.read(arrayBuffer);
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet);
-      if (jsonData.length === 0) throw new Error("File kosong");
-      const firstRow = jsonData[0] as any;
-      if (!("nama" in firstRow)) throw new Error("Kolom 'nama' tidak ditemukan");
-      setPreviewData(jsonData);
-      toast({ title: "File Berhasil Diupload", description: `${jsonData.length} data mapel siap diimpor.` });
-      setImportDialogOpen(true);
-    } catch (error: any) {
-      setUploadError(error.message);
-      toast({ title: "Upload Gagal", description: error.message, variant: "destructive" });
-    } finally {
-      setIsImporting(false);
-      event.target.value = "";
-    }
-  };
-
-  const handleImportMapel = async () => {
-    if (!canWrite || !previewData.length) return;
-    setIsImporting(true);
-    try {
-      let successCount = 0;
-      let skipCount = 0;
-      for (const item of previewData) {
-        const nama = item.nama?.trim();
-        if (!nama) continue;
-        const { data: existing } = await supabase.from("mata_pelajaran").select("id_mapel").eq("nama", nama);
-        if (existing && existing.length > 0) {
-          skipCount++;
-          continue;
-        }
-        const { error } = await supabase.from("mata_pelajaran").insert({ nama, aktif: true, dibuat_pada: new Date().toISOString() });
-        if (error) throw error;
-        successCount++;
-      }
-      toast({ title: "Impor Selesai", description: `${successCount} data berhasil diimpor, ${skipCount} duplikat dilewati.` });
-      setImportDialogOpen(false);
-      setPreviewData([]);
-      fetchMapel();
-    } catch (error: any) {
-      toast({ title: "Impor Gagal", description: error.message, variant: "destructive" });
-    } finally {
-      setIsImporting(false);
-    }
-  };
-
-  // IMPORT JADWAL
-  const downloadJadwalTemplate = () => {
-    const headers = ["kelas", "mapel", "nik_guru", "hari", "jam"];
-    const data = [
-      ["X IPA 1", "Matematika", "1234567890", "Senin", "07:00 - 08:30"],
-      ["X IPA 1", "Fisika", "0987654321", "Senin", "08:30 - 10:00"],
-      ["XI IPS 2", "Bahasa Indonesia", "1122334455", "Selasa", "09:00 - 10:30"],
-    ];
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Template_Jadwal");
-    XLSX.writeFile(wb, "template_impor_jadwal.xlsx");
-  };
-
-  const toStringTrim = (value: any): string => {
-    if (value === null || value === undefined) return "";
-    return String(value).trim();
-  };
-
-  const validateJadwalImportRow = (row: any, index: number) => {
-    const errors: string[] = [];
-    const kelas = toStringTrim(row.kelas);
-    const mapel = toStringTrim(row.mapel);
-    const nikGuru = toStringTrim(row.nik_guru);
-    const hari = toStringTrim(row.hari);
-    const jam = toStringTrim(row.jam);
-    if (!kelas) errors.push("Kelas tidak boleh kosong");
-    if (!mapel) errors.push("Mata pelajaran tidak boleh kosong");
-    if (!nikGuru) errors.push("nik guru tidak boleh kosong");
-    if (!hari) errors.push("Hari tidak boleh kosong");
-    if (!jam) errors.push("Jam tidak boleh kosong");
-    if (jam && !/^\d{2}:\d{2} - \d{2}:\d{2}$/.test(jam)) {
-      errors.push("Format jam harus HH:MM - HH:MM");
-    }
-    if (hari && !HARI.includes(hari)) {
-      errors.push(`Hari harus salah satu dari: ${HARI.join(", ")}`);
-    }
-    return errors;
-  };
-
-  const processJadwalPreview = async (rawData: any[]) => {
-    const missingMapelsSet = new Set<string>();
-    const previewWithValidation = [];
-    for (let i = 0; i < rawData.length; i++) {
-      const row = rawData[i];
-      const validationErrors = validateJadwalImportRow(row, i);
-      const kelasNama = toStringTrim(row.kelas);
-      const kelas = kelasList.find(k => k.nama.toLowerCase() === kelasNama.toLowerCase());
-      const nikGuru = toStringTrim(row.nik_guru);
-      const guru = guruList.find(g => g.nik && g.nik.toString() === nikGuru);
-      const mapelNama = toStringTrim(row.mapel);
-      const mapel = mapelData.find(m => m.nama.toLowerCase() === mapelNama.toLowerCase());
-      if (!mapel && mapelNama) {
-        missingMapelsSet.add(mapelNama);
-      }
-      previewWithValidation.push({
-        kelas: row.kelas,
-        mapel: row.mapel,
-        nik_guru: row.nik_guru,
-        hari: toStringTrim(row.hari),
-        jam: toStringTrim(row.jam),
-        rowIndex: i + 1,
-        kelasId: kelas?.id_kelas || null,
-        guruId: guru?.id_guru || null,
-        mapelId: mapel?.id_mapel || null,
-        kelasValid: !!kelas,
-        guruValid: !!guru,
-        mapelValid: !!mapel,
-        validationErrors,
-        isValid: validationErrors.length === 0 && !!kelas && !!guru && !!mapel,
-      });
-    }
-    setImportJadwalMissingMapels(Array.from(missingMapelsSet));
-    return previewWithValidation;
-  };
-
-  const handleJadwalFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!canWrite) return;
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setImportJadwalUploadError(null);
-    setIsImportingJadwal(true);
-    setImportJadwalStep("upload");
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const workbook = XLSX.read(arrayBuffer);
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet);
-      if (jsonData.length === 0) throw new Error("File kosong");
-      const firstRow = jsonData[0] as any;
-      const requiredColumns = ["kelas", "mapel", "nik_guru", "hari", "jam"];
-      const missingColumns = requiredColumns.filter(col => !(col in firstRow));
-      if (missingColumns.length > 0) {
-        throw new Error(`Kolom tidak ditemukan: ${missingColumns.join(", ")}. Pastikan file memiliki kolom: kelas, mapel, nik_guru, hari, jam`);
-      }
-      setImportJadwalRawData(jsonData);
-      const preview = await processJadwalPreview(jsonData);
-      setImportJadwalPreviewRows(preview);
-      if (preview.some(p => !p.mapelValid)) {
-        setMissingMapelDialogOpen(true);
+      const newStatus = !deactivatingUser.aktif;
+      if (deactivatingUser.peran === "guru") {
+        await supabase.from("guru").update({ aktif: newStatus }).eq("id_guru", deactivatingUser.id as number);
+        await supabase.from("akun").update({ aktif: newStatus }).eq("id_guru", deactivatingUser.id as number);
+      } else if (deactivatingUser.peran === "siswa") {
+        await supabase.from("siswa").update({ aktif: newStatus }).eq("id_siswa", deactivatingUser.id as number);
+        await supabase.from("akun").update({ aktif: newStatus }).eq("id_siswa", deactivatingUser.id as number);
       } else {
-        setImportJadwalStep("preview");
-        setImportJadwalDialogOpen(true);
+        await supabase.from("akun").update({ aktif: newStatus }).eq("id_akun", deactivatingUser.id as string);
       }
+      toast({ title: "Berhasil", description: `Pengguna ${deactivatingUser.nama} telah ${newStatus ? "diaktifkan" : "dinonaktifkan"}.` });
+      refreshAll();
     } catch (error: any) {
-      setImportJadwalUploadError(error.message);
-      toast({ title: "Upload Gagal", description: error.message, variant: "destructive" });
+      toast({ title: "Kesalahan", description: error.message, variant: "destructive" });
     } finally {
-      setIsImportingJadwal(false);
-      event.target.value = "";
+      setIsLoading(false);
+      setDeactivatingUser(null);
     }
   };
 
-  const handleAddMissingMapelsAndContinue = async () => {
-    if (!canWrite) return;
-    if (importJadwalMissingMapels.length === 0) {
-      setMissingMapelDialogOpen(false);
-      return;
-    }
-    setIsAddingMissingMapels(true);
-    let addedCount = 0;
-    try {
-      for (const mapelNama of importJadwalMissingMapels) {
-        const { data: existing } = await supabase
-          .from("mata_pelajaran")
-          .select("id_mapel")
-          .eq("nama", mapelNama)
-          .maybeSingle();
-        if (!existing) {
-          const { error } = await supabase
-            .from("mata_pelajaran")
-            .insert({ nama: mapelNama, aktif: true, dibuat_pada: new Date().toISOString() });
-          if (error) throw error;
-          addedCount++;
-        }
-      }
-      await fetchMapel();
-      toast({ 
-        title: "Berhasil", 
-        description: `${addedCount} mata pelajaran berhasil ditambahkan.` 
-      });
-      const updatedPreview = await processJadwalPreview(importJadwalRawData);
-      setImportJadwalPreviewRows(updatedPreview);
-      setMissingMapelDialogOpen(false);
-      setImportJadwalStep("preview");
-      setImportJadwalDialogOpen(true);
-    } catch (error: any) {
-      toast({ 
-        title: "Gagal Menambahkan Mapel", 
-        description: error.message, 
-        variant: "destructive" 
-      });
-    } finally {
-      setIsAddingMissingMapels(false);
-    }
+  // ========== SELECT MASSAL ==========
+  const toggleSelectMode = () => {
+    setSelectMode(!selectMode);
+    if (selectMode) setSelectedIds([]);
   };
 
-  const confirmImportJadwal = async () => {
-    if (!canWrite) return;
-    const validRows = importJadwalPreviewRows.filter(row => row.isValid);
-    if (validRows.length === 0) {
-      toast({ 
-        title: "Tidak Ada Data Valid", 
-        description: "Tidak ada baris yang valid untuk diimpor. Perbaiki error terlebih dahulu.", 
-        variant: "destructive" 
-      });
-      return;
-    }
-    setIsImportingJadwal(true);
-    let successCount = 0;
-    let failCount = 0;
-    const failures: { row: number; error: string }[] = [];
-    for (const row of validRows) {
-      try {
-        const isOverlapMapel = await checkOverlapJadwal(
-          row.kelasId,
-          row.mapelId,
-          row.hari,
-          row.jam
-        );
-        if (isOverlapMapel) {
-          failures.push({ 
-            row: row.rowIndex, 
-            error: `Jadwal tumpang tindih dengan jadwal lain di kelas ${row.kelas} untuk mapel ${row.mapel} pada hari ${row.hari} jam ${row.jam}` 
-          });
-          failCount++;
-          continue;
-        }
-        const isGuruOverlap = await checkGuruOverlap(
-          row.guruId,
-          row.hari,
-          row.jam
-        );
-        if (isGuruOverlap) {
-          failures.push({ 
-            row: row.rowIndex, 
-            error: `Guru dengan NIK ${row.nik_guru} sudah memiliki jadwal lain di hari ${row.hari} pada jam yang tumpang tindih` 
-          });
-          failCount++;
-          continue;
-        }
-        const { error } = await supabase.from("jadwal").insert({
-          id_kelas: row.kelasId,
-          id_mapel: row.mapelId,
-          id_guru: row.guruId,
-          hari: row.hari,
-          jam: row.jam,
-          aktif: true,
-          dibuat_pada: new Date().toISOString(),
-        });
-        if (error) throw error;
-        successCount++;
-      } catch (error: any) {
-        failures.push({ row: row.rowIndex, error: error.message });
-        failCount++;
-      }
-    }
-    if (successCount > 0) {
-      toast({ 
-        title: "Import Selesai", 
-        description: `${successCount} jadwal berhasil diimpor${failCount > 0 ? `, ${failCount} gagal` : ""}.` 
-      });
-      if (selectedKelas) {
-        fetchJadwal();
-      }
-    }
-    if (failures.length > 0) {
-      console.error("Import failures:", failures);
-      toast({ 
-        title: "Beberapa jadwal gagal diimpor", 
-        description: `Cek console untuk detail error. ${failCount} jadwal gagal.`, 
-        variant: "destructive" 
-      });
-    }
-    setImportJadwalDialogOpen(false);
-    setImportJadwalRawData([]);
-    setImportJadwalPreviewRows([]);
-    setImportJadwalStep("upload");
-    setIsImportingJadwal(false);
-  };
-
-  // BULK ACTION MAPEL
   const handleSelectAll = () => {
-    const filtered = filteredMapel;
-    if (selectedMapelIds.length === filtered.length && filtered.length > 0) setSelectedMapelIds([]);
-    else setSelectedMapelIds(filtered.map(m => m.id_mapel));
+    if (selectedIds.length === paginatedUserList.length && paginatedUserList.length > 0) setSelectedIds([]);
+    else setSelectedIds(paginatedUserList.map(u => u.id));
   };
 
-  const handleSelectItem = (id: number) => {
-    setSelectedMapelIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  const handleSelectItem = (id: string | number) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
-  const handleBulkAction = (action: "aktifkan" | "nonaktifkan") => {
-    if (!canWrite) return;
-    if (selectedMapelIds.length === 0) {
+  const handleBulkAction = async (action: "activate" | "deactivate") => {
+    if (selectedIds.length === 0) {
       toast({ title: "Tidak ada data dipilih", variant: "destructive" });
       return;
     }
+    const usersSelected = selectedIds.map(id => {
+      const u = userList.find(u => u.id === id);
+      return { id, nama: u?.nama || `ID ${id}`, aktif: u?.aktif ?? false, peran: u?.peran };
+    }).filter(u => u.peran) as { id: string | number; nama: string; aktif: boolean; peran: string }[];
+    const cannotProcess: { id: string | number; nama: string; reasons: string[] }[] = [];
+    const canProcessIds: (string | number)[] = [];
+    if (action === "deactivate") {
+      for (const u of usersSelected) {
+        if (!u.aktif) continue;
+        let reasons: string[] = [];
+        if (u.peran === "guru") {
+          const { data: jadwalData } = await supabase.from("jadwal").select("id_jadwal").eq("id_guru", u.id as number);
+          if (jadwalData?.length) reasons.push(`📚 Memiliki ${jadwalData.length} jadwal`);
+          const { data: kelasData } = await supabase.from("kelas").select("id_kelas").eq("id_guru", u.id as number);
+          if (kelasData?.length) reasons.push(`🏫 Wali kelas ${kelasData.length} kelas`);
+          const { data: pklData } = await supabase.from("pkl").select("id_pkl").eq("id_guru", u.id as number);
+          if (pklData?.length) reasons.push(`🏢 Membimbing ${pklData.length} PKL`);
+        } else if (u.peran === "siswa") {
+          const { data: presHarian } = await supabase.from("presensi_harian").select("id_presensi_harian").eq("id_siswa", u.id as number);
+          if (presHarian?.length) reasons.push(`📅 ${presHarian.length} presensi harian`);
+          const { data: presMapel } = await supabase.from("presensi_siswa_mapel").select("id_pre_siswa").eq("id_siswa", u.id as number);
+          if (presMapel?.length) reasons.push(`📖 ${presMapel.length} presensi mapel`);
+        }
+        if (reasons.length) cannotProcess.push({ id: u.id, nama: u.nama, reasons });
+        else canProcessIds.push(u.id);
+      }
+    } else {
+      for (const u of usersSelected) { if (!u.aktif) canProcessIds.push(u.id); }
+    }
+    setBulkActionData({ users: usersSelected, cannotProcess, canProcessIds });
     setBulkActionType(action);
     setBulkActionDialogOpen(true);
   };
 
   const executeBulkAction = async () => {
-    if (!canWrite) return;
-    setIsProcessingBulk(true);
-    setBulkActionDialogOpen(false);
-    let successCount = 0;
-    let failCount = 0;
-    for (const id of selectedMapelIds) {
+    if (!bulkActionData) return;
+    const { canProcessIds } = bulkActionData;
+    const newActiveStatus = bulkActionType === "activate";
+    let successCount = 0, failCount = 0;
+    for (const id of canProcessIds) {
       try {
-        const newStatus = bulkActionType === "aktifkan";
-        const { error } = await supabase.from("mata_pelajaran").update({ aktif: newStatus }).eq("id_mapel", id);
-        if (error) throw error;
+        const targetUser = userList.find(u => u.id === id);
+        if (!targetUser) continue;
+        if (targetUser.peran === "guru") {
+          await supabase.from("guru").update({ aktif: newActiveStatus }).eq("id_guru", id as number);
+          await supabase.from("akun").update({ aktif: newActiveStatus }).eq("id_guru", id as number);
+        } else if (targetUser.peran === "siswa") {
+          await supabase.from("siswa").update({ aktif: newActiveStatus }).eq("id_siswa", id as number);
+          await supabase.from("akun").update({ aktif: newActiveStatus }).eq("id_siswa", id as number);
+        } else {
+          await supabase.from("akun").update({ aktif: newActiveStatus }).eq("id_akun", id as string);
+        }
         successCount++;
-      } catch (error) {
-        failCount++;
-      }
+      } catch { failCount++; }
     }
-    toast({ title: "Berhasil", description: `${successCount} mata pelajaran berhasil ${bulkActionType === "aktifkan" ? "diaktifkan" : "dinonaktifkan"}${failCount > 0 ? `, ${failCount} gagal` : ""}.` });
-    fetchMapel();
+    toast({ title: "Berhasil", description: `${successCount} pengguna berhasil ${bulkActionType === "activate" ? "diaktifkan" : "dinonaktifkan"}${failCount ? `, ${failCount} gagal` : ""}` });
+    refreshAll();
     setSelectMode(false);
-    setSelectedMapelIds([]);
-    setIsProcessingBulk(false);
+    setSelectedIds([]);
+    setBulkActionDialogOpen(false);
   };
 
-  // FILTER MAPEL
-  const filteredMapel = useMemo(() => {
-    let filtered = mapelData;
-    if (statusFilter === "aktif") filtered = filtered.filter(m => m.aktif === true);
-    if (statusFilter === "nonaktif") filtered = filtered.filter(m => m.aktif === false);
-    if (mapelSearchTerm) filtered = filtered.filter(m => m.nama.toLowerCase().includes(mapelSearchTerm.toLowerCase()));
-    return filtered;
-  }, [mapelData, mapelSearchTerm, statusFilter]);
-
-  const mapelTotalPages = useMemo(() => Math.ceil(filteredMapel.length / mapelItemsPerPage), [filteredMapel.length]);
-  const paginatedMapel = useMemo(() => {
-    const start = (mapelCurrentPage - 1) * mapelItemsPerPage;
-    return filteredMapel.slice(start, start + mapelItemsPerPage);
-  }, [filteredMapel, mapelCurrentPage]);
-
-  useEffect(() => {
-    setMapelCurrentPage(1);
-  }, [statusFilter, mapelSearchTerm]);
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    Promise.all([fetchJadwal(), fetchMapel()]).finally(() => setRefreshing(false));
+  // ========== KELAS MANAGEMENT ==========
+  const handleAddKelas = () => {
+    if (isAdminJurusan && !user?.id_jurusan) { toast({ title: "Error", description: "Admin jurusan tidak memiliki jurusan", variant: "destructive" }); return; }
+    setEditingKelas(null);
+    setKelasForm({ nama: "", id_guru: "" });
+    setKelasDialogOpen(true);
   };
 
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-16 w-16 animate-spin text-blue-600 mx-auto" />
-          <p className="text-slate-600 font-medium">Memuat Manajemen Jadwal</p>
-        </div>
-      </div>
-    );
-  }
+  const handleEditKelas = (kelas: Kelas) => {
+    setEditingKelas(kelas);
+    setKelasForm({ nama: kelas.nama, id_guru: kelas.id_guru?.toString() || "" });
+    setKelasDialogOpen(true);
+  };
 
+  const handleSaveKelas = async () => {
+    if (!kelasForm.nama.trim()) { toast({ title: "Kesalahan", description: "Nama kelas tidak boleh kosong", variant: "destructive" }); return; }
+    setIsSavingKelas(true);
+    try {
+      const data: { nama: string; id_guru: number | null; id_jurusan?: number | null } = { nama: kelasForm.nama.trim(), id_guru: kelasForm.id_guru ? parseInt(kelasForm.id_guru) : null };
+      if (isAdminJurusan && user?.id_jurusan) data.id_jurusan = user.id_jurusan;
+      if (editingKelas) {
+        await supabase.from("kelas").update(data).eq("id_kelas", editingKelas.id_kelas);
+        toast({ title: "Berhasil", description: "Kelas berhasil diperbarui" });
+      } else {
+        await supabase.from("kelas").insert({ ...data, aktif: true, dibuat_pada: new Date().toISOString() });
+        toast({ title: "Berhasil", description: "Kelas baru berhasil ditambahkan" });
+      }
+      setKelasDialogOpen(false);
+      refreshAll();
+    } catch (error) { toast({ title: "Kesalahan", description: error instanceof Error ? error.message : "Terjadi kesalahan", variant: "destructive" }); }
+    finally { setIsSavingKelas(false); }
+  };
+
+  const confirmToggleActiveKelas = (kelas: Kelas, isActivating: boolean) => {
+    setTogglingKelas(kelas);
+    setIsActivatingKelasMode(isActivating);
+    setToggleKelasDialogOpen(true);
+  };
+
+  const executeToggleActiveKelas = async () => {
+    if (!togglingKelas) return;
+    setIsSavingKelas(true);
+    setToggleKelasDialogOpen(false);
+    try {
+      await supabase.from("kelas").update({ aktif: !togglingKelas.aktif }).eq("id_kelas", togglingKelas.id_kelas);
+      toast({ title: "Berhasil", description: `Kelas ${togglingKelas.nama} telah ${!togglingKelas.aktif ? "diaktifkan" : "dinonaktifkan"}.` });
+      refreshAll();
+    } catch (error) { toast({ title: "Kesalahan", description: error instanceof Error ? error.message : "Terjadi kesalahan", variant: "destructive" }); }
+    finally { setIsSavingKelas(false); setTogglingKelas(null); }
+  };
+
+  // ========== IMPORT KELAS ==========
+  const downloadKelasTemplate = () => {
+    const headers = ["nama", "nik_wali", "aktif"];
+    const data = [["X IPA 1", "198512342021011001", "1"], ["XI IPS 2", "198709152021012002", "1"], ["XII RPL 3", "", "0"]];
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template_Kelas");
+    XLSX.writeFile(wb, "template_import_kelas.xlsx");
+  };
+
+  const handleKelasFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setImportKelasUploadError(null);
+    setIsImportingKelas(true);
+    setImportKelasStep("upload");
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet) as ExcelRow[];
+      if (jsonData.length === 0) throw new Error("File kosong");
+      if (!("nama" in jsonData[0])) throw new Error("Kolom 'nama' tidak ditemukan");
+      setImportKelasRawData(jsonData);
+      const missingGurusSet = new Set<string>();
+      const previewWithValidation = [];
+      for (let i = 0; i < jsonData.length; i++) {
+        const row = jsonData[i];
+        const nama = row.nama?.toString().trim();
+        const nikWali = row.nik_wali?.toString().trim();
+        let guru = null;
+        if (nikWali) {
+          guru = guruOptions.find(g => g.nik === nikWali);
+          if (!guru) missingGurusSet.add(nikWali);
+        }
+        const aktif = row.aktif === undefined ? true : (row.aktif === "1" || row.aktif === true);
+        previewWithValidation.push({
+          nama, nik_wali: nikWali || null, aktif, rowIndex: i + 1,
+          guruId: guru?.id_guru || null, guruValid: !nikWali || !!guru,
+          validationErrors: !nama ? ["Nama kelas tidak boleh kosong"] : [],
+          isValid: !!nama && (!nikWali || !!guru),
+        });
+      }
+      setImportKelasMissingGurus(missingGurusSet);
+      setImportKelasPreviewRows(previewWithValidation);
+      if (previewWithValidation.some(p => !p.guruValid && p.nik_wali)) setMissingGuruDialogOpen(true);
+      else { setImportKelasStep("preview"); setImportKelasDialogOpen(true); }
+    } catch (error: any) {
+      setImportKelasUploadError(error.message);
+      toast({ title: "Upload Gagal", description: error.message, variant: "destructive" });
+    } finally {
+      setIsImportingKelas(false);
+      event.target.value = "";
+    }
+  };
+
+  const confirmImportKelas = async () => {
+    const validRows = importKelasPreviewRows.filter(row => row.isValid);
+    if (validRows.length === 0) { toast({ title: "Tidak Ada Data Valid", description: "Tidak ada baris yang valid untuk diimpor.", variant: "destructive" }); return; }
+    setIsImportingKelas(true);
+    let successCount = 0, failCount = 0;
+    for (const row of validRows) {
+      try {
+        const { data: existing } = await supabase.from("kelas").select("id_kelas").eq("nama", row.nama).maybeSingle();
+        if (existing) { failCount++; continue; }
+        const dataInsert: any = { nama: row.nama, id_guru: row.guruId, aktif: row.aktif, dibuat_pada: new Date().toISOString() };
+        if (isAdminJurusan && user?.id_jurusan) dataInsert.id_jurusan = user.id_jurusan;
+        await supabase.from("kelas").insert(dataInsert);
+        successCount++;
+      } catch { failCount++; }
+    }
+    if (successCount > 0) toast({ title: "Impor Selesai", description: `${successCount} kelas berhasil diimpor, ${failCount} gagal.` });
+    else toast({ title: "Impor Gagal", description: "Tidak ada kelas yang berhasil diimpor.", variant: "destructive" });
+    refreshAll();
+    setImportKelasDialogOpen(false);
+    setImportKelasRawData([]);
+    setImportKelasPreviewRows([]);
+    setImportKelasStep("upload");
+    setIsImportingKelas(false);
+  };
+
+  const handleSkipMissingGurus = () => {
+    const filteredRows = importKelasPreviewRows.map(row => {
+      if (!row.guruValid && row.nik_wali) return { ...row, isValid: false, validationErrors: [...row.validationErrors, "NIK wali tidak ditemukan, baris akan dilewati"] };
+      return row;
+    });
+    setImportKelasPreviewRows(filteredRows);
+    setMissingGuruDialogOpen(false);
+    setImportKelasStep("preview");
+    setImportKelasDialogOpen(true);
+  };
+
+  // ========== IMPORT EXCEL UNTUK PENGGUNA ==========
+  const downloadTemplate = (type: "guru" | "siswa" | "admin_jurusan" | "bk") => {
+    let headers: string[];
+    let data: (string | number)[][];
+    if (type === "guru") {
+      headers = ["nama", "nik", "username", "gender", "nama_jurusan", "password"];
+      data = [
+        ["Ahmad Santoso", "198512342021011001", "ahmad.santoso@school.com", "L", "RPL", "password123"],
+        ["Siti Aminah", "198709152021012002", "siti.aminah@school.com", "P", "TKJ", "password123"],
+      ];
+    } else if (type === "siswa") {
+      headers = ["nama", "nis", "username", "gender", "kelas", "password"];
+      data = [
+        ["Budi Raharjo", "1234567890", "budi.raharjo@student.com", "L", "XII RPL 1", "password123"],
+        ["Anisa Fitri", "1234567891", "anisa.fitri@student.com", "P", "XII RPL 2", "password123"],
+      ];
+    } else if (type === "admin_jurusan") {
+      headers = ["nama", "username", "nama_jurusan", "password"];
+      data = [
+        ["Dr. Ahmad", "ahmad.admin", "RPL", "password123"],
+        ["Dra. Siti", "siti.admin", "TKJ", "password123"],
+      ];
+    } else if (type === "bk") {
+      headers = ["nama", "username", "password"];
+      data = [
+        ["Bapak Budi BK", "budi.bk", "password123"],
+        ["Ibu Ani BK", "ani.bk", "password123"],
+      ];
+    }
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, `Template_${type}`);
+    XLSX.writeFile(wb, `template_import_${type}.xlsx`);
+  };
+
+  const handleUserFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploadError(null);
+    setIsLoading(true);
+    setImportStep("upload");
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet) as ExcelRow[];
+      if (jsonData.length === 0) throw new Error("File kosong");
+      
+      let requiredColumns: string[];
+      if (userType === "guru") requiredColumns = ["nama", "nik", "username", "gender"];
+      else if (userType === "siswa") requiredColumns = ["nama", "nis", "username", "gender", "kelas"];
+      else if (userType === "admin_jurusan") requiredColumns = ["nama", "username", "nama_jurusan"];
+      else requiredColumns = ["nama", "username"];
+      
+      const firstRow = jsonData[0];
+      const missingColumns = requiredColumns.filter(col => !(col in firstRow));
+      if (missingColumns.length) throw new Error(`Kolom tidak ditemukan: ${missingColumns.join(", ")}`);
+      
+      setImportRawData(jsonData);
+      setPreviewData(jsonData);
+      setImportStep("preview");
+      setImportDialogOpen(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Upload gagal";
+      setUploadError(message);
+      setPreviewData([]);
+      toast({ title: "Upload Gagal", description: message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+      event.target.value = "";
+    }
+  };
+
+  const handleImport = async () => {
+    if (!previewData.length) {
+      toast({ title: "Kesalahan", description: "Tidak ada data untuk diimpor", variant: "destructive" });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      let successCount = 0;
+      let skipCount = 0;
+      
+      if (userType === "guru") {
+        for (const row of previewData) {
+          const nama = row.nama?.toString().trim();
+          const nik = row.nik?.toString().trim();
+          const username = row.username?.toString().trim();
+          const gender = row.gender?.toString().toUpperCase();
+          const password = row.password?.toString() || "password123";
+          const namaJurusan = row.nama_jurusan?.toString().trim();
+          if (!nama || !nik || !username || !gender) { skipCount++; continue; }
+          const { data: existingUsername } = await supabase.from("akun").select("username").eq("username", username).maybeSingle();
+          if (existingUsername) { skipCount++; continue; }
+          const { data: existingNik } = await supabase.from("guru").select("nik").eq("nik", parseInt(nik)).maybeSingle();
+          if (existingNik) { skipCount++; continue; }
+          let jurusanId = null;
+          if (namaJurusan) {
+            const { data: jurusan } = await supabase.from("jurusan").select("id_jurusan").eq("nama_jurusan", namaJurusan).maybeSingle();
+            if (!jurusan) { skipCount++; continue; }
+            jurusanId = jurusan.id_jurusan;
+          } else if (isAdminJurusan && user?.id_jurusan) {
+            jurusanId = user.id_jurusan;
+          }
+          const nextId = await getNextId("guru");
+          const hashedPassword = await bcrypt.hash(password, 10);
+          await supabase.from("guru").insert({ id_guru: nextId, nama, nik: parseInt(nik), gender, aktif: true, dibuat_pada: new Date().toISOString(), id_jurusan: jurusanId });
+          await supabase.from("akun").insert({ nama, username, peran: "guru", aktif: true, dibuat_pada: new Date().toISOString(), id_guru: nextId, id_siswa: null, kata_sandi: hashedPassword });
+          successCount++;
+        }
+      } else if (userType === "siswa") {
+        for (const row of previewData) {
+          const nama = row.nama?.toString().trim();
+          const nis = row.nis?.toString().trim();
+          const username = row.username?.toString().trim();
+          const gender = row.gender?.toString().toUpperCase();
+          const kelasNama = row.kelas?.toString().trim();
+          const password = row.password?.toString() || "password123";
+          if (!nama || !nis || !username || !gender || !kelasNama) { skipCount++; continue; }
+          const { data: existingUsername } = await supabase.from("akun").select("username").eq("username", username).maybeSingle();
+          if (existingUsername) { skipCount++; continue; }
+          const { data: existingNis } = await supabase.from("siswa").select("nis").eq("nis", parseInt(nis)).maybeSingle();
+          if (existingNis) { skipCount++; continue; }
+          const { data: kelas } = await supabase.from("kelas").select("id_kelas").eq("nama", kelasNama).maybeSingle();
+          if (!kelas) { skipCount++; continue; }
+          const nextId = await getNextId("siswa");
+          const hashedPassword = await bcrypt.hash(password, 10);
+          await supabase.from("siswa").insert({ id_siswa: nextId, nama, nis: parseInt(nis), gender, aktif: true, dibuat_pada: new Date().toISOString(), id_kelas: kelas.id_kelas });
+          await supabase.from("akun").insert({ nama, username, peran: "siswa", aktif: true, dibuat_pada: new Date().toISOString(), id_guru: null, id_siswa: nextId, kata_sandi: hashedPassword });
+          successCount++;
+        }
+      } else if (userType === "admin_jurusan") {
+        const jurusanNames = [...new Set(previewData.map(row => row.nama_jurusan?.toString().trim()).filter(Boolean))];
+        const { data: existingJurusan } = await supabase.from("jurusan").select("nama_jurusan").in("nama_jurusan", jurusanNames);
+        const existingNames = existingJurusan?.map(j => j.nama_jurusan) || [];
+        const missingJurusan = jurusanNames.filter(n => !existingNames.includes(n));
+        if (missingJurusan.length > 0) {
+          setImportJurusanMissing(missingJurusan);
+          setMissingJurusanDialogOpen(true);
+          setIsLoading(false);
+          return;
+        }
+        for (const row of previewData) {
+          const nama = row.nama?.toString().trim();
+          const username = row.username?.toString().trim();
+          const namaJurusan = row.nama_jurusan?.toString().trim();
+          const password = row.password?.toString() || "password123";
+          if (!nama || !username || !namaJurusan) { skipCount++; continue; }
+          const { data: existingUsername } = await supabase.from("akun").select("username").eq("username", username).maybeSingle();
+          if (existingUsername) { skipCount++; continue; }
+          const { data: jurusan } = await supabase.from("jurusan").select("id_jurusan").eq("nama_jurusan", namaJurusan).single();
+          if (!jurusan) { skipCount++; continue; }
+          const hashedPassword = await bcrypt.hash(password, 10);
+          await supabase.from("akun").insert({ nama, username, peran: "admin_jurusan", aktif: true, dibuat_pada: new Date().toISOString(), id_guru: null, id_siswa: null, id_jurusan: jurusan.id_jurusan, kata_sandi: hashedPassword });
+          successCount++;
+        }
+      } else if (userType === "bk") {
+        for (const row of previewData) {
+          const nama = row.nama?.toString().trim();
+          const username = row.username?.toString().trim();
+          const password = row.password?.toString() || "password123";
+          if (!nama || !username) { skipCount++; continue; }
+          const { data: existingUsername } = await supabase.from("akun").select("username").eq("username", username).maybeSingle();
+          if (existingUsername) { skipCount++; continue; }
+          const hashedPassword = await bcrypt.hash(password, 10);
+          await supabase.from("akun").insert({ nama, username, peran: "bk", aktif: true, dibuat_pada: new Date().toISOString(), id_guru: null, id_siswa: null, id_jurusan: null, kata_sandi: hashedPassword });
+          successCount++;
+        }
+      }
+      
+      toast({ title: "Impor Selesai", description: `${successCount} data berhasil diimpor, ${skipCount} duplikat/gagal dilewati.` });
+      setImportDialogOpen(false);
+      setPreviewData([]);
+      setImportRawData([]);
+      setImportStep("upload");
+      refreshAll();
+    } catch (error: any) {
+      toast({ title: "Impor Gagal", description: error.message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const continueImportAfterMissingJurusan = async () => {
+    if (importJurusanMissing.length === 0) return;
+    setIsAddingMissingJurusan(true);
+    let addedCount = 0;
+    try {
+      for (const namaJurusan of importJurusanMissing) {
+        const { data: existing } = await supabase
+          .from("jurusan")
+          .select("id_jurusan")
+          .eq("nama_jurusan", namaJurusan)
+          .maybeSingle();
+        if (!existing) {
+          await supabase.from("jurusan").insert({
+            nama_jurusan: namaJurusan,
+            aktif: true,
+            dibuat_pada: new Date().toISOString(),
+          });
+          addedCount++;
+        }
+      }
+      toast({ title: "Berhasil", description: `${addedCount} jurusan berhasil ditambahkan.` });
+      setMissingJurusanDialogOpen(false);
+      setImportJurusanMissing([]);
+      await handleImport(); // ulangi import setelah jurusan ditambahkan
+    } catch (error: any) {
+      toast({ title: "Gagal", description: error.message, variant: "destructive" });
+    } finally {
+      setIsAddingMissingJurusan(false);
+    }
+  };
+
+  // ========== RENDER ==========
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
       {/* HEADER */}
@@ -964,11 +1287,11 @@ export default function ScheduleManagement() {
         <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-3 sm:gap-4">
-              <div className="bg-white/20 p-2 sm:p-3 rounded-2xl backdrop-blur-sm"><Calendar className="h-6 w-6 sm:h-8 sm:w-8" /></div>
+              <div className="bg-white/20 p-2 sm:p-3 rounded-2xl backdrop-blur-sm"><Users className="h-6 w-6 sm:h-8 sm:w-8" /></div>
               <div>
-                <div className="flex items-center gap-2">{getGreetingIcon()}<p className="text-xs sm:text-sm text-blue-100">{greeting}</p></div>
-                <h1 className="text-base sm:text-2xl lg:text-3xl font-bold leading-tight">Manajemen Jadwal &amp; Mata Pelajaran</h1>
-                <p className="text-blue-100 text-xs sm:text-sm">Atur jadwal pelajaran per kelas dan kelola daftar mata pelajaran</p>
+                <div className="flex items-center gap-2">{greeting === "Selamat Pagi" ? <Sun className="h-3 w-3 sm:h-4 sm:w-4" /> : greeting === "Selamat Malam" ? <Moon className="h-3 w-3 sm:h-4 sm:w-4" /> : <Cloud className="h-3 w-3 sm:h-4 sm:w-4" />}<p className="text-xs sm:text-sm text-blue-100">{greeting}</p></div>
+                <h1 className="text-base sm:text-2xl lg:text-3xl font-bold leading-tight">Manajemen Data Pengguna &amp; Kelas</h1>
+                <p className="text-blue-100 text-xs sm:text-sm">{isAdminSuper ? "Kelola semua pengguna dan kelas" : (isAdminJurusan ? "Kelola guru, siswa, dan kelas dalam jurusan Anda" : "Manajemen data")}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -976,614 +1299,444 @@ export default function ScheduleManagement() {
                 <p className="text-[10px] sm:text-xs text-blue-100">{formatDate(currentTime)}</p>
                 <p className="text-base sm:text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
               </div>
-              <Button variant="ghost" size="icon" className="bg-white/10 hover:bg-white/20 text-white rounded-xl" onClick={handleRefresh} disabled={refreshing}>
-                <RefreshCw className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
-              </Button>
             </div>
           </div>
         </div>
       </div>
 
       <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8">
-        {/* STATS CARDS */}
+        {/* STATS CARDS - TOTAL KESELURUHAN */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-            <CardContent className="p-3 sm:p-4"><div className="flex justify-between"><div><p className="text-[10px] sm:text-xs text-blue-600 font-medium">Total Kelas</p><p className="text-lg sm:text-2xl font-bold text-blue-900">{kelasList.length}</p></div><School className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" /></div></CardContent>
+          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] sm:text-xs text-blue-600 font-medium">Total Guru</p>
+                  <p className="text-lg sm:text-2xl font-bold text-blue-900">{totalGuru}</p>
+                </div>
+                <User className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" />
+              </div>
+            </CardContent>
           </Card>
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
-            <CardContent className="p-3 sm:p-4"><div className="flex justify-between"><div><p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Total Mapel</p><p className="text-lg sm:text-2xl font-bold text-emerald-900">{mapelData.length}</p></div><BookOpen className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" /></div></CardContent>
+          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Total Siswa</p>
+                  <p className="text-lg sm:text-2xl font-bold text-emerald-900">{totalSiswa}</p>
+                </div>
+                <GraduationCap className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />
+              </div>
+            </CardContent>
           </Card>
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-            <CardContent className="p-3 sm:p-4"><div className="flex justify-between"><div><p className="text-[10px] sm:text-xs text-purple-600 font-medium">Total Guru</p><p className="text-lg sm:text-2xl font-bold text-purple-900">{guruList.length}</p></div><User className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" /></div></CardContent>
+          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] sm:text-xs text-purple-600 font-medium">Admin Jurusan</p>
+                  <p className="text-lg sm:text-2xl font-bold text-purple-900">{totalAdminJurusan}</p>
+                </div>
+                <Building2 className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" />
+              </div>
+            </CardContent>
           </Card>
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
-            <CardContent className="p-3 sm:p-4"><div className="flex justify-between"><div><p className="text-[10px] sm:text-xs text-amber-600 font-medium">Total Jadwal Aktif</p><p className="text-lg sm:text-2xl font-bold text-amber-900">{statistik.totalJadwal}</p></div><Calendar className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" /></div></CardContent>
+          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] sm:text-xs text-amber-600 font-medium">BK</p>
+                  <p className="text-lg sm:text-2xl font-bold text-amber-900">{totalBK}</p>
+                </div>
+                <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" />
+              </div>
+            </CardContent>
           </Card>
         </div>
 
-        {/* DETAIL STATISTIK JADWAL */}
-        {activeTab === "jadwal" && selectedKelas && jadwalList.length > 0 && (
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-r from-slate-700 to-slate-800 text-white">
-            <CardContent className="p-4 sm:p-5"><div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 text-center"><div><p className="text-[10px] sm:text-xs text-slate-300">Total Jadwal Aktif</p><p className="text-xl sm:text-2xl font-bold">{statistik.totalJadwal}</p></div><div><p className="text-[10px] sm:text-xs text-slate-300">Hari Tersibuk</p><p className="text-base sm:text-lg font-semibold">{statistik.hariTersibuk}</p></div><div><p className="text-[10px] sm:text-xs text-slate-300">Jam Tersibuk</p><p className="text-base sm:text-lg font-semibold">{statistik.jamTersibuk}</p></div><div><p className="text-[10px] sm:text-xs text-slate-300">Guru Tersibuk</p><p className="text-base sm:text-lg font-semibold truncate">{statistik.guruTersibuk}</p></div></div></CardContent>
-          </Card>
-        )}
-
-        {/* MAIN TABS CARD */}
         <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
           <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex items-center gap-2 sm:gap-3"><div className="bg-white/10 p-1.5 sm:p-2 rounded-xl"><Calendar className="h-5 w-5 sm:h-6 sm:w-6" /></div><div><CardTitle className="text-base sm:text-xl">Manajemen Jadwal &amp; Mata Pelajaran</CardTitle><CardDescription className="text-slate-300 text-xs sm:text-sm">Atur jadwal pelajaran per kelas dan kelola daftar mata pelajaran</CardDescription></div></div>
-              {activeTab === "jadwal" && canWrite && (
-                <div className="flex gap-1 bg-white/10 p-1 rounded-xl self-start md:self-auto">
-                  <Button variant="ghost" size="sm" className={`rounded-lg text-white text-xs sm:text-sm ${viewMode === "table" ? "bg-white/20" : ""}`} onClick={() => setViewMode("table")}><LayoutGrid className="h-3.5 w-3.5 mr-1" />Tabel</Button>
-                  <Button variant="ghost" size="sm" className={`rounded-lg text-white text-xs sm:text-sm ${viewMode === "card" ? "bg-white/20" : ""}`} onClick={() => setViewMode("card")}><ListIcon className="h-3.5 w-3.5 mr-1" />Kartu</Button>
-                </div>
-              )}
-              {activeTab === "jadwal" && !canWrite && (
-                <div className="bg-white/10 p-1 rounded-xl flex items-center gap-1 text-white text-xs"><Eye className="h-3.5 w-3.5" /> Mode Baca Saja</div>
-              )}
-            </div>
+            <div className="flex items-center gap-2 sm:gap-3"><div className="bg-white/10 p-1.5 sm:p-2 rounded-xl"><Shield className="h-5 w-5 sm:h-6 sm:w-6" /></div><div><CardTitle className="text-base sm:text-xl">Manajemen Pengguna &amp; Kelas</CardTitle><CardDescription className="text-slate-300 text-xs sm:text-sm">Kelola semua jenis pengguna dan kelas sesuai hak akses</CardDescription></div></div>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-4 sm:space-y-6">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "list" | "kelas")} className="space-y-4 sm:space-y-6">
               <div className="flex justify-center">
                 <TabsList className="bg-slate-100 p-1 rounded-xl w-auto inline-flex">
-                  <TabsTrigger value="jadwal" className="rounded-lg data-[state=active]:bg-white text-xs sm:text-sm px-3 sm:px-4"><Calendar className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Jadwal Pelajaran</TabsTrigger>
-                  <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white text-xs sm:text-sm px-3 sm:px-4"><BookOpen className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Mata Pelajaran</TabsTrigger>
+                  <TabsTrigger value="list" className="rounded-lg data-[state=active]:bg-white text-xs sm:text-sm px-3 sm:px-4"><Users className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Daftar Pengguna</TabsTrigger>
+                  <TabsTrigger value="kelas" className="rounded-lg data-[state=active]:bg-white text-xs sm:text-sm px-3 sm:px-4"><School className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Kelola Kelas</TabsTrigger>
                 </TabsList>
               </div>
 
-              {/* TAB JADWAL */}
-              <TabsContent value="jadwal" className="space-y-4 sm:space-y-6">
-                <div className="flex flex-col sm:flex-row gap-3 items-end justify-center">
-                  <div className="w-full sm:w-64">
-                    <Label className="text-slate-700 font-medium text-xs sm:text-sm">Kelas</Label>
-                    <Popover open={popoverKelasOpen} onOpenChange={setPopoverKelasOpen}>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full justify-between rounded-xl border-slate-200 h-8 sm:h-9 text-xs sm:text-sm font-normal mt-1">
-                          {selectedKelas ? kelasList.find(k => k.id_kelas.toString() === selectedKelas)?.nama || "Pilih Kelas" : "Pilih Kelas"}
-                          <ChevronDown className="h-3.5 w-3.5 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-64 p-0" align="start" sideOffset={5}>
-                        <div className="p-2 border-b bg-slate-50">
-                          <div className="flex gap-1 mb-2 flex-wrap">
-                            {["all", "X", "XI", "XII"].map(jenjang => (
-                              <Button key={jenjang} variant={kelasJenjangFilter === jenjang ? "default" : "ghost"} size="sm" className={`h-7 px-2 text-xs rounded-md ${kelasJenjangFilter === jenjang ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"}`} onClick={() => setKelasJenjangFilter(jenjang)}>
-                                {jenjang === "all" ? "Semua" : jenjang}
-                              </Button>
-                            ))}
-                          </div>
-                          <div className="relative">
-                            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                            <Input placeholder="Cari kelas..." value={kelasSearchQuery} onChange={(e) => setKelasSearchQuery(e.target.value)} className="pl-7 h-8 text-sm rounded-lg" onClick={(e) => e.stopPropagation()} />
-                            {kelasSearchQuery && <button onClick={() => setKelasSearchQuery("")} className="absolute right-2 top-1/2"><X className="h-3.5 w-3.5 text-slate-400" /></button>}
-                          </div>
-                        </div>
-                        <div className="max-h-60 overflow-y-auto">
-                          {filteredKelasOptions.length === 0 ? (
-                            <div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada kelas yang cocok</div>
-                          ) : (
-                            filteredKelasOptions.map(kelas => (
-                              <button key={kelas.id_kelas} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${selectedKelas === kelas.id_kelas.toString() ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-700"}`} onClick={() => { setSelectedKelas(kelas.id_kelas.toString()); setPopoverKelasOpen(false); setKelasSearchQuery(""); setKelasJenjangFilter("all"); }}>
-                                {kelas.nama}
-                              </button>
-                            ))
-                          )}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-
-                  <div className="w-full sm:w-40">
-                    <Label className="text-slate-700 font-medium text-xs sm:text-sm">Hari</Label>
-                    <Select value={selectedHari} onValueChange={setSelectedHari}>
-                      <SelectTrigger className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
+              {/* TAB DAFTAR PENGGUNA */}
+              <TabsContent value="list" className="space-y-4 sm:space-y-6">
+                <div className="flex flex-col gap-4">
+                  <div className="flex justify-start">
+                    <Select value={userType} onValueChange={(v) => { setUserType(v as any); resetPagination(); }} disabled={isAdminJurusan && (userType === "admin_jurusan" || userType === "bk")}>
+                      <SelectTrigger className="w-[180px] rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {HARI.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                        <SelectItem value="guru">Guru</SelectItem>
+                        <SelectItem value="siswa">Siswa</SelectItem>
+                        {isAdminSuper && <SelectItem value="admin_jurusan">Admin Jurusan</SelectItem>}
+                        {isAdminSuper && <SelectItem value="bk">BK</SelectItem>}
                       </SelectContent>
                     </Select>
                   </div>
-
-                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start w-full sm:w-auto">
-                    {canWrite && (
-                      <>
-                        <Button onClick={openAddJadwal} disabled={!selectedKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600">
-                          <Plus className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" /> Tambah Jadwal
-                        </Button>
-                        <Button variant="outline" onClick={() => setImportJadwalDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">
-                          <Upload className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" /> Impor Jadwal
-                        </Button>
-                      </>
-                    )}
-                    <Button variant="outline" onClick={fetchJadwal} disabled={!selectedKelas || isFetchingJadwal} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">
-                      <RefreshCw className={`mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5 ${isFetchingJadwal ? "animate-spin" : ""}`} /> Segarkan
-                    </Button>
+                  <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-2">
+                    <Button onClick={openAddDialog} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600 w-full"><Plus className="mr-1 h-3 w-3" /> Tambah</Button>
+                    <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full"><Upload className="mr-1 h-3 w-3" /> Impor</Button>
+                    <Button variant="outline" onClick={refreshAll} disabled={isFetching} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full"><RefreshCw className={`mr-1 h-3 w-3 ${isFetching ? "animate-spin" : ""}`} /> Segarkan</Button>
+                  </div>
+                  
+                  {/* Enhanced Search Bar with Glass Morphism Effect */}
+                  <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-200"></div>
+                    <div className="relative bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-200">
+                      <div className="flex items-center p-1">
+                        <div className="pl-3 pr-1">
+                          <Search className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                        </div>
+                        <Input 
+                          placeholder="Cari berdasarkan nama, username, NIK, NIS, atau kelas..." 
+                          value={searchQuery} 
+                          onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} 
+                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none rounded-xl h-9 sm:h-10 text-xs sm:text-sm w-full bg-transparent"
+                        />
+                        {searchQuery && (
+                          <button 
+                            onClick={() => { setSearchQuery(""); setCurrentPage(1); }} 
+                            className="mr-2 p-1 rounded-full hover:bg-slate-100 transition-colors"
+                          >
+                            <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400 hover:text-slate-600" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row gap-2 items-center justify-between">
+                    <Button variant={selectMode ? "default" : "outline"} onClick={toggleSelectMode} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full sm:w-auto">{selectMode ? "Batalkan Mode Pilih" : "Mode Pilih"}</Button>
+                    {selectMode && <div className="flex gap-2 w-full sm:w-auto justify-center"><Button onClick={() => handleBulkAction("activate")} disabled={selectedIds.length === 0} className="bg-green-600 hover:bg-green-700 rounded-xl text-xs">Aktifkan ({selectedIds.filter(id => !userList.find(u => u.id === id)?.aktif).length})</Button><Button variant="destructive" onClick={() => handleBulkAction("deactivate")} disabled={selectedIds.length === 0} className="rounded-xl text-xs">Nonaktifkan ({selectedIds.filter(id => userList.find(u => u.id === id)?.aktif).length})</Button></div>}
                   </div>
                 </div>
-
-                {!selectedKelas && (
-                  <Alert className="rounded-xl bg-amber-50 max-w-md mx-auto">
-                    <AlertCircle className="h-4 w-4 text-amber-600" />
-                    <AlertDescription className="text-amber-700 text-xs sm:text-sm">Silakan pilih kelas terlebih dahulu</AlertDescription>
-                  </Alert>
-                )}
-
-                {selectedKelas && viewMode === "table" && (
+                {isFetching ? <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div> : (
                   <div className="border rounded-xl overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-slate-50">
-                            <TableHead className="text-xs sm:text-sm">Jam</TableHead>
-                            <TableHead className="text-xs sm:text-sm">Mata Pelajaran</TableHead>
-                            <TableHead className="text-xs sm:text-sm">Guru</TableHead>
-                            <TableHead className="text-center text-xs sm:text-sm">Hari</TableHead>
-                            <TableHead className="text-center text-xs sm:text-sm">Status</TableHead>
-                            {canWrite && <TableHead className="text-center w-28 text-xs sm:text-sm">Aksi</TableHead>}
+                            {selectMode && <TableHead className="w-10"><Checkbox checked={selectedIds.length === paginatedUserList.length && paginatedUserList.length > 0} onCheckedChange={handleSelectAll} /></TableHead>}
+                            <TableHead>Nama</TableHead>
+                            <TableHead>Nama Pengguna</TableHead>
+                            {userType === "guru" && <TableHead>NIK</TableHead>}
+                            {userType === "guru" && <TableHead>Jurusan</TableHead>}
+                            {userType === "siswa" && <TableHead>NIS</TableHead>}
+                            {userType === "siswa" && <TableHead>Kelas</TableHead>}
+                            {userType === "admin_jurusan" && <TableHead>Jurusan</TableHead>}
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-center">Aksi</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {isFetchingJadwal ? (
-                            <TableRow><TableCell colSpan={canWrite ? 6 : 5} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
-                          ) : jadwalList.length === 0 ? (
-                            <TableRow><TableCell colSpan={canWrite ? 6 : 5} className="text-center py-8 text-slate-500"><Calendar className="h-8 w-8 mx-auto mb-2" />Tidak ada jadwal untuk hari {selectedHari}</TableCell></TableRow>
-                          ) : (
-                            jadwalList.map(j => (
-                              <TableRow key={j.id_jadwal}>
-                                <TableCell className="font-mono text-xs sm:text-sm font-medium whitespace-nowrap">{j.jam}</TableCell>
-                                <TableCell><div className="flex items-center gap-2"><div className="bg-blue-100 p-1.5 rounded-lg"><BookOpen className="h-4 w-4 text-blue-600" /></div><span className="font-medium text-xs sm:text-sm">{j.mapel?.nama || "-"}{j.mapel?.aktif === false && <span className="ml-1 text-xs text-red-500">(nonaktif)</span>}</span></div></TableCell>
-                                <TableCell><div className="flex items-center gap-2"><div className="bg-purple-100 p-1.5 rounded-lg"><User className="h-4 w-4 text-purple-600" /></div><span className="text-xs sm:text-sm">{j.guru?.nama || "-"}{j.guru?.aktif === false && <span className="ml-1 text-xs text-red-500">(nonaktif)</span>}</span></div></TableCell>
-                                <TableCell className="text-center"><Badge className={`${getHariColor(j.hari)} border-0 rounded-full px-2 sm:px-3 py-0.5 sm:py-1 text-xs`}>{j.hari}</Badge></TableCell>
-                                <TableCell className="text-center"><Badge className={`${getStatusColor(j.aktif)} border-0 rounded-full px-2 sm:px-3 py-0.5 sm:py-1 text-xs`}>{j.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell>
-                                {canWrite && (
-                                  <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditJadwal(j)}><Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" /></Button>{j.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)}><UserMinus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)}><UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500" /></Button>}</div></TableCell>
-                                )}
-                              </TableRow>
-                            ))
-                          )}
+                          {paginatedUserList.map(item => (
+                            <TableRow key={item.id} className="hover:bg-slate-50">
+                              {selectMode && <TableCell><Checkbox checked={selectedIds.includes(item.id)} onCheckedChange={() => handleSelectItem(item.id)} /></TableCell>}
+                              <TableCell className="whitespace-nowrap">{item.nama}</TableCell>
+                              <TableCell className="break-all min-w-[180px]">{item.username}</TableCell>
+                              {userType === "guru" && <TableCell>{(item as GuruData).nik}</TableCell>}
+                              {userType === "guru" && <TableCell>{(item as GuruData).id_jurusan ? jurusanList.find(j => j.id_jurusan === (item as GuruData).id_jurusan)?.nama_jurusan || "-" : "-"}</TableCell>}
+                              {userType === "siswa" && <TableCell>{(item as SiswaData).nis}</TableCell>}
+                              {userType === "siswa" && <TableCell>{(item as SiswaData).nama_kelas || "-"}</TableCell>}
+                              {userType === "admin_jurusan" && <TableCell>{(item as AdminJurusanData).jurusan_nama || "-"}</TableCell>}
+                              <TableCell><Badge className={item.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>{item.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell>
+                              <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditDialog(item)}><Edit className="h-4 w-4 text-blue-500" /></Button>{item.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmDeactivate(item)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmActivate(item)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell>
+                            </TableRow>
+                          ))}
+                          {paginatedUserList.length === 0 && <TableRow><TableCell colSpan={selectMode ? 10 : 9} className="text-center py-8 text-slate-500"><Users className="h-8 w-8 mx-auto mb-2 text-slate-300" />Tidak ada data</TableCell></TableRow>}
                         </TableBody>
                       </Table>
                     </div>
                   </div>
                 )}
-
-                {selectedKelas && viewMode === "card" && (
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {jadwalList.map(j => (
-                      <Card key={j.id_jadwal} className="rounded-xl border-0 shadow-md overflow-hidden group">
-                        <div className={`absolute top-0 right-0 w-20 h-20 -mr-10 -mt-10 rounded-full ${getHariColor(j.hari)} opacity-20 group-hover:scale-150 transition-transform`} />
-                        <CardContent className="p-3 sm:p-4 relative">
-                          <div className="flex justify-between mb-3 flex-wrap gap-1">
-                            <Badge className={getHariColor(j.hari)}>{j.hari}</Badge>
-                            <span className="font-mono text-xs sm:text-sm font-bold">{j.jam}</span>
-                          </div>
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2"><div className="bg-blue-100 p-1.5 rounded-xl"><BookOpen className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" /></div><span className="font-semibold text-xs sm:text-sm">{j.mapel?.nama || "-"}{j.mapel?.aktif === false && <span className="ml-1 text-xs text-red-500">(nonaktif)</span>}</span></div>
-                            <div className="flex items-center gap-2"><div className="bg-purple-100 p-1.5 rounded-xl"><User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-600" /></div><span className="text-xs sm:text-sm">{j.guru?.nama || "-"}{j.guru?.aktif === false && <span className="ml-1 text-xs text-red-500">(nonaktif)</span>}</span></div>
-                            <div><Badge className={getStatusColor(j.aktif)}>{j.aktif ? "Aktif" : "Nonaktif"}</Badge></div>
-                          </div>
-                          {canWrite && (
-                            <div className="flex gap-2 mt-3 pt-3 border-t">
-                              <Button variant="ghost" size="sm" onClick={() => openEditJadwal(j)} className="flex-1 text-xs sm:text-sm"><Edit className="h-3.5 w-3.5 mr-1" /> Edit</Button>
-                              {j.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)} className="flex-1 text-red-500 text-xs sm:text-sm"><UserMinus className="h-3.5 w-3.5 mr-1" /> Nonaktif</Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)} className="flex-1 text-green-500 text-xs sm:text-sm"><UserPlus className="h-3.5 w-3.5 mr-1" /> Aktif</Button>}
-                            </div>
-                          )}
-                          {!canWrite && (
-                            <div className="mt-3 pt-3 border-t text-center text-xs text-slate-400 flex items-center justify-center gap-1"><Eye className="h-3 w-3" /> Mode baca saja</div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
+                {/* Improved Pagination with better styling */}
+                {totalFilteredData > 0 && (
+                  <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 bg-white rounded-xl p-3 shadow-sm border">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-600">Tampilkan</span>
+                      <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
+                        <SelectTrigger className="w-[70px] h-8 text-xs bg-white border-slate-200">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="10">10</SelectItem>
+                          <SelectItem value="20">20</SelectItem>
+                          <SelectItem value="50">50</SelectItem>
+                          <SelectItem value="100">100</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <span className="text-xs text-slate-600">per halaman</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={goToFirstPage} 
+                        disabled={currentPage === 1}
+                        className="h-8 w-8 p-0 rounded-lg border-slate-200 hover:bg-slate-100"
+                      >
+                        <ChevronsLeft className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={goToPreviousPage} 
+                        disabled={currentPage === 1}
+                        className="h-8 w-8 p-0 rounded-lg border-slate-200 hover:bg-slate-100"
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                      </Button>
+                      
+                      <div className="flex items-center gap-1 px-2">
+                        <span className="text-sm font-medium text-slate-700">{currentPage}</span>
+                        <span className="text-xs text-slate-400">/</span>
+                        <span className="text-sm text-slate-500">{totalPages || 1}</span>
+                      </div>
+                      
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={goToNextPage} 
+                        disabled={currentPage === totalPages || totalPages === 0}
+                        className="h-8 w-8 p-0 rounded-lg border-slate-200 hover:bg-slate-100"
+                      >
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={goToLastPage} 
+                        disabled={currentPage === totalPages || totalPages === 0}
+                        className="h-8 w-8 p-0 rounded-lg border-slate-200 hover:bg-slate-100"
+                      >
+                        <ChevronsRight className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    
+                    <div className="text-xs text-slate-500">
+                      Menampilkan <span className="font-medium text-slate-700">{totalFilteredData === 0 ? 0 : startIndex + 1}</span> - <span className="font-medium text-slate-700">{Math.min(endIndex, totalFilteredData)}</span> dari <span className="font-medium text-slate-700">{totalFilteredData}</span> data
+                    </div>
                   </div>
                 )}
               </TabsContent>
 
-              {/* TAB MATA PELAJARAN */}
-              <TabsContent value="mapel" className="space-y-4 sm:space-y-6">
+              {/* TAB KELAS (sama seperti sebelumnya, hanya refreshAll dipanggil) */}
+              <TabsContent value="kelas" className="space-y-4 sm:space-y-6">
                 <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
-                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                    {canWrite && (
-                      <>
-                        <Button onClick={openAddMapel} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600"><Plus className="mr-1 h-3 w-3" /> Tambah Mapel</Button>
-                        <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><Upload className="mr-1 h-3 w-3" /> Impor Excel</Button>
-                      </>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2 justify-center sm:justify-end">
-                    <div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" /><Input placeholder="Cari mapel..." value={mapelSearchTerm} onChange={(e) => setMapelSearchTerm(e.target.value)} className="pl-8 rounded-xl w-48 sm:w-64 h-8 sm:h-9 text-xs sm:text-sm" /></div>
-                    <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}><SelectTrigger className="w-32 h-8 sm:h-9 rounded-xl text-xs sm:text-sm"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="semua">Semua</SelectItem><SelectItem value="aktif">Aktif</SelectItem><SelectItem value="nonaktif">Nonaktif</SelectItem></SelectContent></Select>
-                    <Button variant="outline" onClick={fetchMapel} disabled={isFetchingMapel} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><RefreshCw className={`mr-1 h-3 w-3 ${isFetchingMapel ? "animate-spin" : ""}`} /> Segarkan</Button>
-                  </div>
+                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start"><Button onClick={handleAddKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600"><Plus className="mr-1 h-3 w-3" /> Tambah Kelas</Button><Button variant="outline" onClick={() => setImportKelasDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><Upload className="mr-1 h-3 w-3" /> Impor Excel</Button></div>
+                  <div className="relative flex-1 max-w-md"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" /><Input placeholder="Cari kelas..." value={searchKelasQuery} onChange={(e) => setSearchKelasQuery(e.target.value)} className="pl-9 pr-8 rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full" />{searchKelasQuery && <button onClick={() => setSearchKelasQuery("")} className="absolute right-3 top-1/2"><X className="h-3.5 w-3.5" /></button>}</div>
+                  <Button variant="outline" onClick={refreshAll} disabled={isFetchingKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><RefreshCw className={`mr-1 h-3 w-3 ${isFetchingKelas ? "animate-spin" : ""}`} /> Segarkan</Button>
                 </div>
-                {canWrite && (
-                  <div className="flex flex-col sm:flex-row justify-between items-center gap-2">
-                    <div className="flex flex-wrap gap-2 justify-center">
-                      <Button variant={selectMode ? "default" : "outline"} onClick={() => { setSelectMode(!selectMode); if (!selectMode) setSelectedMapelIds([]); }} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">{selectMode ? "Batalkan Mode Pilih" : "Mode Pilih"}</Button>
-                      {selectMode && <>
-                        <Button variant="default" onClick={() => handleBulkAction("aktifkan")} disabled={selectedMapelIds.length === 0 || isProcessingBulk} className="bg-green-600 hover:bg-green-700 rounded-xl h-8 sm:h-9 text-xs sm:text-sm">Aktifkan ({selectedMapelIds.filter(id => !mapelData.find(m => m.id_mapel === id)?.aktif).length})</Button>
-                        <Button variant="destructive" onClick={() => handleBulkAction("nonaktifkan")} disabled={selectedMapelIds.length === 0 || isProcessingBulk} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">Nonaktifkan ({selectedMapelIds.filter(id => mapelData.find(m => m.id_mapel === id)?.aktif).length})</Button>
-                      </>}
+                {isFetchingKelas ? <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div> : (
+                  <div className="border rounded-xl overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader><TableRow className="bg-slate-50"><TableHead>Nama Kelas</TableHead><TableHead>Wali Kelas</TableHead><TableHead className="text-center">Status</TableHead><TableHead className="text-center">Aksi</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                          {kelasList.filter(k => !searchKelasQuery || k.nama.toLowerCase().includes(searchKelasQuery.toLowerCase())).map(kelas => (
+                            <TableRow key={kelas.id_kelas}><TableCell className="font-medium">{kelas.nama}</TableCell><TableCell><div className="flex items-center gap-2"><div className="bg-purple-100 p-1.5 rounded-lg"><User className="h-3 w-3 text-purple-600" /></div>{kelas.guru_nama || "-"}</div></TableCell><TableCell className="text-center"><Badge className={kelas.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>{kelas.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell><TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => handleEditKelas(kelas)}><Edit className="h-4 w-4 text-blue-500" /></Button>{kelas.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, false)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, true)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell></TableRow>
+                          ))}
+                          {kelasList.filter(k => !searchKelasQuery || k.nama.toLowerCase().includes(searchKelasQuery.toLowerCase())).length === 0 && <TableRow><TableCell colSpan={4} className="text-center py-8 text-slate-500">Belum ada data kelas</TableCell></TableRow>}
+                        </TableBody>
+                      </Table>
                     </div>
-                    {selectMode && <Button variant="ghost" size="sm" onClick={handleSelectAll} className="text-xs sm:text-sm">Pilih Semua</Button>}
                   </div>
                 )}
-                <div className="border rounded-xl overflow-hidden shadow-sm"><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-slate-50">{selectMode && canWrite && <TableHead className="w-10"><Checkbox checked={selectedMapelIds.length === paginatedMapel.length && paginatedMapel.length > 0} onCheckedChange={handleSelectAll} /></TableHead>}<TableHead className="text-xs sm:text-sm">Nama Mata Pelajaran</TableHead><TableHead className="text-center w-24 text-xs sm:text-sm">Status</TableHead>{canWrite && <TableHead className="text-center w-28 text-xs sm:text-sm">Aksi</TableHead>}</TableRow></TableHeader><TableBody>{isFetchingMapel ? <TableRow><TableCell colSpan={selectMode && canWrite ? 4 : (canWrite ? 3 : 2)} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow> : filteredMapel.length === 0 ? <TableRow><TableCell colSpan={selectMode && canWrite ? 4 : (canWrite ? 3 : 2)} className="text-center py-8 text-slate-500"><BookOpen className="h-8 w-8 mx-auto mb-2" />{mapelSearchTerm ? "Tidak ada mata pelajaran yang cocok" : "Belum ada mata pelajaran"}</TableCell></TableRow> : paginatedMapel.map(m => (<TableRow key={m.id_mapel}>{selectMode && canWrite && <TableCell><Checkbox checked={selectedMapelIds.includes(m.id_mapel)} onCheckedChange={() => handleSelectItem(m.id_mapel)} /></TableCell>}<TableCell className="font-medium text-xs sm:text-sm">{m.nama}</TableCell><TableCell className="text-center"><Badge className={`${getStatusColor(m.aktif)} border-0 rounded-full px-2 sm:px-3 py-0.5 sm:py-1 text-xs`}>{m.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell>{canWrite && <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditMapel(m)}><Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" /></Button>{m.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleMapel(m, false)}><UserMinus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleMapel(m, true)}><UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500" /></Button>}</div></TableCell>}</TableRow>))}</TableBody></Table></div></div>
-                {filteredMapel.length > 0 && (<div className="flex flex-col sm:flex-row items-center justify-between gap-3"><p className="text-xs sm:text-sm text-slate-600">Menampilkan {((mapelCurrentPage - 1) * mapelItemsPerPage) + 1}-{Math.min(mapelCurrentPage * mapelItemsPerPage, filteredMapel.length)} dari {filteredMapel.length} mata pelajaran</p><div className="flex gap-2"><Button variant="outline" size="sm" onClick={() => setMapelCurrentPage(p => Math.max(1, p - 1))} disabled={mapelCurrentPage === 1} className="rounded-lg h-7 sm:h-8 text-xs">Sebelumnya</Button><div className="flex items-center gap-1">{Array.from({ length: Math.min(mapelTotalPages, 5) }, (_, i) => i + 1).map((page) => (<Button key={page} variant={mapelCurrentPage === page ? "default" : "outline"} size="sm" onClick={() => setMapelCurrentPage(page)} className="rounded-lg h-7 w-7 sm:h-8 sm:w-8 p-0 text-xs">{page}</Button>))}</div><Button variant="outline" size="sm" onClick={() => setMapelCurrentPage(p => Math.min(mapelTotalPages, p + 1))} disabled={mapelCurrentPage === mapelTotalPages} className="rounded-lg h-7 sm:h-8 text-xs">Berikutnya</Button></div></div>)}
               </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
 
-        <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50 max-w-3xl mx-auto">
-          <CardContent className="p-4 sm:p-5"><div className="flex gap-3 sm:gap-4"><div className="bg-indigo-100 p-2 sm:p-3 rounded-xl"><Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" /></div><div><h3 className="font-semibold text-sm sm:text-base">Tips Mengelola Jadwal</h3><p className="text-xs sm:text-sm text-slate-600">Pastikan tidak ada tumpang tindih jadwal untuk guru yang sama. Sistem akan otomatis memvalidasi overlap jadwal. Gunakan filter kelas dan hari untuk melihat jadwal spesifik. Anda dapat menonaktifkan jadwal atau mata pelajaran tanpa menghapus datanya.</p></div></div></CardContent>
+        {/* TIPS SECTION */}
+        <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50 max-w-3xl mx-auto">
+          <CardContent className="p-4 sm:p-5"><div className="flex gap-3"><div className="bg-indigo-100 p-2 rounded-xl"><Sparkles className="h-5 w-5 text-indigo-600" /></div><div><h3 className="font-semibold text-sm">Tips Mengelola Data</h3><p className="text-xs text-slate-600">Gunakan impor Excel untuk data massal. {isAdminJurusan ? "Anda hanya dapat mengelola guru, siswa, dan kelas dalam jurusan Anda." : "Admin super dapat mengelola semua jenis pengguna."}</p></div></div></CardContent>
         </Card>
-        <div className="text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Manajemen Jadwal - SmartAS</p><p className="text-[10px] text-slate-300 mt-1">Sistem Informasi Akademik</p></div>
+        <div className="text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Manajemen Pengguna &amp; Kelas - SmartAS</p></div>
       </div>
 
-      {/* DIALOG JADWAL */}
-      <Dialog open={jadwalDialogOpen} onOpenChange={setJadwalDialogOpen}>
-        <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-2xl p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">{editingJadwal ? "Edit Jadwal" : "Tambah Jadwal Baru"}</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">{editingJadwal ? "Perbarui informasi jadwal pelajaran" : "Tambahkan jadwal pelajaran baru untuk kelas yang dipilih"}</DialogDescription>
-          </DialogHeader>
+      {/* DIALOGS (sama seperti sebelumnya, hanya sesuaikan refreshAll) */}
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-md">
+          <DialogHeader><DialogTitle><Plus className="h-5 w-5 inline mr-2 text-emerald-600" /> Tambah {addForm.peran === "guru" ? "Guru" : addForm.peran === "siswa" ? "Siswa" : addForm.peran === "admin_jurusan" ? "Admin Jurusan" : "BK"}</DialogTitle><DialogDescription>Isi data pengguna baru. Kata sandi default "password123".</DialogDescription></DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label className="text-slate-700 font-medium text-xs sm:text-sm">Kelas</Label>
-                <Select value={jadwalForm.id_kelas} onValueChange={(v) => setJadwalForm({ ...jadwalForm, id_kelas: v })}>
-                  <SelectTrigger className="rounded-lg mt-1 h-8 sm:h-9 text-xs sm:text-sm">{jadwalForm.id_kelas ? kelasList.find(k => k.id_kelas.toString() === jadwalForm.id_kelas)?.nama : "Pilih Kelas"}</SelectTrigger>
-                  <SelectContent>
-                    {kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {formErrors.id_kelas && <p className="text-red-500 text-xs mt-1">{formErrors.id_kelas}</p>}
-              </div>
-              <div>
-                <Label className="text-slate-700 font-medium text-xs sm:text-sm">Mata Pelajaran</Label>
-                <Select value={jadwalForm.id_mapel} onValueChange={(v) => setJadwalForm({ ...jadwalForm, id_mapel: v })}>
-                  <SelectTrigger className="rounded-lg mt-1 h-8 sm:h-9 text-xs sm:text-sm">{jadwalForm.id_mapel ? mapelData.find(m => m.id_mapel.toString() === jadwalForm.id_mapel)?.nama : "Pilih Mapel"}</SelectTrigger>
-                  <SelectContent>
-                    {mapelData.filter(m => m.aktif).map(m => <SelectItem key={m.id_mapel} value={m.id_mapel.toString()}>{m.nama}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {formErrors.id_mapel && <p className="text-red-500 text-xs mt-1">{formErrors.id_mapel}</p>}
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label className="text-slate-700 font-medium text-xs sm:text-sm">Guru</Label>
-                <Select value={jadwalForm.id_guru} onValueChange={(v) => setJadwalForm({ ...jadwalForm, id_guru: v })}>
-                  <SelectTrigger className="rounded-lg mt-1 h-8 sm:h-9 text-xs sm:text-sm">{jadwalForm.id_guru ? guruList.find(g => g.id_guru.toString() === jadwalForm.id_guru)?.nama : "Pilih Guru"}</SelectTrigger>
-                  <SelectContent>
-                    {guruList.map(g => <SelectItem key={g.id_guru} value={g.id_guru.toString()}>{g.nama}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {formErrors.id_guru && <p className="text-red-500 text-xs mt-1">{formErrors.id_guru}</p>}
-              </div>
-              <div>
-                <Label className="text-slate-700 font-medium text-xs sm:text-sm">Hari</Label>
-                <Select value={jadwalForm.hari} onValueChange={(v) => setJadwalForm({ ...jadwalForm, hari: v })}>
-                  <SelectTrigger className="rounded-lg mt-1 h-8 sm:h-9 text-xs sm:text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {HARI.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div>
-              <Label className="text-slate-700 font-medium text-xs sm:text-sm">Jam (Format: HH:MM - HH:MM)</Label>
-              <Input placeholder="07:00 - 08:30" value={jadwalForm.jam} onChange={(e) => setJadwalForm({ ...jadwalForm, jam: e.target.value })} className="rounded-lg mt-1 h-8 sm:h-9 text-xs sm:text-sm" />
-              {formErrors.jam && <p className="text-red-500 text-xs mt-1">{formErrors.jam}</p>}
-              <p className="text-xs text-slate-500 mt-1">Contoh: 07:00 - 08:30, 08:30 - 10:00</p>
-            </div>
+            <div><Label>Nama Lengkap</Label><Input value={addForm.nama} onChange={e => setAddForm({...addForm, nama: e.target.value})} className="rounded-xl" /></div>
+            <div><Label>Nama Pengguna</Label><Input value={addForm.username} onChange={e => setAddForm({...addForm, username: e.target.value})} className="rounded-xl" /></div>
+            {addForm.peran !== "bk" && addForm.peran !== "admin_jurusan" && <div><Label>Jenis Kelamin</Label><Select value={addForm.gender} onValueChange={v => setAddForm({...addForm, gender: v})}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jenis kelamin" /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>}
+            {addForm.peran === "guru" && <div><Label>NIK</Label><Input value={addForm.nik} onChange={e => setAddForm({...addForm, nik: e.target.value})} className="rounded-xl" /></div>}
+            {addForm.peran === "guru" && isAdminSuper && <div><Label>Jurusan</Label><Select value={addForm.id_jurusan} onValueChange={v => setAddForm({...addForm, id_jurusan: v})}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan (opsional)" /></SelectTrigger><SelectContent><SelectItem value="">Tidak ada</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
+            {addForm.peran === "siswa" && <div><Label>NIS</Label><Input value={addForm.nis} onChange={e => setAddForm({...addForm, nis: e.target.value})} className="rounded-xl" /></div>}
+            {addForm.peran === "siswa" && <div><Label>Kelas</Label><Select value={addForm.kelas_id} onValueChange={v => setAddForm({...addForm, kelas_id: v})}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih kelas (opsional)" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada kelas</SelectItem>{kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}</SelectContent></Select></div>}
+            {addForm.peran === "admin_jurusan" && <div><Label>Jurusan</Label><Select value={addForm.id_jurusan} onValueChange={v => setAddForm({...addForm, id_jurusan: v})}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
+            <div><Label>Kata Sandi (opsional)</Label><Input type="password" value={addForm.password} onChange={e => setAddForm({...addForm, password: e.target.value})} className="rounded-xl" placeholder="Kosongkan untuk default: password123" /></div>
           </div>
-          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
-            <Button variant="outline" onClick={() => setJadwalDialogOpen(false)} className="rounded-lg w-full sm:w-auto text-xs sm:text-sm">Batal</Button>
-            <Button onClick={handleSaveJadwal} disabled={isSavingJadwal} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 w-full sm:w-auto text-xs sm:text-sm">
-              {isSavingJadwal ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Menyimpan...</> : "Simpan Jadwal"}
-            </Button>
-          </DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setAddDialogOpen(false)}>Batal</Button><Button onClick={handleAddUser} disabled={isLoading} className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG TOGGLE JADWAL */}
-      <Dialog open={toggleJadwalDialogOpen} onOpenChange={setToggleJadwalDialogOpen}>
-        <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">{isActivatingJadwalMode ? "Aktifkan Jadwal" : "Nonaktifkan Jadwal"}</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">{isActivatingJadwalMode ? "Jadwal akan diaktifkan kembali" : "Jadwal akan dinonaktifkan tetapi data tetap tersimpan"}</DialogDescription>
-          </DialogHeader>
-          {togglingJadwal && (
-            <div className="space-y-3 py-4">
-              <div className="bg-slate-50 p-3 rounded-lg">
-                <p className="text-sm text-slate-600"><span className="font-medium">Mapel:</span> {togglingJadwal.mapel?.nama}</p>
-                <p className="text-sm text-slate-600"><span className="font-medium">Guru:</span> {togglingJadwal.guru?.nama}</p>
-                <p className="text-sm text-slate-600"><span className="font-medium">Jam:</span> {togglingJadwal.jam}</p>
-                <p className="text-sm text-slate-600"><span className="font-medium">Hari:</span> {togglingJadwal.hari}</p>
-              </div>
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-md">
+          <DialogHeader><DialogTitle><Edit className="h-5 w-5 inline mr-2 text-blue-600" /> Edit Pengguna</DialogTitle><DialogDescription>Ubah informasi pengguna. Kosongkan kata sandi jika tidak ingin mengubah.</DialogDescription></DialogHeader>
+          <div className="space-y-4">
+            <div><Label>Nama</Label><Input value={editForm.nama} onChange={e => setEditForm({...editForm, nama: e.target.value})} className="rounded-xl" /></div>
+            <div><Label>Nama Pengguna</Label><Input value={editForm.username} onChange={e => setEditForm({...editForm, username: e.target.value})} className="rounded-xl" /></div>
+            {editForm.peran !== "bk" && editForm.peran !== "admin_jurusan" && <div><Label>Jenis Kelamin</Label><Select value={editForm.gender} onValueChange={v => setEditForm({...editForm, gender: v})}><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>}
+            {editForm.peran === "guru" && <div><Label>NIK</Label><Input value={editForm.nik} onChange={e => setEditForm({...editForm, nik: e.target.value})} className="rounded-xl" /></div>}
+            {editForm.peran === "guru" && isAdminSuper && <div><Label>Jurusan</Label><Select value={editForm.id_jurusan} onValueChange={v => setEditForm({...editForm, id_jurusan: v})}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent><SelectItem value="">Tidak ada</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
+            {editForm.peran === "siswa" && <div><Label>NIS</Label><Input value={editForm.nis} onChange={e => setEditForm({...editForm, nis: e.target.value})} className="rounded-xl" /></div>}
+            {editForm.peran === "siswa" && <div><Label>Kelas</Label><Select value={editForm.kelas_id} onValueChange={v => setEditForm({...editForm, kelas_id: v})}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih kelas" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada kelas</SelectItem>{kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}</SelectContent></Select></div>}
+            {editForm.peran === "admin_jurusan" && <div><Label>Jurusan</Label><Select value={editForm.id_jurusan} onValueChange={v => setEditForm({...editForm, id_jurusan: v})}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
+            <div><Label>Role</Label><Select value={editForm.peran} onValueChange={v => setEditForm({...editForm, peran: v as any})} disabled={!isAdminSuper}><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="guru">Guru</SelectItem><SelectItem value="siswa">Siswa</SelectItem>{isAdminSuper && <SelectItem value="admin_jurusan">Admin Jurusan</SelectItem>}{isAdminSuper && <SelectItem value="bk">BK</SelectItem>}</SelectContent></Select></div>
+            <div><Label>Kata Sandi Baru (Opsional)</Label><Input type="password" placeholder="Kosongkan jika tidak ingin mengubah" value={editForm.password} onChange={e => setEditForm({...editForm, password: e.target.value})} className="rounded-xl" /></div>
+            <div className="flex items-center space-x-2"><Checkbox id="edit_aktif" checked={editForm.aktif} onCheckedChange={(checked) => setEditForm({...editForm, aktif: checked === true})} /><Label htmlFor="edit_aktif">Aktif (centang agar pengguna dapat login)</Label></div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setEditDialogOpen(false)}>Batal</Button><Button onClick={handleUpdateUser} disabled={isLoading} className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-lg">
+          <DialogHeader><DialogTitle>{isActivatingMode ? "Aktifkan Pengguna" : "Nonaktifkan Pengguna"}</DialogTitle><DialogDescription>{isActivatingMode ? `Aktifkan kembali ${deactivatingUser?.nama}?` : `Yakin ingin menonaktifkan ${deactivatingUser?.nama}?`}</DialogDescription></DialogHeader>
+          {!isActivatingMode && deactivateConstraints.length > 0 && <div className="bg-amber-50 border p-3 rounded-lg"><p className="font-medium text-amber-800">Data terkait:</p><ul className="list-disc list-inside text-xs">{deactivateConstraints.map((c,i)=><li key={i}>{c}</li>)}</ul><p className="text-xs mt-1">Pengguna akan dinonaktifkan, namun data terkait tetap tersimpan.</p></div>}
+          <DialogFooter><Button variant="outline" onClick={() => setDeactivateDialogOpen(false)}>Batal</Button><Button variant={isActivatingMode ? "default" : "destructive"} onClick={executeToggleActive} disabled={isLoading}>{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isActivatingMode ? "Aktifkan" : "Nonaktifkan"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkActionDialogOpen} onOpenChange={setBulkActionDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-lg">
+          <DialogHeader><DialogTitle>{bulkActionType === "activate" ? "Aktifkan Massal" : "Nonaktifkan Massal"}</DialogTitle><DialogDescription>Anda akan {bulkActionType === "activate" ? "mengaktifkan" : "menonaktifkan"} {bulkActionData?.users.length} pengguna.</DialogDescription></DialogHeader>
+          {bulkActionData && bulkActionData.cannotProcess.length > 0 && <div className="bg-amber-50 border p-3 rounded-lg"><p className="font-medium text-amber-800">⚠️ Beberapa pengguna memiliki data terkait:</p><ul className="list-disc list-inside text-xs">{bulkActionData.cannotProcess.map(c=><li key={c.id}>{c.nama}: {c.reasons.join(", ")}</li>)}</ul><p className="text-xs mt-1">Tetap dapat dinonaktifkan, data terkait tetap tersimpan.</p></div>}
+          <DialogFooter><Button variant="outline" onClick={() => setBulkActionDialogOpen(false)}>Batal</Button><Button variant={bulkActionType === "activate" ? "default" : "destructive"} onClick={executeBulkAction} disabled={isProcessingSelected}>{isProcessingSelected && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Ya, {bulkActionType === "activate" ? "Aktifkan" : "Nonaktifkan"} {bulkActionData?.canProcessIds.length} Pengguna</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Kelas Dialogs */}
+      <Dialog open={kelasDialogOpen} onOpenChange={setKelasDialogOpen}>
+        <DialogContent className="rounded-2xl"><DialogHeader><DialogTitle>{editingKelas ? "Ubah Kelas" : "Tambah Kelas Baru"}</DialogTitle></DialogHeader><div><Label>Nama Kelas</Label><Input value={kelasForm.nama} onChange={e => setKelasForm({...kelasForm, nama: e.target.value})} className="rounded-xl mt-1" /></div><div><Label>Wali Kelas</Label><Select value={kelasForm.id_guru} onValueChange={v => setKelasForm({...kelasForm, id_guru: v})}><SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="Pilih wali kelas (opsional)" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada wali kelas</SelectItem>{guruOptions.map(g => <SelectItem key={g.id_guru} value={g.id_guru.toString()}>{g.nama} (NIK: {g.nik})</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setKelasDialogOpen(false)}>Batal</Button><Button onClick={handleSaveKelas} disabled={isSavingKelas} className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600">{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button></DialogFooter></DialogContent>
+      </Dialog>
+
+      <Dialog open={toggleKelasDialogOpen} onOpenChange={setToggleKelasDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-lg"><DialogHeader><DialogTitle>{isActivatingKelasMode ? "Aktifkan Kelas" : "Nonaktifkan Kelas"}</DialogTitle><DialogDescription>{isActivatingKelasMode ? `Aktifkan kembali kelas ${togglingKelas?.nama}?` : `Yakin ingin menonaktifkan kelas ${togglingKelas?.nama}?`}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setToggleKelasDialogOpen(false)}>Batal</Button><Button onClick={executeToggleActiveKelas} disabled={isSavingKelas}>{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isActivatingKelasMode ? "Aktifkan" : "Nonaktifkan"}</Button></DialogFooter></DialogContent>
+      </Dialog>
+
+      <Dialog open={importKelasDialogOpen} onOpenChange={setImportKelasDialogOpen}>
+        <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader><DialogTitle>Impor Kelas dari Excel</DialogTitle><DialogDescription>Unggah file Excel untuk menambah kelas secara massal</DialogDescription></DialogHeader>
+          {importKelasStep === "upload" && (
+            <div className="space-y-4">
+              <div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50"><div className="flex flex-col items-center gap-2"><Upload className="h-8 w-8 text-slate-400" /><label htmlFor="kelas-file-input" className="cursor-pointer"><span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk unggah</span><input id="kelas-file-input" type="file" accept=".xlsx,.xls" onChange={handleKelasFileUpload} className="hidden" disabled={isImportingKelas} /></label><p className="text-xs text-slate-500">atau tarik & lepas file Excel di sini</p></div></div>
+              {importKelasUploadError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{importKelasUploadError}</AlertDescription></Alert>}
+              <Button variant="outline" onClick={downloadKelasTemplate} className="w-full"><Download className="h-4 w-4 mr-2" /> Unduh Template Excel Kelas</Button>
+              <div className="bg-blue-50 p-3 rounded-lg text-sm"><p className="font-semibold">Format File:</p><p>Kolom yang diperlukan: <strong>nama</strong> (wajib), <strong>nik_wali</strong> (opsional), <strong>aktif</strong> (opsional, 1 untuk aktif)</p><p className="text-xs text-red-600">* NIK wali harus sesuai dengan data guru di database</p></div>
             </div>
           )}
-          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
-            <Button variant="outline" onClick={() => setToggleJadwalDialogOpen(false)} className="rounded-lg w-full sm:w-auto text-xs sm:text-sm">Batal</Button>
-            <Button onClick={executeToggleJadwal} disabled={isSavingJadwal} className={`rounded-lg w-full sm:w-auto text-xs sm:text-sm ${isActivatingJadwalMode ? "bg-green-600" : "bg-red-600"}`}>
-              {isSavingJadwal ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Memproses...</> : (isActivatingJadwalMode ? "Aktifkan" : "Nonaktifkan")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* DIALOG MAPEL */}
-      <Dialog open={mapelDialogOpen} onOpenChange={setMapelDialogOpen}>
-        <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">{editingMapel ? "Edit Mata Pelajaran" : "Tambah Mata Pelajaran"}</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">{editingMapel ? "Perbarui nama mata pelajaran" : "Tambahkan mata pelajaran baru ke dalam sistem"}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-slate-700 font-medium text-xs sm:text-sm">Nama Mata Pelajaran</Label>
-              <Input placeholder="Contoh: Matematika, Fisika, dll" value={mapelForm.nama} onChange={(e) => setMapelForm({ nama: e.target.value })} className="rounded-lg mt-1 h-8 sm:h-9 text-xs sm:text-sm" />
-            </div>
-          </div>
-          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
-            <Button variant="outline" onClick={() => setMapelDialogOpen(false)} className="rounded-lg w-full sm:w-auto text-xs sm:text-sm">Batal</Button>
-            <Button onClick={handleSaveMapel} disabled={isSavingMapel} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 w-full sm:w-auto text-xs sm:text-sm">
-              {isSavingMapel ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Menyimpan...</> : "Simpan Mapel"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* DIALOG TOGGLE MAPEL */}
-      <Dialog open={toggleMapelDialogOpen} onOpenChange={setToggleMapelDialogOpen}>
-        <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">{isActivatingMapelMode ? "Aktifkan Mata Pelajaran" : "Nonaktifkan Mata Pelajaran"}</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">{isActivatingMapelMode ? "Mata pelajaran akan diaktifkan kembali" : "Mata pelajaran akan dinonaktifkan tetapi data tetap tersimpan"}</DialogDescription>
-          </DialogHeader>
-          {togglingMapel && (
-            <div className="py-4">
-              <div className="bg-slate-50 p-3 rounded-lg">
-                <p className="text-sm text-slate-600"><span className="font-medium">Nama:</span> {togglingMapel.nama}</p>
-                <p className="text-sm text-slate-600"><span className="font-medium">Status:</span> {togglingMapel.aktif ? "Aktif" : "Nonaktif"}</p>
-              </div>
+          {importKelasStep === "preview" && importKelasPreviewRows.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex justify-between"><p className="text-sm font-medium">Pratinjau Data ({importKelasPreviewRows.length} baris)</p><Badge>{importKelasPreviewRows.filter(r=>r.isValid).length} dari {importKelasPreviewRows.length} valid</Badge></div>
+              <div className="border rounded-lg overflow-x-auto max-h-96"><Table><TableHeader><TableRow><TableHead>#</TableHead><TableHead>Nama Kelas</TableHead><TableHead>NIK Wali</TableHead><TableHead>Aktif</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{importKelasPreviewRows.map((row,idx)=>(<TableRow key={idx} className={!row.isValid?"bg-red-50":""}><TableCell>{row.rowIndex}</TableCell><TableCell>{row.nama}</TableCell><TableCell>{row.nik_wali||"-"}{!row.guruValid && row.nik_wali && <span className="text-red-500">(tidak ditemukan)</span>}</TableCell><TableCell>{row.aktif ? "Aktif" : "Nonaktif"}</TableCell><TableCell>{row.isValid ? "Valid" : <div className="text-red-600 text-xs">{row.validationErrors.join(", ")}</div>}</TableCell></TableRow>))}</TableBody></Table></div>
+              <div className="flex justify-end gap-3"><Button variant="outline" onClick={()=>{setImportKelasDialogOpen(false);setImportKelasRawData([]);setImportKelasPreviewRows([]);setImportKelasStep("upload");}}>Batal</Button><Button onClick={confirmImportKelas} disabled={isImportingKelas || importKelasPreviewRows.filter(r=>r.isValid).length===0} className="bg-gradient-to-r from-blue-600 to-indigo-600">{isImportingKelas && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Impor Data</Button></div>
             </div>
           )}
-          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
-            <Button variant="outline" onClick={() => setToggleMapelDialogOpen(false)} className="rounded-lg w-full sm:w-auto text-xs sm:text-sm">Batal</Button>
-            <Button onClick={executeToggleMapel} disabled={isSavingMapel} className={`rounded-lg w-full sm:w-auto text-xs sm:text-sm ${isActivatingMapelMode ? "bg-green-600" : "bg-red-600"}`}>
-              {isSavingMapel ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Memproses...</> : (isActivatingMapelMode ? "Aktifkan" : "Nonaktifkan")}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG IMPORT EXCEL MAPEL */}
+      <Dialog open={missingGuruDialogOpen} onOpenChange={setMissingGuruDialogOpen}>
+        <DialogContent className="rounded-xl max-w-md">
+          <DialogHeader><DialogTitle>Wali Kelas Tidak Ditemukan</DialogTitle><DialogDescription>Beberapa NIK wali kelas tidak ditemukan.</DialogDescription></DialogHeader>
+          <div className="bg-yellow-50 p-3 rounded-lg"><p className="font-medium">NIK tidak ditemukan:</p><ul className="list-disc list-inside mt-1">{Array.from(importKelasMissingGurus).map(nik=><li key={nik} className="font-mono">{nik}</li>)}</ul><p className="text-sm mt-2">Baris dengan NIK tidak ditemukan akan dilewati. Lanjutkan?</p></div>
+          <DialogFooter><Button variant="outline" onClick={() => { setMissingGuruDialogOpen(false); setImportKelasDialogOpen(false); setImportKelasRawData([]); }}>Batalkan Impor</Button><Button onClick={handleSkipMissingGurus} className="bg-green-600">Lanjutkan (Lewati Baris Bermasalah)</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import User Dialog */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-        <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-2xl p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">Impor Mata Pelajaran dari Excel</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">Upload file Excel untuk menambah mata pelajaran secara massal</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50">
-              <div className="flex flex-col items-center gap-2">
-                <Upload className="h-8 w-8 text-slate-400" />
-                <label htmlFor="file-input" className="cursor-pointer">
-                  <span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk upload</span>
-                  <input id="file-input" type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="hidden" disabled={isImporting} />
-                </label>
-                <p className="text-xs text-slate-500">atau drag & drop file Excel di sini</p>
-              </div>
-            </div>
-            {uploadError && <Alert className="bg-red-50 border-red-200"><AlertCircle className="h-4 w-4 text-red-600" /><AlertDescription className="text-red-700 text-xs">{uploadError}</AlertDescription></Alert>}
-            {previewData.length > 0 && (
-              <div>
-                <p className="text-sm font-medium mb-2">Preview Data ({previewData.length} item):</p>
-                <div className="border rounded-lg overflow-y-auto max-h-48">
-                  <Table>
-                    <TableHeader><TableRow className="bg-slate-50"><TableHead className="text-xs">Nama Mapel</TableHead></TableRow></TableHeader>
-                    <TableBody>
-                      {previewData.slice(0, 5).map((item, idx) => <TableRow key={idx}><TableCell className="text-sm">{item.nama}</TableCell></TableRow>)}
-                      {previewData.length > 5 && <TableRow><TableCell className="text-sm text-slate-500 text-center py-2">... dan {previewData.length - 5} data lainnya</TableCell></TableRow>}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            )}
-            <Button variant="outline" onClick={downloadTemplateMapel} className="w-full rounded-lg text-xs sm:text-sm"><Download className="h-4 w-4 mr-2" /> Download Template Excel</Button>
-          </div>
-          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
-            <Button variant="outline" onClick={() => { setImportDialogOpen(false); setPreviewData([]); setUploadError(null); }} className="rounded-lg w-full sm:w-auto text-xs sm:text-sm">Batal</Button>
-            <Button onClick={handleImportMapel} disabled={isImporting || previewData.length === 0} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 w-full sm:w-auto text-xs sm:text-sm">
-              {isImporting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Mengimpor...</> : "Impor Data"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* DIALOG IMPORT EXCEL JADWAL */}
-      <Dialog open={importJadwalDialogOpen} onOpenChange={setImportJadwalDialogOpen}>
-        <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">Impor Jadwal Pelajaran dari Excel</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">Upload file Excel untuk menambah jadwal secara massal (gunakan NIK Guru)</DialogDescription>
-          </DialogHeader>
-          
-          {importJadwalStep === "upload" && (
+        <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader><DialogTitle>Impor {userType === "guru" ? "Guru" : userType === "siswa" ? "Siswa" : userType === "admin_jurusan" ? "Admin Jurusan" : "BK"} dari Excel</DialogTitle><DialogDescription>Unggah file Excel untuk menambah data secara massal</DialogDescription></DialogHeader>
+          {importStep === "upload" && (
             <div className="space-y-4">
-              <div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50">
-                <div className="flex flex-col items-center gap-2">
-                  <Upload className="h-8 w-8 text-slate-400" />
-                  <label htmlFor="jadwal-file-input" className="cursor-pointer">
-                    <span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk upload</span>
-                    <input id="jadwal-file-input" type="file" accept=".xlsx,.xls" onChange={handleJadwalFileUpload} className="hidden" disabled={isImportingJadwal} />
-                  </label>
-                  <p className="text-xs text-slate-500">atau drag & drop file Excel di sini</p>
-                </div>
-              </div>
-              {importJadwalUploadError && (
-                <Alert className="bg-red-50 border-red-200">
-                  <AlertCircle className="h-4 w-4 text-red-600" />
-                  <AlertDescription className="text-red-700 text-xs">{importJadwalUploadError}</AlertDescription>
-                </Alert>
-              )}
-              <Button variant="outline" onClick={downloadJadwalTemplate} className="w-full rounded-lg text-xs sm:text-sm">
-                <Download className="h-4 w-4 mr-2" /> Download Template Excel Jadwal (NIK Guru)
-              </Button>
-              <div className="bg-blue-50 p-3 rounded-lg text-xs sm:text-sm text-blue-700">
+              <div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50"><div className="flex flex-col items-center gap-2"><Upload className="h-8 w-8 text-slate-400" /><label htmlFor="user-file-input" className="cursor-pointer"><span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk unggah</span><input id="user-file-input" type="file" accept=".xlsx,.xls" onChange={handleUserFileUpload} className="hidden" disabled={isLoading} /></label><p className="text-xs text-slate-500">atau tarik & lepas file Excel di sini</p></div></div>
+              {uploadError && <Alert className="bg-red-50 border-red-200"><AlertCircle className="h-4 w-4 text-red-600" /><AlertDescription className="text-red-700">{uploadError}</AlertDescription></Alert>}
+              <Button variant="outline" onClick={() => downloadTemplate(userType)} className="w-full rounded-lg"><Download className="h-4 w-4 mr-2" /> Unduh Template Excel</Button>
+              <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
                 <p className="font-semibold">Format File:</p>
-                <p>Kolom yang diperlukan: <strong>kelas, mapel, nik_guru, hari, jam</strong></p>
-                <p className="text-xs mt-1">Contoh: X IPA 1, Matematika, 1234567890, Senin, 07:00 - 08:30</p>
+                {userType === "guru" && <p>Kolom yang diperlukan: <strong>nama, nik, username, gender</strong> (opsional: nama_jurusan, password)</p>}
+                {userType === "siswa" && <p>Kolom yang diperlukan: <strong>nama, nis, username, gender, kelas</strong> (opsional: password)</p>}
+                {userType === "admin_jurusan" && <p>Kolom yang diperlukan: <strong>nama, username, nama_jurusan</strong> (opsional: password)</p>}
+                {userType === "bk" && <p>Kolom yang diperlukan: <strong>nama, username</strong> (opsional: password)</p>}
+                <p className="text-xs mt-1">Kata sandi default "password123".</p>
               </div>
             </div>
           )}
-          
-          {importJadwalStep === "preview" && importJadwalPreviewRows.length > 0 && (
+          {importStep === "preview" && previewData.length > 0 && (
             <div className="space-y-4">
-              <div className="flex justify-between items-center flex-wrap gap-2">
-                <p className="text-sm font-medium">Preview Data ({importJadwalPreviewRows.length} baris)</p>
-                <Badge className={importJadwalPreviewRows.filter(r => r.isValid).length === importJadwalPreviewRows.length ? "bg-green-100 text-green-700 text-xs" : "bg-yellow-100 text-yellow-700 text-xs"}>
-                  {importJadwalPreviewRows.filter(r => r.isValid).length} dari {importJadwalPreviewRows.length} valid
-                </Badge>
-              </div>
-              
+              <div className="flex justify-between items-center"><p className="text-sm font-medium">Pratinjau Data ({previewData.length} baris)</p></div>
               <div className="border rounded-lg overflow-x-auto max-h-96">
                 <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50">
-                      <TableHead className="w-12 text-xs">#</TableHead>
-                      <TableHead className="text-xs">Kelas</TableHead>
-                      <TableHead className="text-xs">Mapel</TableHead>
-                      <TableHead className="text-xs">NIK Guru</TableHead>
-                      <TableHead className="text-xs">Hari</TableHead>
-                      <TableHead className="text-xs">Jam</TableHead>
-                      <TableHead className="text-center text-xs">Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
+                  <TableHeader><TableRow className="bg-slate-50">
+                    <TableHead>Nama</TableHead>
+                    {userType === "guru" && <TableHead>NIK</TableHead>}
+                    {userType === "siswa" && <TableHead>NIS</TableHead>}
+                    <TableHead>Nama Pengguna</TableHead>
+                    {userType !== "bk" && userType !== "admin_jurusan" && <TableHead>Jenis Kelamin</TableHead>}
+                    {userType === "siswa" && <TableHead>Kelas</TableHead>}
+                    {userType === "admin_jurusan" && <TableHead>Nama Jurusan</TableHead>}
+                  </TableRow></TableHeader>
                   <TableBody>
-                    {importJadwalPreviewRows.map((row, idx) => (
-                      <TableRow key={idx} className={!row.isValid ? "bg-red-50" : ""}>
-                        <TableCell className="text-xs text-slate-500">{row.rowIndex}</TableCell>
-                        <TableCell className="text-xs">
-                          {row.kelas}
-                          {!row.kelasValid && <span className="text-red-500 text-xs ml-1">(tidak ditemukan)</span>}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {row.mapel}
-                          {!row.mapelValid && <span className="text-red-500 text-xs ml-1">(tidak ditemukan)</span>}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {row.nik_guru}
-                          {!row.guruValid && <span className="text-red-500 text-xs ml-1">(tidak ditemukan)</span>}
-                        </TableCell>
-                        <TableCell className="text-xs">{row.hari}</TableCell>
-                        <TableCell className="font-mono text-xs">{row.jam}</TableCell>
-                        <TableCell className="text-center">
-                          {row.isValid ? (
-                            <Badge className="bg-green-100 text-green-700 text-xs">Valid</Badge>
-                          ) : (
-                            <div className="text-xs text-red-600">
-                              {row.validationErrors?.map((err: string, i: number) => (
-                                <div key={i}>{err}</div>
-                              ))}
-                              {!row.kelasValid && <div>Kelas tidak ditemukan</div>}
-                              {!row.guruValid && <div>Guru dengan nik tersebut tidak ditemukan</div>}
-                              {!row.mapelValid && <div>Mapel tidak ditemukan</div>}
-                            </div>
-                          )}
-                        </TableCell>
+                    {previewData.slice(0,20).map((item,idx)=>(
+                      <TableRow key={idx}>
+                        <TableCell>{item.nama as string}</TableCell>
+                        {userType==="guru"&&<TableCell>{item.nik as string}</TableCell>}
+                        {userType==="siswa"&&<TableCell>{item.nis as string}</TableCell>}
+                        <TableCell>{item.username as string}</TableCell>
+                        {userType!=="bk"&&userType!=="admin_jurusan"&&<TableCell><Badge className={(item.gender as string)==="L"?"bg-blue-100":"bg-pink-100"}>{item.gender==="L"?"Laki-laki":"Perempuan"}</Badge></TableCell>}
+                        {userType==="siswa"&&<TableCell>{item.kelas as string}</TableCell>}
+                        {userType==="admin_jurusan"&&<TableCell>{item.nama_jurusan as string}</TableCell>}
                       </TableRow>
                     ))}
+                    {previewData.length>20 && <TableRow><TableCell colSpan={6} className="text-center text-slate-500">... dan {previewData.length-20} baris lainnya</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </div>
-              
               <div className="flex gap-3 justify-end">
-                <Button variant="outline" onClick={() => {
-                  setImportJadwalDialogOpen(false);
-                  setImportJadwalRawData([]);
-                  setImportJadwalPreviewRows([]);
-                  setImportJadwalStep("upload");
-                }} className="rounded-lg text-xs sm:text-sm">
-                  Batal
-                </Button>
-                <Button 
-                  onClick={confirmImportJadwal} 
-                  disabled={isImportingJadwal || importJadwalPreviewRows.filter(r => r.isValid).length === 0}
-                  className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-xs sm:text-sm"
-                >
-                  {isImportingJadwal ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Mengimpor...</> : "Impor Data"}
-                </Button>
+                <Button variant="outline" onClick={()=>{setImportDialogOpen(false);setPreviewData([]);setImportRawData([]);setImportStep("upload");}} className="rounded-lg">Batal</Button>
+                <Button onClick={handleImport} disabled={isLoading} className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Impor Data</Button>
               </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG MISSING MAPEL UNTUK JADWAL */}
-      <Dialog open={missingMapelDialogOpen} onOpenChange={setMissingMapelDialogOpen}>
-        <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
+      {/* Dialog Konfirmasi Jurusan Baru */}
+      <Dialog open={missingJurusanDialogOpen} onOpenChange={setMissingJurusanDialogOpen}>
+        <DialogContent className="rounded-xl max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">Mata Pelajaran Belum Tersedia</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">
-              Beberapa mata pelajaran dalam file Excel belum ada di database.
-            </DialogDescription>
+            <DialogTitle>Jurusan Tidak Ditemukan</DialogTitle>
+            <DialogDescription>Beberapa nama jurusan dalam file Excel tidak ditemukan di database.</DialogDescription>
           </DialogHeader>
-          
           <div className="space-y-4">
             <div className="bg-yellow-50 p-3 rounded-lg">
-              <p className="text-sm font-medium text-yellow-800">Mapel yang belum terdaftar:</p>
+              <p className="text-sm font-medium text-yellow-800">Jurusan yang belum terdaftar:</p>
               <ul className="list-disc list-inside mt-2 space-y-1">
-                {importJadwalMissingMapels.map((mapel, idx) => (
-                  <li key={idx} className="text-sm text-yellow-700">{mapel}</li>
+                {importJurusanMissing.map((jurusan, idx) => (
+                  <li key={idx} className="text-sm text-yellow-700">{jurusan}</li>
                 ))}
               </ul>
             </div>
-            <p className="text-xs sm:text-sm text-slate-600">
-              Apakah Anda ingin menambahkan mata pelajaran di atas ke database dan melanjutkan import jadwal?
+            <p className="text-sm text-slate-600">
+              Apakah Anda ingin menambahkan jurusan di atas ke database dan melanjutkan import?
             </p>
           </div>
-          
-          <DialogFooter className="gap-2 flex-col sm:flex-row">
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setMissingMapelDialogOpen(false);
-                setImportJadwalDialogOpen(false);
-                setImportJadwalRawData([]);
-              }}
-              className="rounded-lg w-full sm:w-auto text-xs sm:text-sm"
-            >
-              Batalkan Import
-            </Button>
-            <Button 
-              onClick={handleAddMissingMapelsAndContinue} 
-              disabled={isAddingMissingMapels}
-              className="rounded-lg bg-green-600 hover:bg-green-700 w-full sm:w-auto text-xs sm:text-sm"
-            >
-              {isAddingMissingMapels ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Menambahkan...</> : "Tambahkan Mapel & Lanjutkan"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* DIALOG BULK ACTION */}
-      <Dialog open={bulkActionDialogOpen} onOpenChange={setBulkActionDialogOpen}>
-        <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">{bulkActionType === "aktifkan" ? "Aktifkan Mata Pelajaran" : "Nonaktifkan Mata Pelajaran"}</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">{bulkActionType === "aktifkan" ? `Aktifkan ${selectedMapelIds.length} mata pelajaran?` : `Nonaktifkan ${selectedMapelIds.length} mata pelajaran?`}</DialogDescription>
-          </DialogHeader>
-          <p className="text-xs sm:text-sm text-slate-600 py-2">Tindakan ini tidak dapat dibatalkan setelah dikonfirmasi.</p>
-          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
-            <Button variant="outline" onClick={() => setBulkActionDialogOpen(false)} className="rounded-lg w-full sm:w-auto text-xs sm:text-sm">Batal</Button>
-            <Button onClick={executeBulkAction} disabled={isProcessingBulk} className={`rounded-lg w-full sm:w-auto text-xs sm:text-sm ${bulkActionType === "aktifkan" ? "bg-green-600" : "bg-red-600"}`}>
-              {isProcessingBulk ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Memproses...</> : (bulkActionType === "aktifkan" ? "Aktifkan" : "Nonaktifkan")}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setMissingJurusanDialogOpen(false); setImportJurusanMissing([]); setImportDialogOpen(false); }} className="rounded-lg">Batalkan Impor</Button>
+            <Button onClick={continueImportAfterMissingJurusan} disabled={isAddingMissingJurusan} className="rounded-lg bg-green-600 hover:bg-green-700">
+              {isAddingMissingJurusan ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Menambahkan...</> : "Tambahkan Jurusan & Lanjutkan"}
             </Button>
           </DialogFooter>
         </DialogContent>
