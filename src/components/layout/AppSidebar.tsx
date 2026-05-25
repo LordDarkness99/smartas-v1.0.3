@@ -183,8 +183,11 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
               SMARTAS
             </h2>
             <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-[#4BB8FA] mt-1.5">
-              {userRole || "Access"} Mode
+              {userRole || "Access"}
             </p>
+            {/* <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-[#4BB8FA] mt-1.5">
+              {userRole || "Access"} Mode
+            </p> */}
           </div>
         </SidebarHeader>
 
