@@ -67,10 +67,8 @@ export default function UserManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchKelasQuery, setSearchKelasQuery] = useState("");
   const [filterKelas, setFilterKelas] = useState<string>("all");
-  const [showFilter, setShowFilter] = useState(false);
-  const [filterSearchQuery, setFilterSearchQuery] = useState("");
   const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<(string)[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessingSelected, setIsProcessingSelected] = useState(false);
 
   // Data state
@@ -499,11 +497,11 @@ export default function UserManagement() {
         let jurusanId = null;
         if (isAdminJurusan && user?.id_jurusan) jurusanId = user.id_jurusan;
         else if (addForm.id_jurusan) jurusanId = parseInt(addForm.id_jurusan);
-        const { data: newAkun } = await supabase.from("akun").insert({
+        await supabase.from("akun").insert({
           nama: addForm.nama, username: addForm.username, peran: "guru",
           aktif: true, dibuat_pada: now, id_guru: nextId, id_siswa: null,
           kata_sandi: hashedPassword,
-        }).select("id_akun").single();
+        });
         await supabase.from("guru").insert({
           id_guru: nextId, nama: addForm.nama, nik: parseInt(addForm.nik),
           gender: addForm.gender.toUpperCase(), aktif: true, dibuat_pada: now,
@@ -563,6 +561,9 @@ export default function UserManagement() {
       toast({ title: "Error", description: "Hanya admin super yang dapat mengedit akun sistem", variant: "destructive" });
       return;
     }
+    if (userItem.peran === "siswa") {
+      toast({ title: "Informasi", description: "Role siswa tidak dapat diubah.", variant: "default" });
+    }
     setEditingUser(userItem);
     if (userItem.peran === "guru") {
       const guru = userItem as GuruData;
@@ -595,7 +596,7 @@ export default function UserManagement() {
     setEditDialogOpen(true);
   };
 
-  // ========== HANDLE UPDATE USER (DIPERBAIKI) ==========
+  // ========== HANDLE UPDATE USER (DENGAN LARANGAN ROLE SISWA & URUTAN YANG BENAR) ==========
   const handleUpdateUser = async () => {
     if (!editingUser) return;
     if ((editForm.peran === "admin_jurusan" || editForm.peran === "bk") && !isAdminSuper) {
@@ -619,93 +620,68 @@ export default function UserManagement() {
       const newRole = editForm.peran;
       const roleChanged = oldRole !== newRole;
 
-      // Update atau hapus data di tabel spesifik berdasarkan role lama dan baru
-      if (oldRole === "guru") {
-        const guru = editingUser as GuruData;
-        if (newRole !== "guru") {
-          // Hapus data guru karena pindah role
-          await supabase.from("guru").delete().eq("id_guru", guru.id_guru);
-          updateData.id_guru = null;
-        } else {
-          // Update data guru
-          let jurusanId = null;
-          if (editForm.id_jurusan && editForm.id_jurusan !== "none") jurusanId = parseInt(editForm.id_jurusan);
-          else if (isAdminJurusan && user?.id_jurusan) jurusanId = user.id_jurusan;
-          await supabase.from("guru").update({
-            nama: editForm.nama, gender: editForm.gender.toUpperCase(),
-            aktif: editForm.aktif, id_jurusan: jurusanId,
-          }).eq("id_guru", guru.id_guru);
-          // Update NIK jika berubah
-          if (editForm.nik && editForm.nik !== guru.nik) {
-            await supabase.from("guru").update({ nik: parseInt(editForm.nik) }).eq("id_guru", guru.id_guru);
-          }
+      // ========== LARANGAN MENGUBAH ROLE SISWA ==========
+      if (roleChanged) {
+        if (oldRole === "siswa" || newRole === "siswa") {
+          throw new Error("Role siswa tidak dapat diubah ke role lain, dan role lain tidak dapat diubah menjadi siswa.");
         }
-      } else if (oldRole === "siswa") {
-        const siswa = editingUser as SiswaData;
-        if (newRole !== "siswa") {
-          await supabase.from("siswa").delete().eq("id_siswa", siswa.id_siswa);
-          updateData.id_siswa = null;
-        } else {
-          // Update data siswa
-          let kelasId = null;
-          if (editForm.kelas_id && editForm.kelas_id !== "none") {
-            kelasId = parseInt(editForm.kelas_id);
-            if (isAdminJurusan && user?.id_jurusan) {
-              const { data: kelas } = await supabase
-                .from("kelas").select("id_jurusan").eq("id_kelas", kelasId).single();
-              if (!kelas || kelas.id_jurusan !== user.id_jurusan) throw new Error("Kelas tidak berada dalam jurusan Anda");
-            }
-          }
-          await supabase.from("siswa").update({
-            nama: editForm.nama, gender: editForm.gender.toUpperCase(),
-            aktif: editForm.aktif, id_kelas: kelasId,
-          }).eq("id_siswa", siswa.id_siswa);
-          if (editForm.nis && editForm.nis !== siswa.nis) {
-            await supabase.from("siswa").update({ nis: parseInt(editForm.nis) }).eq("id_siswa", siswa.id_siswa);
-          }
-        }
-      } else if (oldRole === "admin_jurusan" || oldRole === "bk") {
-        // Tidak ada tabel terpisah, hanya akun. Jika pindah ke guru/siswa, nanti buat entri baru.
-        if (newRole === "guru" || newRole === "siswa") {
+      }
+
+      // 1. Jika role berubah, siapkan update akun untuk melepas foreign key & ganti peran
+      if (roleChanged) {
+        updateData.peran = newRole;
+        if (oldRole === "guru") {
           updateData.id_guru = null;
+        } else if (oldRole === "siswa") {
           updateData.id_siswa = null;
+        } else if (oldRole === "admin_jurusan" || oldRole === "bk") {
           updateData.id_jurusan = null;
         }
       }
 
-      if (roleChanged) {
-        updateData.peran = newRole;
-      }
-
-      // Update akun utama menggunakan id_akun
+      // 2. Update akun TERLEBIH DAHULU (sehingga foreign key ke guru/siswa terputus)
       const { error: updateAkunError } = await supabase
         .from("akun")
         .update(updateData)
         .eq("id_akun", editingUser.id_akun);
       if (updateAkunError) throw updateAkunError;
 
-      // Jika role baru memerlukan entri di tabel guru/siswa dan sebelumnya tidak ada, buat entri baru
+      // 3. Setelah akun tidak mereferensi, hapus data terkait & hapus guru/siswa (jika role berubah)
+      if (roleChanged) {
+        if (oldRole === "guru") {
+          const guru = editingUser as GuruData;
+          await supabase.from("jadwal").delete().eq("id_guru", guru.id_guru);
+          await supabase.from("kelas").update({ id_guru: null }).eq("id_guru", guru.id_guru);
+          await supabase.from("pkl").delete().eq("id_guru", guru.id_guru);
+          await supabase.from("guru").delete().eq("id_guru", guru.id_guru);
+        } 
+        else if (oldRole === "siswa") {
+          const siswa = editingUser as SiswaData;
+          await supabase.from("presensi_harian").delete().eq("id_siswa", siswa.id_siswa);
+          await supabase.from("presensi_siswa_mapel").delete().eq("id_siswa", siswa.id_siswa);
+          await supabase.from("siswa").delete().eq("id_siswa", siswa.id_siswa);
+        }
+      }
+
+      // 4. Jika role berubah dan role baru memerlukan entri di tabel guru/siswa, buat entri baru
       if (roleChanged) {
         if (newRole === "guru" && oldRole !== "guru") {
           const nextId = await getNextId("guru");
-          const jurusanId = (editForm.id_jurusan && editForm.id_jurusan !== "none") ? parseInt(editForm.id_jurusan) : (isAdminJurusan && user?.id_jurusan ? user.id_jurusan : null);
+          const jurusanId = (editForm.id_jurusan && editForm.id_jurusan !== "none") 
+            ? parseInt(editForm.id_jurusan) 
+            : (isAdminJurusan && user?.id_jurusan ? user.id_jurusan : null);
           await supabase.from("guru").insert({
-            id_guru: nextId, nama: editForm.nama, nik: editForm.nik ? parseInt(editForm.nik) : null,
+            id_guru: nextId, nama: editForm.nama, nik: editForm.nik ? parseInt(editForm.nik) : 0,
             gender: editForm.gender?.toUpperCase() || "L", aktif: editForm.aktif,
             dibuat_pada: new Date().toISOString(), id_jurusan: jurusanId,
           });
           await supabase.from("akun").update({ id_guru: nextId }).eq("id_akun", editingUser.id_akun);
-        } else if (newRole === "siswa" && oldRole !== "siswa") {
-          const nextId = await getNextId("siswa");
-          let kelasId = null;
-          if (editForm.kelas_id && editForm.kelas_id !== "none") kelasId = parseInt(editForm.kelas_id);
-          await supabase.from("siswa").insert({
-            id_siswa: nextId, nama: editForm.nama, nis: editForm.nis ? parseInt(editForm.nis) : null,
-            gender: editForm.gender?.toUpperCase() || "L", aktif: editForm.aktif,
-            dibuat_pada: new Date().toISOString(), id_kelas: kelasId,
-          });
-          await supabase.from("akun").update({ id_siswa: nextId }).eq("id_akun", editingUser.id_akun);
-        } else if (newRole === "admin_jurusan" && oldRole !== "admin_jurusan") {
+        } 
+        else if (newRole === "siswa" && oldRole !== "siswa") {
+          // Sebenarnya tidak akan masuk sini karena sudah dicegah, tapi untuk jaga-jaga
+          throw new Error("Tidak dapat mengubah role menjadi siswa.");
+        } 
+        else if (newRole === "admin_jurusan" && oldRole !== "admin_jurusan") {
           if (editForm.id_jurusan && editForm.id_jurusan !== "none") {
             await supabase.from("akun").update({ id_jurusan: parseInt(editForm.id_jurusan) }).eq("id_akun", editingUser.id_akun);
           }
@@ -714,6 +690,26 @@ export default function UserManagement() {
         // Jika role tidak berubah tetapi admin_jurusan, update id_jurusan
         if (newRole === "admin_jurusan" && editForm.id_jurusan && editForm.id_jurusan !== "none") {
           await supabase.from("akun").update({ id_jurusan: parseInt(editForm.id_jurusan) }).eq("id_akun", editingUser.id_akun);
+        }
+        // Jika role tidak berubah tetapi guru/siswa, update data tambahan (NIK/NIS, kelas, jurusan)
+        if (newRole === "guru") {
+          const guru = editingUser as GuruData;
+          if (editForm.nik && editForm.nik !== guru.nik) {
+            await supabase.from("guru").update({ nik: parseInt(editForm.nik) }).eq("id_guru", guru.id_guru);
+          }
+          let jurusanId = (editForm.id_jurusan && editForm.id_jurusan !== "none") ? parseInt(editForm.id_jurusan) : (isAdminJurusan && user?.id_jurusan ? user.id_jurusan : null);
+          await supabase.from("guru").update({
+            nama: editForm.nama, gender: editForm.gender?.toUpperCase(), aktif: editForm.aktif, id_jurusan: jurusanId,
+          }).eq("id_guru", guru.id_guru);
+        } else if (newRole === "siswa") {
+          const siswa = editingUser as SiswaData;
+          if (editForm.nis && editForm.nis !== siswa.nis) {
+            await supabase.from("siswa").update({ nis: parseInt(editForm.nis) }).eq("id_siswa", siswa.id_siswa);
+          }
+          let kelasId = (editForm.kelas_id && editForm.kelas_id !== "none") ? parseInt(editForm.kelas_id) : null;
+          await supabase.from("siswa").update({
+            nama: editForm.nama, gender: editForm.gender?.toUpperCase(), aktif: editForm.aktif, id_kelas: kelasId,
+          }).eq("id_siswa", siswa.id_siswa);
         }
       }
 
@@ -820,7 +816,6 @@ export default function UserManagement() {
         if (!u.aktif) continue;
         let reasons: string[] = [];
         if (u.peran === "guru") {
-          // butuh id_guru, cari dari userList
           const guru = userList.find(gu => gu.id_akun === u.id_akun) as GuruData;
           if (guru) {
             const { data: jadwalData } = await supabase.from("jadwal").select("id_jadwal").eq("id_guru", guru.id_guru);
@@ -1315,52 +1310,32 @@ export default function UserManagement() {
           <Card className="rounded-xl border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-all">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Total Guru</p>
-                  <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalGuru}</p>
-                </div>
-                <div className="p-2 rounded-full bg-[#C4E2F5]">
-                  <User className="h-5 w-5 text-[#2C5EAD]" />
-                </div>
+                <div><p className="text-[10px] sm:text-xs text-slate-500 font-medium">Total Guru</p><p className="text-lg sm:text-2xl font-bold text-slate-800">{totalGuru}</p></div>
+                <div className="p-2 rounded-full bg-[#C4E2F5]"><User className="h-5 w-5 text-[#2C5EAD]" /></div>
               </div>
             </CardContent>
           </Card>
           <Card className="rounded-xl border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-all">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Total Siswa</p>
-                  <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalSiswa}</p>
-                </div>
-                <div className="p-2 rounded-full bg-emerald-100">
-                  <GraduationCap className="h-5 w-5 text-emerald-600" />
-                </div>
+                <div><p className="text-[10px] sm:text-xs text-slate-500 font-medium">Total Siswa</p><p className="text-lg sm:text-2xl font-bold text-slate-800">{totalSiswa}</p></div>
+                <div className="p-2 rounded-full bg-emerald-100"><GraduationCap className="h-5 w-5 text-emerald-600" /></div>
               </div>
             </CardContent>
           </Card>
           <Card className="rounded-xl border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-all">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Admin Jurusan</p>
-                  <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalAdminJurusan}</p>
-                </div>
-                <div className="p-2 rounded-full bg-purple-100">
-                  <Building2 className="h-5 w-5 text-purple-600" />
-                </div>
+                <div><p className="text-[10px] sm:text-xs text-slate-500 font-medium">Admin Jurusan</p><p className="text-lg sm:text-2xl font-bold text-slate-800">{totalAdminJurusan}</p></div>
+                <div className="p-2 rounded-full bg-purple-100"><Building2 className="h-5 w-5 text-purple-600" /></div>
               </div>
             </CardContent>
           </Card>
           <Card className="rounded-xl border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-all">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] sm:text-xs text-slate-500 font-medium">BK</p>
-                  <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalBK}</p>
-                </div>
-                <div className="p-2 rounded-full bg-amber-100">
-                  <Shield className="h-5 w-5 text-amber-600" />
-                </div>
+                <div><p className="text-[10px] sm:text-xs text-slate-500 font-medium">BK</p><p className="text-lg sm:text-2xl font-bold text-slate-800">{totalBK}</p></div>
+                <div className="p-2 rounded-full bg-amber-100"><Shield className="h-5 w-5 text-amber-600" /></div>
               </div>
             </CardContent>
           </Card>
@@ -1369,27 +1344,16 @@ export default function UserManagement() {
         <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
           <CardHeader className="bg-[#1591DC] text-white p-4 sm:p-6">
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="bg-white/20 p-1.5 sm:p-2 rounded-xl">
-                <Shield className="h-5 w-5 sm:h-6 sm:w-6" />
-              </div>
-              <div>
-                <CardTitle className="text-base sm:text-xl">Manajemen Pengguna &amp; Kelas</CardTitle>
-                <CardDescription className="text-blue-100 text-xs sm:text-sm">
-                  Kelola semua jenis pengguna dan kelas sesuai hak akses
-                </CardDescription>
-              </div>
+              <div className="bg-white/20 p-1.5 sm:p-2 rounded-xl"><Shield className="h-5 w-5 sm:h-6 sm:w-6" /></div>
+              <div><CardTitle className="text-base sm:text-xl">Manajemen Pengguna &amp; Kelas</CardTitle><CardDescription className="text-blue-100 text-xs sm:text-sm">Kelola semua jenis pengguna dan kelas sesuai hak akses</CardDescription></div>
             </div>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "list" | "kelas")} className="space-y-4 sm:space-y-6">
               <div className="flex justify-center">
                 <TabsList className="bg-[#C4E2F5]/50 p-1 rounded-xl">
-                  <TabsTrigger value="list" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4">
-                    <Users className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Daftar Pengguna
-                  </TabsTrigger>
-                  <TabsTrigger value="kelas" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4">
-                    <School className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Kelola Kelas
-                  </TabsTrigger>
+                  <TabsTrigger value="list" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4"><Users className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Daftar Pengguna</TabsTrigger>
+                  <TabsTrigger value="kelas" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4"><School className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Kelola Kelas</TabsTrigger>
                 </TabsList>
               </div>
 
@@ -1398,155 +1362,62 @@ export default function UserManagement() {
                 <div className="flex flex-col gap-4">
                   <div className="flex justify-start">
                     <Select value={userType} onValueChange={(v) => { setUserType(v as any); resetPagination(); }} disabled={isAdminJurusan && (userType === "admin_jurusan" || userType === "bk")}>
-                      <SelectTrigger className="w-[180px] rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD]/20 focus:ring-[#2C5EAD]">
-                        <SelectValue />
-                      </SelectTrigger>
+                      <SelectTrigger className="w-[180px] rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD]/20 focus:ring-[#2C5EAD]"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="guru">Guru</SelectItem>
-                        <SelectItem value="siswa">Siswa</SelectItem>
+                        <SelectItem value="guru">Guru</SelectItem><SelectItem value="siswa">Siswa</SelectItem>
                         {isAdminSuper && <SelectItem value="admin_jurusan">Admin Jurusan</SelectItem>}
                         {isAdminSuper && <SelectItem value="bk">BK</SelectItem>}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-2">
-                    <Button onClick={openAddDialog} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] hover:shadow-md w-full">
-                      <Plus className="mr-1 h-3 w-3" /> Tambah
-                    </Button>
-                    <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white w-full">
-                      <Upload className="mr-1 h-3 w-3" /> Impor
-                    </Button>
-                    <Button variant="outline" onClick={refreshAll} disabled={isFetching} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white w-full">
-                      <RefreshCw className={`mr-1 h-3 w-3 ${isFetching ? "animate-spin" : ""}`} /> Segarkan
-                    </Button>
+                    <Button onClick={openAddDialog} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] w-full"><Plus className="mr-1 h-3 w-3" /> Tambah</Button>
+                    <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white w-full"><Upload className="mr-1 h-3 w-3" /> Impor</Button>
+                    <Button variant="outline" onClick={refreshAll} disabled={isFetching} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white w-full"><RefreshCw className={`mr-1 h-3 w-3 ${isFetching ? "animate-spin" : ""}`} /> Segarkan</Button>
                   </div>
-                  {/* Search bar */}
                   <div className="relative group">
                     <div className="absolute -inset-0.5 bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-200"></div>
                     <div className="relative bg-white rounded-xl shadow-md hover:shadow-lg transition-all">
                       <div className="flex items-center p-1">
-                        <div className="pl-3 pr-1">
-                          <Search className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400 group-focus-within:text-[#2C5EAD] transition-colors" />
-                        </div>
-                        <Input
-                          placeholder="Cari berdasarkan nama, username, NIK, NIS, atau kelas..."
-                          value={searchQuery}
-                          onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none rounded-xl h-9 sm:h-10 text-xs sm:text-sm w-full bg-transparent"
-                        />
-                        {searchQuery && (
-                          <button onClick={() => { setSearchQuery(""); setCurrentPage(1); }} className="mr-2 p-1 rounded-full hover:bg-slate-100">
-                            <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400 hover:text-slate-600" />
-                          </button>
-                        )}
+                        <div className="pl-3 pr-1"><Search className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400 group-focus-within:text-[#2C5EAD] transition-colors" /></div>
+                        <Input placeholder="Cari berdasarkan nama, username, NIK, NIS, atau kelas..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none rounded-xl h-9 sm:h-10 text-xs sm:text-sm w-full bg-transparent" />
+                        {searchQuery && <button onClick={() => { setSearchQuery(""); setCurrentPage(1); }} className="mr-2 p-1 rounded-full hover:bg-slate-100"><X className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400 hover:text-slate-600" /></button>}
                       </div>
                     </div>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2 items-center justify-between">
-                    <Button
-                      variant={selectMode ? "default" : "outline"}
-                      onClick={toggleSelectMode}
-                      className={`rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full sm:w-auto ${selectMode ? "bg-[#2C5EAD] hover:bg-[#2C5EAD]/80" : "border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"}`}
-                    >
-                      {selectMode ? "Batalkan Mode Pilih" : "Mode Pilih"}
-                    </Button>
-                    {selectMode && (
-                      <div className="flex gap-2 w-full sm:w-auto justify-center">
-                        <Button onClick={() => handleBulkAction("activate")} disabled={selectedIds.length === 0} className="bg-green-600 hover:bg-green-700 rounded-xl text-xs">
-                          Aktifkan ({selectedIds.filter(id => !userList.find(u => u.id_akun === id)?.aktif).length})
-                        </Button>
-                        <Button variant="destructive" onClick={() => handleBulkAction("deactivate")} disabled={selectedIds.length === 0} className="rounded-xl text-xs">
-                          Nonaktifkan ({selectedIds.filter(id => userList.find(u => u.id_akun === id)?.aktif).length})
-                        </Button>
-                      </div>
-                    )}
+                    <Button variant={selectMode ? "default" : "outline"} onClick={toggleSelectMode} className={`rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full sm:w-auto ${selectMode ? "bg-[#2C5EAD] hover:bg-[#2C5EAD]/80" : "border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"}`}>{selectMode ? "Batalkan Mode Pilih" : "Mode Pilih"}</Button>
+                    {selectMode && <div className="flex gap-2 w-full sm:w-auto justify-center"><Button onClick={() => handleBulkAction("activate")} disabled={selectedIds.length === 0} className="bg-green-600 hover:bg-green-700 rounded-xl text-xs">Aktifkan ({selectedIds.filter(id => !userList.find(u => u.id_akun === id)?.aktif).length})</Button><Button variant="destructive" onClick={() => handleBulkAction("deactivate")} disabled={selectedIds.length === 0} className="rounded-xl text-xs">Nonaktifkan ({selectedIds.filter(id => userList.find(u => u.id_akun === id)?.aktif).length})</Button></div>}
                   </div>
                 </div>
-                {isFetching ? (
-                  <div className="flex justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-[#2C5EAD]" />
-                  </div>
-                ) : (
+                {isFetching ? <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-[#2C5EAD]" /></div> : (
                   <div className="border rounded-xl overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
                       <Table>
-                        <TableHeader>
-                          <TableRow className="bg-slate-50">
-                            {selectMode && (
-                              <TableHead className="w-10">
-                                <Checkbox
-                                  checked={selectedIds.length === paginatedUserList.length && paginatedUserList.length > 0}
-                                  onCheckedChange={handleSelectAll}
-                                  className="data-[state=checked]:bg-[#2C5EAD] data-[state=checked]:border-[#2C5EAD]"
-                                />
-                              </TableHead>
-                            )}
-                            <TableHead>Nama</TableHead>
-                            <TableHead>Nama Pengguna</TableHead>
-                            {userType === "guru" && <TableHead>NIK</TableHead>}
-                            {userType === "guru" && <TableHead>Jurusan</TableHead>}
-                            {userType === "siswa" && <TableHead>NIS</TableHead>}
-                            {userType === "siswa" && <TableHead>Kelas</TableHead>}
-                            {userType === "admin_jurusan" && <TableHead>Jurusan</TableHead>}
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-center">Aksi</TableHead>
-                          </TableRow>
-                        </TableHeader>
+                        <TableHeader><TableRow className="bg-slate-50">
+                          {selectMode && <TableHead className="w-10"><Checkbox checked={selectedIds.length === paginatedUserList.length && paginatedUserList.length > 0} onCheckedChange={handleSelectAll} className="data-[state=checked]:bg-[#2C5EAD] data-[state=checked]:border-[#2C5EAD]" /></TableHead>}
+                          <TableHead>Nama</TableHead><TableHead>Nama Pengguna</TableHead>
+                          {userType === "guru" && <TableHead>NIK</TableHead>}{userType === "guru" && <TableHead>Jurusan</TableHead>}
+                          {userType === "siswa" && <TableHead>NIS</TableHead>}{userType === "siswa" && <TableHead>Kelas</TableHead>}
+                          {userType === "admin_jurusan" && <TableHead>Jurusan</TableHead>}
+                          <TableHead>Status</TableHead><TableHead className="text-center">Aksi</TableHead>
+                        </TableRow></TableHeader>
                         <TableBody>
                           {paginatedUserList.map(item => {
-                            const isGuru = item.peran === "guru";
-                            const isSiswa = item.peran === "siswa";
-                            const isAdminJur = item.peran === "admin_jurusan";
-                            return (
-                              <TableRow key={item.id_akun} className="hover:bg-slate-50">
-                                {selectMode && (
-                                  <TableCell>
-                                    <Checkbox
-                                      checked={selectedIds.includes(item.id_akun)}
-                                      onCheckedChange={() => handleSelectItem(item.id_akun)}
-                                      className="data-[state=checked]:bg-[#2C5EAD] data-[state=checked]:border-[#2C5EAD]"
-                                    />
-                                  </TableCell>
-                                )}
-                                <TableCell className="whitespace-nowrap">{item.nama}</TableCell>
-                                <TableCell className="break-all min-w-[180px]">{item.username}</TableCell>
-                                {isGuru && <TableCell>{(item as GuruData).nik}</TableCell>}
-                                {isGuru && <TableCell>{(item as GuruData).id_jurusan ? jurusanList.find(j => j.id_jurusan === (item as GuruData).id_jurusan)?.nama_jurusan || "-" : "-"}</TableCell>}
-                                {isSiswa && <TableCell>{(item as SiswaData).nis}</TableCell>}
-                                {isSiswa && <TableCell>{(item as SiswaData).nama_kelas || "-"}</TableCell>}
-                                {isAdminJur && <TableCell>{(item as AdminJurusanData).jurusan_nama || "-"}</TableCell>}
-                                <TableCell>
-                                  <Badge className={item.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>
-                                    {item.aktif ? "Aktif" : "Nonaktif"}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <div className="flex gap-1 justify-center">
-                                    <Button variant="ghost" size="sm" onClick={() => openEditDialog(item)}>
-                                      <Edit className="h-4 w-4 text-[#2C5EAD]" />
-                                    </Button>
-                                    {item.aktif ? (
-                                      <Button variant="ghost" size="sm" onClick={() => confirmDeactivate(item)}>
-                                        <UserMinus className="h-4 w-4 text-red-500" />
-                                      </Button>
-                                    ) : (
-                                      <Button variant="ghost" size="sm" onClick={() => confirmActivate(item)}>
-                                        <UserPlus className="h-4 w-4 text-green-500" />
-                                      </Button>
-                                    )}
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            );
+                            const isGuru = item.peran === "guru", isSiswa = item.peran === "siswa", isAdminJur = item.peran === "admin_jurusan";
+                            return (<TableRow key={item.id_akun} className="hover:bg-slate-50">
+                              {selectMode && <TableCell><Checkbox checked={selectedIds.includes(item.id_akun)} onCheckedChange={() => handleSelectItem(item.id_akun)} className="data-[state=checked]:bg-[#2C5EAD] data-[state=checked]:border-[#2C5EAD]" /></TableCell>}
+                              <TableCell className="whitespace-nowrap">{item.nama}</TableCell><TableCell className="break-all min-w-[180px]">{item.username}</TableCell>
+                              {isGuru && <TableCell>{(item as GuruData).nik}</TableCell>}
+                              {isGuru && <TableCell>{(item as GuruData).id_jurusan ? jurusanList.find(j => j.id_jurusan === (item as GuruData).id_jurusan)?.nama_jurusan || "-" : "-"}</TableCell>}
+                              {isSiswa && <TableCell>{(item as SiswaData).nis}</TableCell>}
+                              {isSiswa && <TableCell>{(item as SiswaData).nama_kelas || "-"}</TableCell>}
+                              {isAdminJur && <TableCell>{(item as AdminJurusanData).jurusan_nama || "-"}</TableCell>}
+                              <TableCell><Badge className={item.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>{item.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell>
+                              <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditDialog(item)}><Edit className="h-4 w-4 text-[#2C5EAD]" /></Button>{item.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmDeactivate(item)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmActivate(item)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell>
+                            </TableRow>);
                           })}
-                          {paginatedUserList.length === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={selectMode ? 10 : 9} className="text-center py-8 text-slate-500">
-                                <Users className="h-8 w-8 mx-auto mb-2 text-slate-300" />
-                                Tidak ada data
-                              </TableCell>
-                            </TableRow>
-                          )}
+                          {paginatedUserList.length === 0 && <TableRow><TableCell colSpan={selectMode ? 10 : 9} className="text-center py-8 text-slate-500"><Users className="h-8 w-8 mx-auto mb-2 text-slate-300" />Tidak ada data</TableCell></TableRow>}
                         </TableBody>
                       </Table>
                     </div>
@@ -1554,52 +1425,9 @@ export default function UserManagement() {
                 )}
                 {totalFiltered > 0 && (
                   <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 bg-white rounded-xl p-3 shadow-sm border border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-600">Tampilkan</span>
-                      <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
-                        <SelectTrigger className="w-[70px] h-8 text-xs bg-white border-slate-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="10">10</SelectItem>
-                          <SelectItem value="20">20</SelectItem>
-                          <SelectItem value="50">50</SelectItem>
-                          <SelectItem value="100">100</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <span className="text-xs text-slate-600">per halaman</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={goToFirstPage} disabled={currentPage === 1} className="h-8 w-8 p-0 rounded-lg border-slate-200 hover:bg-slate-100">
-                        <ChevronsLeft className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={goToPreviousPage} disabled={currentPage === 1} className="h-8 w-8 p-0 rounded-lg border-slate-200 hover:bg-slate-100">
-                        <ChevronLeft className="h-3.5 w-3.5" />
-                      </Button>
-                      <div className="flex items-center gap-1 px-2">
-                        <span className="text-sm font-medium text-slate-700">{currentPage}</span>
-                        <span className="text-xs text-slate-400">/</span>
-                        <span className="text-sm text-slate-500">{totalPages || 1}</span>
-                      </div>
-                      <Button variant="outline" size="sm" onClick={goToNextPage} disabled={currentPage === totalPages || totalPages === 0} className="h-8 w-8 p-0 rounded-lg border-slate-200 hover:bg-slate-100">
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={goToLastPage} disabled={currentPage === totalPages || totalPages === 0} className="h-8 w-8 p-0 rounded-lg border-slate-200 hover:bg-slate-100">
-                        <ChevronsRight className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      Menampilkan{" "}
-                      <span className="font-medium text-slate-700">
-                        {totalFiltered === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}
-                      </span>{" "}
-                      -{" "}
-                      <span className="font-medium text-slate-700">
-                        {Math.min(currentPage * itemsPerPage, totalFiltered)}
-                      </span>{" "}
-                      dari{" "}
-                      <span className="font-medium text-slate-700">{totalFiltered}</span> data
-                    </div>
+                    <div className="flex items-center gap-2"><span className="text-xs text-slate-600">Tampilkan</span><Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}><SelectTrigger className="w-[70px] h-8 text-xs bg-white border-slate-200"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="20">20</SelectItem><SelectItem value="50">50</SelectItem><SelectItem value="100">100</SelectItem></SelectContent></Select><span className="text-xs text-slate-600">per halaman</span></div>
+                    <div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={goToFirstPage} disabled={currentPage === 1} className="h-8 w-8 p-0 rounded-lg border-slate-200 hover:bg-slate-100"><ChevronsLeft className="h-3.5 w-3.5" /></Button><Button variant="outline" size="sm" onClick={goToPreviousPage} disabled={currentPage === 1} className="h-8 w-8 p-0 rounded-lg border-slate-200 hover:bg-slate-100"><ChevronLeft className="h-3.5 w-3.5" /></Button><div className="flex items-center gap-1 px-2"><span className="text-sm font-medium text-slate-700">{currentPage}</span><span className="text-xs text-slate-400">/</span><span className="text-sm text-slate-500">{totalPages || 1}</span></div><Button variant="outline" size="sm" onClick={goToNextPage} disabled={currentPage === totalPages || totalPages === 0} className="h-8 w-8 p-0 rounded-lg border-slate-200 hover:bg-slate-100"><ChevronRight className="h-3.5 w-3.5" /></Button><Button variant="outline" size="sm" onClick={goToLastPage} disabled={currentPage === totalPages || totalPages === 0} className="h-8 w-8 p-0 rounded-lg border-slate-200 hover:bg-slate-100"><ChevronsRight className="h-3.5 w-3.5" /></Button></div>
+                    <div className="text-xs text-slate-500">Menampilkan <span className="font-medium text-slate-700">{totalFiltered === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</span> - <span className="font-medium text-slate-700">{Math.min(currentPage * itemsPerPage, totalFiltered)}</span> dari <span className="font-medium text-slate-700">{totalFiltered}</span> data</div>
                   </div>
                 )}
               </TabsContent>
@@ -1607,90 +1435,20 @@ export default function UserManagement() {
               {/* TAB KELAS */}
               <TabsContent value="kelas" className="space-y-4 sm:space-y-6">
                 <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
-                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                    <Button onClick={handleAddKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">
-                      <Plus className="mr-1 h-3 w-3" /> Tambah Kelas
-                    </Button>
-                    <Button variant="outline" onClick={() => setImportKelasDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">
-                      <Upload className="mr-1 h-3 w-3" /> Impor Excel
-                    </Button>
-                  </div>
-                  <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                    <Input
-                      placeholder="Cari kelas..."
-                      value={searchKelasQuery}
-                      onChange={(e) => setSearchKelasQuery(e.target.value)}
-                      className="pl-9 pr-8 rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full"
-                    />
-                    {searchKelasQuery && (
-                      <button onClick={() => setSearchKelasQuery("")} className="absolute right-3 top-1/2">
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                  <Button variant="outline" onClick={refreshAll} disabled={isFetchingKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">
-                    <RefreshCw className={`mr-1 h-3 w-3 ${isFetchingKelas ? "animate-spin" : ""}`} /> Segarkan
-                  </Button>
+                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start"><Button onClick={handleAddKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]"><Plus className="mr-1 h-3 w-3" /> Tambah Kelas</Button><Button variant="outline" onClick={() => setImportKelasDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"><Upload className="mr-1 h-3 w-3" /> Impor Excel</Button></div>
+                  <div className="relative flex-1 max-w-md"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" /><Input placeholder="Cari kelas..." value={searchKelasQuery} onChange={(e) => setSearchKelasQuery(e.target.value)} className="pl-9 pr-8 rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full" />{searchKelasQuery && <button onClick={() => setSearchKelasQuery("")} className="absolute right-3 top-1/2"><X className="h-3.5 w-3.5" /></button>}</div>
+                  <Button variant="outline" onClick={refreshAll} disabled={isFetchingKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"><RefreshCw className={`mr-1 h-3 w-3 ${isFetchingKelas ? "animate-spin" : ""}`} /> Segarkan</Button>
                 </div>
-                {isFetchingKelas ? (
-                  <div className="flex justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-[#2C5EAD]" />
-                  </div>
-                ) : (
+                {isFetchingKelas ? <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-[#2C5EAD]" /></div> : (
                   <div className="border rounded-xl overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
                       <Table>
-                        <TableHeader>
-                          <TableRow className="bg-slate-50">
-                            <TableHead>Nama Kelas</TableHead>
-                            <TableHead>Wali Kelas</TableHead>
-                            <TableHead className="text-center">Status</TableHead>
-                            <TableHead className="text-center">Aksi</TableHead>
-                          </TableRow>
-                        </TableHeader>
+                        <TableHeader><TableRow className="bg-slate-50"><TableHead>Nama Kelas</TableHead><TableHead>Wali Kelas</TableHead><TableHead className="text-center">Status</TableHead><TableHead className="text-center">Aksi</TableHead></TableRow></TableHeader>
                         <TableBody>
                           {kelasList.filter(k => !searchKelasQuery || k.nama.toLowerCase().includes(searchKelasQuery.toLowerCase())).map(kelas => (
-                            <TableRow key={kelas.id_kelas}>
-                              <TableCell className="font-medium">{kelas.nama}</TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <div className="bg-purple-100 p-1.5 rounded-lg">
-                                    <User className="h-3 w-3 text-purple-600" />
-                                  </div>
-                                  {kelas.guru_nama || "-"}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <Badge className={kelas.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>
-                                  {kelas.aktif ? "Aktif" : "Nonaktif"}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <div className="flex gap-1 justify-center">
-                                  <Button variant="ghost" size="sm" onClick={() => handleEditKelas(kelas)}>
-                                    <Edit className="h-4 w-4 text-[#2C5EAD]" />
-                                  </Button>
-                                  {kelas.aktif ? (
-                                    <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, false)}>
-                                      <UserMinus className="h-4 w-4 text-red-500" />
-                                    </Button>
-                                  ) : (
-                                    <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, true)}>
-                                      <UserPlus className="h-4 w-4 text-green-500" />
-                                    </Button>
-                                  )}
-                                </div>
-                              </TableCell>
-                            </TableRow>
+                            <TableRow key={kelas.id_kelas}><TableCell className="font-medium">{kelas.nama}</TableCell><TableCell><div className="flex items-center gap-2"><div className="bg-purple-100 p-1.5 rounded-lg"><User className="h-3 w-3 text-purple-600" /></div>{kelas.guru_nama || "-"}</div></TableCell><TableCell className="text-center"><Badge className={kelas.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>{kelas.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell><TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => handleEditKelas(kelas)}><Edit className="h-4 w-4 text-[#2C5EAD]" /></Button>{kelas.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, false)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, true)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell></TableRow>
                           ))}
-                          {kelasList.filter(k => !searchKelasQuery || k.nama.toLowerCase().includes(searchKelasQuery.toLowerCase())).length === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={4} className="text-center py-8 text-slate-500">
-                                Belum ada data kelas
-                              </TableCell>
-                            </TableRow>
-                          )}
+                          {kelasList.filter(k => !searchKelasQuery || k.nama.toLowerCase().includes(searchKelasQuery.toLowerCase())).length === 0 && <TableRow><TableCell colSpan={4} className="text-center py-8 text-slate-500">Belum ada data kelas</TableCell></TableRow>}
                         </TableBody>
                       </Table>
                     </div>
@@ -1703,490 +1461,102 @@ export default function UserManagement() {
 
         {/* TIPS SECTION */}
         <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-[#C4E2F5]/50 to-[#4BB8FA]/20 max-w-3xl mx-auto">
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex gap-3">
-              <div className="bg-[#2C5EAD]/10 p-2 rounded-xl">
-                <Sparkles className="h-5 w-5 text-[#2C5EAD]" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-sm">Tips Mengelola Data</h3>
-                <p className="text-xs text-slate-600">
-                  Gunakan impor Excel untuk data massal.{" "}
-                  {isAdminJurusan
-                    ? "Anda hanya dapat mengelola guru, siswa, dan kelas dalam jurusan Anda."
-                    : "Admin super dapat mengelola semua jenis pengguna."}
-                </p>
-              </div>
-            </div>
-          </CardContent>
+          <CardContent className="p-4 sm:p-5"><div className="flex gap-3"><div className="bg-[#2C5EAD]/10 p-2 rounded-xl"><Sparkles className="h-5 w-5 text-[#2C5EAD]" /></div><div><h3 className="font-semibold text-sm">Tips Mengelola Data</h3><p className="text-xs text-slate-600">Gunakan impor Excel untuk data massal. {isAdminJurusan ? "Anda hanya dapat mengelola guru, siswa, dan kelas dalam jurusan Anda." : "Admin super dapat mengelola semua jenis pengguna."}</p></div></div></CardContent>
         </Card>
-        <div className="text-center pt-4">
-          <Separator className="mb-4" />
-          <p className="text-xs text-slate-400">© {new Date().getFullYear()} Manajemen Pengguna &amp; Kelas - SmartAS</p>
-        </div>
+        <div className="text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Manajemen Pengguna &amp; Kelas - SmartAS</p></div>
       </div>
 
       {/* DIALOG TAMBAH USER */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent className="rounded-2xl max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              <Plus className="h-5 w-5 inline mr-2 text-emerald-600" /> Tambah{" "}
-              {addForm.peran === "guru"
-                ? "Guru"
-                : addForm.peran === "siswa"
-                ? "Siswa"
-                : addForm.peran === "admin_jurusan"
-                ? "Admin Jurusan"
-                : "BK"}
-            </DialogTitle>
-            <DialogDescription>Isi data pengguna baru. Kata sandi default "password123".</DialogDescription>
-          </DialogHeader>
+          <DialogHeader><DialogTitle><Plus className="h-5 w-5 inline mr-2 text-emerald-600" /> Tambah {addForm.peran === "guru" ? "Guru" : addForm.peran === "siswa" ? "Siswa" : addForm.peran === "admin_jurusan" ? "Admin Jurusan" : "BK"}</DialogTitle><DialogDescription>Isi data pengguna baru. Kata sandi default "password123".</DialogDescription></DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label>Nama Lengkap</Label>
-              <Input value={addForm.nama} onChange={e => setAddForm({ ...addForm, nama: e.target.value })} className="rounded-xl" />
-            </div>
-            <div>
-              <Label>Nama Pengguna</Label>
-              <Input value={addForm.username} onChange={e => setAddForm({ ...addForm, username: e.target.value })} className="rounded-xl" />
-            </div>
-            {addForm.peran !== "bk" && addForm.peran !== "admin_jurusan" && (
-              <div>
-                <Label>Jenis Kelamin</Label>
-                <Select value={addForm.gender} onValueChange={v => setAddForm({ ...addForm, gender: v })}>
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue placeholder="Pilih jenis kelamin" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="L">Laki-laki</SelectItem>
-                    <SelectItem value="P">Perempuan</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {addForm.peran === "guru" && (
-              <div>
-                <Label>NIK</Label>
-                <Input value={addForm.nik} onChange={e => setAddForm({ ...addForm, nik: e.target.value })} className="rounded-xl" />
-              </div>
-            )}
-            {addForm.peran === "guru" && isAdminSuper && (
-              <div>
-                <Label>Jurusan</Label>
-                <Select value={addForm.id_jurusan} onValueChange={v => setAddForm({ ...addForm, id_jurusan: v })}>
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue placeholder="Pilih jurusan (opsional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Tidak ada</SelectItem>
-                    {jurusanList.map(j => (
-                      <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {addForm.peran === "siswa" && (
-              <div>
-                <Label>NIS</Label>
-                <Input value={addForm.nis} onChange={e => setAddForm({ ...addForm, nis: e.target.value })} className="rounded-xl" />
-              </div>
-            )}
-            {addForm.peran === "siswa" && (
-              <div>
-                <Label>Kelas</Label>
-                <Select value={addForm.kelas_id} onValueChange={v => setAddForm({ ...addForm, kelas_id: v })}>
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue placeholder="Pilih kelas (opsional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Tidak ada kelas</SelectItem>
-                    {kelasList.map(k => (
-                      <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {addForm.peran === "admin_jurusan" && (
-              <div>
-                <Label>Jurusan</Label>
-                <Select 
-                  value={addForm.id_jurusan || "none"} 
-                  onValueChange={v => setAddForm({ ...addForm, id_jurusan: v })}
-                >
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue placeholder="Pilih jurusan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none" disabled>Pilih jurusan</SelectItem>
-                    {jurusanList.map(j => (
-                      <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div>
-              <Label>Kata Sandi (opsional)</Label>
-              <Input
-                type="password"
-                value={addForm.password}
-                onChange={e => setAddForm({ ...addForm, password: e.target.value })}
-                className="rounded-xl"
-                placeholder="Kosongkan untuk default: password123"
-              />
-            </div>
+            <div><Label>Nama Lengkap</Label><Input value={addForm.nama} onChange={e => setAddForm({ ...addForm, nama: e.target.value })} className="rounded-xl" /></div>
+            <div><Label>Nama Pengguna</Label><Input value={addForm.username} onChange={e => setAddForm({ ...addForm, username: e.target.value })} className="rounded-xl" /></div>
+            {addForm.peran !== "bk" && addForm.peran !== "admin_jurusan" && <div><Label>Jenis Kelamin</Label><Select value={addForm.gender} onValueChange={v => setAddForm({ ...addForm, gender: v })}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jenis kelamin" /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>}
+            {addForm.peran === "guru" && <div><Label>NIK</Label><Input value={addForm.nik} onChange={e => setAddForm({ ...addForm, nik: e.target.value })} className="rounded-xl" /></div>}
+            {addForm.peran === "guru" && isAdminSuper && <div><Label>Jurusan</Label><Select value={addForm.id_jurusan} onValueChange={v => setAddForm({ ...addForm, id_jurusan: v })}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan (opsional)" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
+            {addForm.peran === "siswa" && <div><Label>NIS</Label><Input value={addForm.nis} onChange={e => setAddForm({ ...addForm, nis: e.target.value })} className="rounded-xl" /></div>}
+            {addForm.peran === "siswa" && <div><Label>Kelas</Label><Select value={addForm.kelas_id} onValueChange={v => setAddForm({ ...addForm, kelas_id: v })}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih kelas (opsional)" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada kelas</SelectItem>{kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}</SelectContent></Select></div>}
+            {addForm.peran === "admin_jurusan" && <div><Label>Jurusan</Label><Select value={addForm.id_jurusan || "none"} onValueChange={v => setAddForm({ ...addForm, id_jurusan: v })}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent><SelectItem value="none" disabled>Pilih jurusan</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
+            <div><Label>Kata Sandi (opsional)</Label><Input type="password" value={addForm.password} onChange={e => setAddForm({ ...addForm, password: e.target.value })} className="rounded-xl" placeholder="Kosongkan untuk default: password123" /></div>
           </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setAddDialogOpen(false)}
-              className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"
-            >
-              Batal
-            </Button>
-            <Button onClick={handleAddUser} disabled={isLoading} className="rounded-xl bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan
-            </Button>
-          </DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setAddDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button><Button onClick={handleAddUser} disabled={isLoading} className="rounded-xl bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* DIALOG EDIT USER */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="rounded-2xl max-w-sm p-4 max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle><Edit className="h-5 w-5 inline mr-2 text-blue-600" /> Edit Pengguna</DialogTitle>
-            <DialogDescription>Ubah informasi pengguna. Kosongkan kata sandi jika tidak ingin mengubah.</DialogDescription>
-          </DialogHeader>
+          <DialogHeader><DialogTitle><Edit className="h-5 w-5 inline mr-2 text-blue-600" /> Edit Pengguna</DialogTitle><DialogDescription>Ubah informasi pengguna. Kosongkan kata sandi jika tidak ingin mengubah.</DialogDescription></DialogHeader>
           <div className="space-y-3">
-            <div>
-              <Label className="text-xs">Nama</Label>
-              <Input value={editForm.nama} onChange={e => setEditForm({ ...editForm, nama: e.target.value })} className="rounded-lg text-sm h-9" />
-            </div>
-            <div>
-              <Label className="text-xs">Nama Pengguna</Label>
-              <Input value={editForm.username} onChange={e => setEditForm({ ...editForm, username: e.target.value })} className="rounded-lg text-sm h-9" />
-            </div>
-            {editForm.peran !== "bk" && editForm.peran !== "admin_jurusan" && (
-              <div>
-                <Label className="text-xs">Jenis Kelamin</Label>
-                <Select value={editForm.gender} onValueChange={v => setEditForm({ ...editForm, gender: v })}>
-                  <SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="L">Laki-laki</SelectItem>
-                    <SelectItem value="P">Perempuan</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {editForm.peran === "guru" && (
-              <div>
-                <Label className="text-xs">NIK</Label>
-                <Input value={editForm.nik} onChange={e => setEditForm({ ...editForm, nik: e.target.value })} className="rounded-lg text-sm h-9" />
-              </div>
-            )}
-            {editForm.peran === "guru" && isAdminSuper && (
-              <div>
-                <Label className="text-xs">Jurusan</Label>
-                <Select value={editForm.id_jurusan} onValueChange={v => setEditForm({ ...editForm, id_jurusan: v })}>
-                  <SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Tidak ada</SelectItem>
-                    {jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {editForm.peran === "siswa" && (
-              <>
-                <div>
-                  <Label className="text-xs">NIS</Label>
-                  <Input value={editForm.nis} onChange={e => setEditForm({ ...editForm, nis: e.target.value })} className="rounded-lg text-sm h-9" />
-                </div>
-                <div>
-                  <Label className="text-xs">Kelas</Label>
-                  <Select value={editForm.kelas_id} onValueChange={v => setEditForm({ ...editForm, kelas_id: v })}>
-                    <SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue placeholder="Pilih kelas" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Tidak ada kelas</SelectItem>
-                      {kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            )}
-            {editForm.peran === "admin_jurusan" && (
-              <div>
-                <Label className="text-xs">Jurusan</Label>
-                <Select 
-                  value={editForm.id_jurusan || "none"} 
-                  onValueChange={v => setEditForm({ ...editForm, id_jurusan: v })}
-                >
-                  <SelectTrigger className="rounded-lg h-9 text-sm">
-                    <SelectValue placeholder="Pilih jurusan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none" disabled>Pilih jurusan</SelectItem>
-                    {jurusanList.map(j => (
-                      <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div>
-              <Label className="text-xs">Role</Label>
-              <Select value={editForm.peran} onValueChange={v => setEditForm({ ...editForm, peran: v as any })} disabled={!isAdminSuper}>
-                <SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="guru">Guru</SelectItem>
-                  <SelectItem value="siswa">Siswa</SelectItem>
-                  {isAdminSuper && <SelectItem value="admin_jurusan">Admin Jurusan</SelectItem>}
-                  {isAdminSuper && <SelectItem value="bk">BK</SelectItem>}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs">Kata Sandi Baru (Opsional)</Label>
-              <Input type="password" placeholder="Kosongkan jika tidak ingin mengubah" value={editForm.password} onChange={e => setEditForm({ ...editForm, password: e.target.value })} className="rounded-lg text-sm h-9" />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox id="edit_aktif" checked={editForm.aktif} onCheckedChange={(checked) => setEditForm({ ...editForm, aktif: checked === true })} />
-              <Label htmlFor="edit_aktif" className="text-xs">Aktif (centang agar pengguna dapat login)</Label>
-            </div>
+            <div><Label className="text-xs">Nama</Label><Input value={editForm.nama} onChange={e => setEditForm({ ...editForm, nama: e.target.value })} className="rounded-lg text-sm h-9" /></div>
+            <div><Label className="text-xs">Nama Pengguna</Label><Input value={editForm.username} onChange={e => setEditForm({ ...editForm, username: e.target.value })} className="rounded-lg text-sm h-9" /></div>
+            {editForm.peran !== "bk" && editForm.peran !== "admin_jurusan" && <div><Label className="text-xs">Jenis Kelamin</Label><Select value={editForm.gender} onValueChange={v => setEditForm({ ...editForm, gender: v })}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>}
+            {editForm.peran === "guru" && <div><Label className="text-xs">NIK</Label><Input value={editForm.nik} onChange={e => setEditForm({ ...editForm, nik: e.target.value })} className="rounded-lg text-sm h-9" /></div>}
+            {editForm.peran === "guru" && isAdminSuper && <div><Label className="text-xs">Jurusan</Label><Select value={editForm.id_jurusan} onValueChange={v => setEditForm({ ...editForm, id_jurusan: v })}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
+            {editForm.peran === "siswa" && (<><div><Label className="text-xs">NIS</Label><Input value={editForm.nis} onChange={e => setEditForm({ ...editForm, nis: e.target.value })} className="rounded-lg text-sm h-9" /></div><div><Label className="text-xs">Kelas</Label><Select value={editForm.kelas_id} onValueChange={v => setEditForm({ ...editForm, kelas_id: v })}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue placeholder="Pilih kelas" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada kelas</SelectItem>{kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}</SelectContent></Select></div></>)}
+            {editForm.peran === "admin_jurusan" && <div><Label className="text-xs">Jurusan</Label><Select value={editForm.id_jurusan || "none"} onValueChange={v => setEditForm({ ...editForm, id_jurusan: v })}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent><SelectItem value="none" disabled>Pilih jurusan</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
+            <div><Label className="text-xs">Role</Label><Select value={editForm.peran} onValueChange={v => setEditForm({ ...editForm, peran: v as any })} disabled={!isAdminSuper || editingUser?.peran === "siswa"}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="guru">Guru</SelectItem><SelectItem value="siswa">Siswa</SelectItem>{isAdminSuper && <SelectItem value="admin_jurusan">Admin Jurusan</SelectItem>}{isAdminSuper && <SelectItem value="bk">BK</SelectItem>}</SelectContent></Select></div>
+            <div><Label className="text-xs">Kata Sandi Baru (Opsional)</Label><Input type="password" placeholder="Kosongkan jika tidak ingin mengubah" value={editForm.password} onChange={e => setEditForm({ ...editForm, password: e.target.value })} className="rounded-lg text-sm h-9" /></div>
+            <div className="flex items-center space-x-2"><Checkbox id="edit_aktif" checked={editForm.aktif} onCheckedChange={(checked) => setEditForm({ ...editForm, aktif: checked === true })} /><Label htmlFor="edit_aktif" className="text-xs">Aktif (centang agar pengguna dapat login)</Label></div>
           </div>
-          <DialogFooter className="mt-3 gap-2">
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white rounded-lg text-xs h-8">Batal</Button>
-            <Button onClick={handleUpdateUser} disabled={isLoading} className="rounded-lg text-xs h-8 bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">
-              {isLoading && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}Simpan
-            </Button>
-          </DialogFooter>
+          <DialogFooter className="mt-3 gap-2"><Button variant="outline" onClick={() => setEditDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white rounded-lg text-xs h-8">Batal</Button><Button onClick={handleUpdateUser} disabled={isLoading} className="rounded-lg text-xs h-8 bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isLoading && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}Simpan</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* DIALOG DEACTIVATE / ACTIVATE */}
       <Dialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
         <DialogContent className="rounded-2xl max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{isActivatingMode ? "Aktifkan Pengguna" : "Nonaktifkan Pengguna"}</DialogTitle>
-            <DialogDescription>{isActivatingMode ? `Aktifkan kembali ${deactivatingUser?.nama}?` : `Yakin ingin menonaktifkan ${deactivatingUser?.nama}?`}</DialogDescription>
-          </DialogHeader>
-          {!isActivatingMode && deactivateConstraints.length > 0 && (
-            <div className="bg-amber-50 border p-3 rounded-lg">
-              <p className="font-medium text-amber-800">Data terkait:</p>
-              <ul className="list-disc list-inside text-xs">
-                {deactivateConstraints.map((c, i) => <li key={i}>{c}</li>)}
-              </ul>
-              <p className="text-xs mt-1">Pengguna akan dinonaktifkan, namun data terkait tetap tersimpan.</p>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeactivateDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button>
-            <Button variant={isActivatingMode ? "default" : "destructive"} onClick={executeToggleActive} disabled={isLoading}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isActivatingMode ? "Aktifkan" : "Nonaktifkan"}
-            </Button>
-          </DialogFooter>
+          <DialogHeader><DialogTitle>{isActivatingMode ? "Aktifkan Pengguna" : "Nonaktifkan Pengguna"}</DialogTitle><DialogDescription>{isActivatingMode ? `Aktifkan kembali ${deactivatingUser?.nama}?` : `Yakin ingin menonaktifkan ${deactivatingUser?.nama}?`}</DialogDescription></DialogHeader>
+          {!isActivatingMode && deactivateConstraints.length > 0 && <div className="bg-amber-50 border p-3 rounded-lg"><p className="font-medium text-amber-800">Data terkait:</p><ul className="list-disc list-inside text-xs">{deactivateConstraints.map((c, i) => <li key={i}>{c}</li>)}</ul><p className="text-xs mt-1">Pengguna akan dinonaktifkan, namun data terkait tetap tersimpan.</p></div>}
+          <DialogFooter><Button variant="outline" onClick={() => setDeactivateDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button><Button variant={isActivatingMode ? "default" : "destructive"} onClick={executeToggleActive} disabled={isLoading}>{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isActivatingMode ? "Aktifkan" : "Nonaktifkan"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* DIALOG BULK ACTION */}
       <Dialog open={bulkActionDialogOpen} onOpenChange={setBulkActionDialogOpen}>
         <DialogContent className="rounded-2xl max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{bulkActionType === "activate" ? "Aktifkan Massal" : "Nonaktifkan Massal"}</DialogTitle>
-            <DialogDescription>Anda akan {bulkActionType === "activate" ? "mengaktifkan" : "menonaktifkan"} {bulkActionData?.users.length} pengguna.</DialogDescription>
-          </DialogHeader>
-          {bulkActionData && bulkActionData.cannotProcess.length > 0 && (
-            <div className="bg-amber-50 border p-3 rounded-lg">
-              <p className="font-medium text-amber-800">⚠️ Beberapa pengguna memiliki data terkait:</p>
-              <ul className="list-disc list-inside text-xs">
-                {bulkActionData.cannotProcess.map(c => <li key={c.id_akun}>{c.nama}: {c.reasons.join(", ")}</li>)}
-              </ul>
-              <p className="text-xs mt-1">Tetap dapat dinonaktifkan, data terkait tetap tersimpan.</p>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkActionDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button>
-            <Button variant={bulkActionType === "activate" ? "default" : "destructive"} onClick={executeBulkAction} disabled={isProcessingSelected}>
-              {isProcessingSelected && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Ya, {bulkActionType === "activate" ? "Aktifkan" : "Nonaktifkan"} {bulkActionData?.canProcessIds.length} Pengguna
-            </Button>
-          </DialogFooter>
+          <DialogHeader><DialogTitle>{bulkActionType === "activate" ? "Aktifkan Massal" : "Nonaktifkan Massal"}</DialogTitle><DialogDescription>Anda akan {bulkActionType === "activate" ? "mengaktifkan" : "menonaktifkan"} {bulkActionData?.users.length} pengguna.</DialogDescription></DialogHeader>
+          {bulkActionData && bulkActionData.cannotProcess.length > 0 && <div className="bg-amber-50 border p-3 rounded-lg"><p className="font-medium text-amber-800">⚠️ Beberapa pengguna memiliki data terkait:</p><ul className="list-disc list-inside text-xs">{bulkActionData.cannotProcess.map(c => <li key={c.id_akun}>{c.nama}: {c.reasons.join(", ")}</li>)}</ul><p className="text-xs mt-1">Tetap dapat dinonaktifkan, data terkait tetap tersimpan.</p></div>}
+          <DialogFooter><Button variant="outline" onClick={() => setBulkActionDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button><Button variant={bulkActionType === "activate" ? "default" : "destructive"} onClick={executeBulkAction} disabled={isProcessingSelected}>{isProcessingSelected && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Ya, {bulkActionType === "activate" ? "Aktifkan" : "Nonaktifkan"} {bulkActionData?.canProcessIds.length} Pengguna</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* KELAS DIALOGS */}
       <Dialog open={kelasDialogOpen} onOpenChange={setKelasDialogOpen}>
-        <DialogContent className="rounded-2xl">
-          <DialogHeader><DialogTitle>{editingKelas ? "Ubah Kelas" : "Tambah Kelas Baru"}</DialogTitle></DialogHeader>
-          <div><Label>Nama Kelas</Label><Input value={kelasForm.nama} onChange={e => setKelasForm({ ...kelasForm, nama: e.target.value })} className="rounded-xl mt-1" /></div>
-          <div><Label>Wali Kelas</Label><Select value={kelasForm.id_guru} onValueChange={v => setKelasForm({ ...kelasForm, id_guru: v })}><SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="Pilih wali kelas (opsional)" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada wali kelas</SelectItem>{guruOptions.map(g => <SelectItem key={g.id_guru} value={g.id_guru.toString()}>{g.nama} (NIK: {g.nik})</SelectItem>)}</SelectContent></Select></div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setKelasDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button>
-            <Button onClick={handleSaveKelas} disabled={isSavingKelas} className="rounded-xl bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button>
-          </DialogFooter>
-        </DialogContent>
+        <DialogContent className="rounded-2xl"><DialogHeader><DialogTitle>{editingKelas ? "Ubah Kelas" : "Tambah Kelas Baru"}</DialogTitle></DialogHeader><div><Label>Nama Kelas</Label><Input value={kelasForm.nama} onChange={e => setKelasForm({ ...kelasForm, nama: e.target.value })} className="rounded-xl mt-1" /></div><div><Label>Wali Kelas</Label><Select value={kelasForm.id_guru} onValueChange={v => setKelasForm({ ...kelasForm, id_guru: v })}><SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="Pilih wali kelas (opsional)" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada wali kelas</SelectItem>{guruOptions.map(g => <SelectItem key={g.id_guru} value={g.id_guru.toString()}>{g.nama} (NIK: {g.nik})</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setKelasDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button><Button onClick={handleSaveKelas} disabled={isSavingKelas} className="rounded-xl bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button></DialogFooter></DialogContent>
       </Dialog>
 
       <Dialog open={toggleKelasDialogOpen} onOpenChange={setToggleKelasDialogOpen}>
-        <DialogContent className="rounded-2xl max-w-lg">
-          <DialogHeader><DialogTitle>{isActivatingKelasMode ? "Aktifkan Kelas" : "Nonaktifkan Kelas"}</DialogTitle><DialogDescription>{isActivatingKelasMode ? `Aktifkan kembali kelas ${togglingKelas?.nama}?` : `Yakin ingin menonaktifkan kelas ${togglingKelas?.nama}?`}</DialogDescription></DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setToggleKelasDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button>
-            <Button onClick={executeToggleActiveKelas} disabled={isSavingKelas}>{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isActivatingKelasMode ? "Aktifkan" : "Nonaktifkan"}</Button>
-          </DialogFooter>
-        </DialogContent>
+        <DialogContent className="rounded-2xl max-w-lg"><DialogHeader><DialogTitle>{isActivatingKelasMode ? "Aktifkan Kelas" : "Nonaktifkan Kelas"}</DialogTitle><DialogDescription>{isActivatingKelasMode ? `Aktifkan kembali kelas ${togglingKelas?.nama}?` : `Yakin ingin menonaktifkan kelas ${togglingKelas?.nama}?`}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setToggleKelasDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button><Button onClick={executeToggleActiveKelas} disabled={isSavingKelas}>{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isActivatingKelasMode ? "Aktifkan" : "Nonaktifkan"}</Button></DialogFooter></DialogContent>
       </Dialog>
 
       {/* IMPORT KELAS DIALOGS */}
       <Dialog open={importKelasDialogOpen} onOpenChange={setImportKelasDialogOpen}>
         <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader><DialogTitle>Impor Kelas dari Excel</DialogTitle><DialogDescription>Unggah file Excel untuk menambah kelas secara massal</DialogDescription></DialogHeader>
-          {importKelasStep === "upload" && (
-            <div className="space-y-4">
-              <div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50">
-                <div className="flex flex-col items-center gap-2">
-                  <Upload className="h-8 w-8 text-slate-400" />
-                  <label htmlFor="kelas-file-input" className="cursor-pointer">
-                    <span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk unggah</span>
-                    <input id="kelas-file-input" type="file" accept=".xlsx,.xls" onChange={handleKelasFileUpload} className="hidden" disabled={isImportingKelas} />
-                  </label>
-                  <p className="text-xs text-slate-500">atau tarik & lepas file Excel di sini</p>
-                </div>
-              </div>
-              {importKelasUploadError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{importKelasUploadError}</AlertDescription></Alert>}
-              <Button variant="outline" onClick={downloadKelasTemplate} className="w-full"><Download className="h-4 w-4 mr-2" /> Unduh Template Excel Kelas</Button>
-              <div className="bg-blue-50 p-3 rounded-lg text-sm">
-                <p className="font-semibold">Format File:</p>
-                <p>Kolom yang diperlukan: <strong>nama</strong> (wajib), <strong>nik_wali</strong> (opsional), <strong>aktif</strong> (opsional, 1 untuk aktif)</p>
-                <p className="text-xs text-red-600">* NIK wali harus sesuai dengan data guru di database</p>
-              </div>
-            </div>
-          )}
-          {importKelasStep === "preview" && importKelasPreviewRows.length > 0 && (
-            <div className="space-y-4">
-              <div className="flex justify-between"><p className="text-sm font-medium">Pratinjau Data ({importKelasPreviewRows.length} baris)</p><Badge>{importKelasPreviewRows.filter(r => r.isValid).length} dari {importKelasPreviewRows.length} valid</Badge></div>
-              <div className="border rounded-lg overflow-x-auto max-h-96">
-                <Table>
-                  <TableHeader><TableRow><TableHead>#</TableHead><TableHead>Nama Kelas</TableHead><TableHead>NIK Wali</TableHead><TableHead>Aktif</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {importKelasPreviewRows.map((row, idx) => (
-                      <TableRow key={idx} className={!row.isValid ? "bg-red-50" : ""}>
-                        <TableCell>{row.rowIndex}</TableCell>
-                        <TableCell>{row.nama}</TableCell>
-                        <TableCell>{row.nik_wali || "-"}{!row.guruValid && row.nik_wali && <span className="text-red-500">(tidak ditemukan)</span>}</TableCell>
-                        <TableCell>{row.aktif ? "Aktif" : "Nonaktif"}</TableCell>
-                        <TableCell>{row.isValid ? "Valid" : <div className="text-red-600 text-xs">{row.validationErrors.join(", ")}</div>}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <div className="flex justify-end gap-3">
-                <Button variant="outline" onClick={() => { setImportKelasDialogOpen(false); setImportKelasRawData([]); setImportKelasPreviewRows([]); setImportKelasStep("upload"); }}>Batal</Button>
-                <Button onClick={confirmImportKelas} disabled={isImportingKelas || importKelasPreviewRows.filter(r => r.isValid).length === 0} className="bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isImportingKelas && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Impor Data</Button>
-              </div>
-            </div>
-          )}
+          {importKelasStep === "upload" && (<div className="space-y-4"><div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50"><div className="flex flex-col items-center gap-2"><Upload className="h-8 w-8 text-slate-400" /><label htmlFor="kelas-file-input" className="cursor-pointer"><span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk unggah</span><input id="kelas-file-input" type="file" accept=".xlsx,.xls" onChange={handleKelasFileUpload} className="hidden" disabled={isImportingKelas} /></label><p className="text-xs text-slate-500">atau tarik & lepas file Excel di sini</p></div></div>{importKelasUploadError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{importKelasUploadError}</AlertDescription></Alert>}<Button variant="outline" onClick={downloadKelasTemplate} className="w-full"><Download className="h-4 w-4 mr-2" /> Unduh Template Excel Kelas</Button><div className="bg-blue-50 p-3 rounded-lg text-sm"><p className="font-semibold">Format File:</p><p>Kolom yang diperlukan: <strong>nama</strong> (wajib), <strong>nik_wali</strong> (opsional), <strong>aktif</strong> (opsional, 1 untuk aktif)</p><p className="text-xs text-red-600">* NIK wali harus sesuai dengan data guru di database</p></div></div>)}
+          {importKelasStep === "preview" && importKelasPreviewRows.length > 0 && (<div className="space-y-4"><div className="flex justify-between"><p className="text-sm font-medium">Pratinjau Data ({importKelasPreviewRows.length} baris)</p><Badge>{importKelasPreviewRows.filter(r => r.isValid).length} dari {importKelasPreviewRows.length} valid</Badge></div><div className="border rounded-lg overflow-x-auto max-h-96"><Table><TableHeader><TableRow><TableHead>#</TableHead><TableHead>Nama Kelas</TableHead><TableHead>NIK Wali</TableHead><TableHead>Aktif</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{importKelasPreviewRows.map((row, idx) => (<TableRow key={idx} className={!row.isValid ? "bg-red-50" : ""}><TableCell>{row.rowIndex}</TableCell><TableCell>{row.nama}</TableCell><TableCell>{row.nik_wali || "-"}{!row.guruValid && row.nik_wali && <span className="text-red-500">(tidak ditemukan)</span>}</TableCell><TableCell>{row.aktif ? "Aktif" : "Nonaktif"}</TableCell><TableCell>{row.isValid ? "Valid" : <div className="text-red-600 text-xs">{row.validationErrors.join(", ")}</div>}</TableCell></TableRow>))}</TableBody></Table></div><div className="flex justify-end gap-3"><Button variant="outline" onClick={() => { setImportKelasDialogOpen(false); setImportKelasRawData([]); setImportKelasPreviewRows([]); setImportKelasStep("upload"); }}>Batal</Button><Button onClick={confirmImportKelas} disabled={isImportingKelas || importKelasPreviewRows.filter(r => r.isValid).length === 0} className="bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isImportingKelas && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Impor Data</Button></div></div>)}
         </DialogContent>
       </Dialog>
 
       <Dialog open={missingGuruDialogOpen} onOpenChange={setMissingGuruDialogOpen}>
-        <DialogContent className="rounded-xl max-w-md">
-          <DialogHeader><DialogTitle>Wali Kelas Tidak Ditemukan</DialogTitle><DialogDescription>Beberapa NIK wali kelas tidak ditemukan.</DialogDescription></DialogHeader>
-          <div className="bg-yellow-50 p-3 rounded-lg"><p className="font-medium">NIK tidak ditemukan:</p><ul className="list-disc list-inside mt-1">{Array.from(importKelasMissingGurus).map(nik => <li key={nik} className="font-mono">{nik}</li>)}</ul><p className="text-sm mt-2">Baris dengan NIK tidak ditemukan akan dilewati. Lanjutkan?</p></div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setMissingGuruDialogOpen(false); setImportKelasDialogOpen(false); setImportKelasRawData([]); }}>Batalkan Impor</Button>
-            <Button onClick={handleSkipMissingGurus} className="bg-green-600">Lanjutkan (Lewati Baris Bermasalah)</Button>
-          </DialogFooter>
-        </DialogContent>
+        <DialogContent className="rounded-xl max-w-md"><DialogHeader><DialogTitle>Wali Kelas Tidak Ditemukan</DialogTitle><DialogDescription>Beberapa NIK wali kelas tidak ditemukan.</DialogDescription></DialogHeader><div className="bg-yellow-50 p-3 rounded-lg"><p className="font-medium">NIK tidak ditemukan:</p><ul className="list-disc list-inside mt-1">{Array.from(importKelasMissingGurus).map(nik => <li key={nik} className="font-mono">{nik}</li>)}</ul><p className="text-sm mt-2">Baris dengan NIK tidak ditemukan akan dilewati. Lanjutkan?</p></div><DialogFooter><Button variant="outline" onClick={() => { setMissingGuruDialogOpen(false); setImportKelasDialogOpen(false); setImportKelasRawData([]); }}>Batalkan Impor</Button><Button onClick={handleSkipMissingGurus} className="bg-green-600">Lanjutkan (Lewati Baris Bermasalah)</Button></DialogFooter></DialogContent>
       </Dialog>
 
       {/* IMPORT USER DIALOG */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader><DialogTitle>Impor {userType === "guru" ? "Guru" : userType === "siswa" ? "Siswa" : userType === "admin_jurusan" ? "Admin Jurusan" : "BK"} dari Excel</DialogTitle><DialogDescription>Unggah file Excel untuk menambah data secara massal</DialogDescription></DialogHeader>
-          {importStep === "upload" && (
-            <div className="space-y-4">
-              <div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50"><div className="flex flex-col items-center gap-2"><Upload className="h-8 w-8 text-slate-400" /><label htmlFor="user-file-input" className="cursor-pointer"><span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk unggah</span><input id="user-file-input" type="file" accept=".xlsx,.xls" onChange={handleUserFileUpload} className="hidden" disabled={isLoading} /></label><p className="text-xs text-slate-500">atau tarik & lepas file Excel di sini</p></div></div>
-              {uploadError && <Alert className="bg-red-50 border-red-200"><AlertCircle className="h-4 w-4 text-red-600" /><AlertDescription className="text-red-700">{uploadError}</AlertDescription></Alert>}
-              <Button variant="outline" onClick={() => downloadTemplate(userType)} className="w-full rounded-lg"><Download className="h-4 w-4 mr-2" /> Unduh Template Excel</Button>
-              <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
-                <p className="font-semibold">Format File:</p>
-                {userType === "guru" && <p>Kolom yang diperlukan: <strong>nama, nik, username, gender</strong> (opsional: nama_jurusan, password)</p>}
-                {userType === "siswa" && <p>Kolom yang diperlukan: <strong>nama, nis, username, gender, kelas</strong> (opsional: password)</p>}
-                {userType === "admin_jurusan" && <p>Kolom yang diperlukan: <strong>nama, username, nama_jurusan</strong> (opsional: password)</p>}
-                {userType === "bk" && <p>Kolom yang diperlukan: <strong>nama, username</strong> (opsional: password)</p>}
-                <p className="text-xs mt-1">Kata sandi default "password123".</p>
-              </div>
-            </div>
-          )}
-          {importStep === "preview" && previewData.length > 0 && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center"><p className="text-sm font-medium">Pratinjau Data ({previewData.length} baris)</p></div>
-              <div className="border rounded-lg overflow-x-auto max-h-96">
-                <Table>
-                  <TableHeader><TableRow className="bg-slate-50">
-                    <TableHead>Nama</TableHead>
-                    {userType === "guru" && <TableHead>NIK</TableHead>}
-                    {userType === "siswa" && <TableHead>NIS</TableHead>}
-                    <TableHead>Nama Pengguna</TableHead>
-                    {userType !== "bk" && userType !== "admin_jurusan" && <TableHead>Jenis Kelamin</TableHead>}
-                    {userType === "siswa" && <TableHead>Kelas</TableHead>}
-                    {userType === "admin_jurusan" && <TableHead>Nama Jurusan</TableHead>}
-                  </TableRow></TableHeader>
-                  <TableBody>
-                    {previewData.slice(0, 20).map((item, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell>{item.nama as string}</TableCell>
-                        {userType === "guru" && <TableCell>{item.nik as string}</TableCell>}
-                        {userType === "siswa" && <TableCell>{item.nis as string}</TableCell>}
-                        <TableCell>{item.username as string}</TableCell>
-                        {userType !== "bk" && userType !== "admin_jurusan" && <TableCell><Badge className={(item.gender as string) === "L" ? "bg-blue-100" : "bg-pink-100"}>{item.gender === "L" ? "Laki-laki" : "Perempuan"}</Badge></TableCell>}
-                        {userType === "siswa" && <TableCell>{item.kelas as string}</TableCell>}
-                        {userType === "admin_jurusan" && <TableCell>{item.nama_jurusan as string}</TableCell>}
-                      </TableRow>
-                    ))}
-                    {previewData.length > 20 && <TableRow><TableCell colSpan={6} className="text-center text-slate-500">... dan {previewData.length - 20} baris lainnya</TableCell></TableRow>}
-                  </TableBody>
-                </Table>
-              </div>
-              <div className="flex gap-3 justify-end">
-                <Button variant="outline" onClick={() => { setImportDialogOpen(false); setPreviewData([]); setImportRawData([]); setImportStep("upload"); }} className="rounded-lg">Batal</Button>
-                <Button onClick={handleImport} disabled={isLoading} className="rounded-lg bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Impor Data</Button>
-              </div>
-            </div>
-          )}
+          {importStep === "upload" && (<div className="space-y-4"><div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50"><div className="flex flex-col items-center gap-2"><Upload className="h-8 w-8 text-slate-400" /><label htmlFor="user-file-input" className="cursor-pointer"><span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk unggah</span><input id="user-file-input" type="file" accept=".xlsx,.xls" onChange={handleUserFileUpload} className="hidden" disabled={isLoading} /></label><p className="text-xs text-slate-500">atau tarik & lepas file Excel di sini</p></div></div>{uploadError && <Alert className="bg-red-50 border-red-200"><AlertCircle className="h-4 w-4 text-red-600" /><AlertDescription className="text-red-700">{uploadError}</AlertDescription></Alert>}<Button variant="outline" onClick={() => downloadTemplate(userType)} className="w-full rounded-lg"><Download className="h-4 w-4 mr-2" /> Unduh Template Excel</Button><div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700"><p className="font-semibold">Format File:</p>{userType === "guru" && <p>Kolom yang diperlukan: <strong>nama, nik, username, gender</strong> (opsional: nama_jurusan, password)</p>}{userType === "siswa" && <p>Kolom yang diperlukan: <strong>nama, nis, username, gender, kelas</strong> (opsional: password)</p>}{userType === "admin_jurusan" && <p>Kolom yang diperlukan: <strong>nama, username, nama_jurusan</strong> (opsional: password)</p>}{userType === "bk" && <p>Kolom yang diperlukan: <strong>nama, username</strong> (opsional: password)</p>}<p className="text-xs mt-1">Kata sandi default "password123".</p></div></div>)}
+          {importStep === "preview" && previewData.length > 0 && (<div className="space-y-4"><div className="flex justify-between items-center"><p className="text-sm font-medium">Pratinjau Data ({previewData.length} baris)</p></div><div className="border rounded-lg overflow-x-auto max-h-96"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead>Nama</TableHead>{userType === "guru" && <TableHead>NIK</TableHead>}{userType === "siswa" && <TableHead>NIS</TableHead>}<TableHead>Nama Pengguna</TableHead>{userType !== "bk" && userType !== "admin_jurusan" && <TableHead>Jenis Kelamin</TableHead>}{userType === "siswa" && <TableHead>Kelas</TableHead>}{userType === "admin_jurusan" && <TableHead>Nama Jurusan</TableHead>}</TableRow></TableHeader><TableBody>{previewData.slice(0, 20).map((item, idx) => (<TableRow key={idx}><TableCell>{item.nama as string}</TableCell>{userType === "guru" && <TableCell>{item.nik as string}</TableCell>}{userType === "siswa" && <TableCell>{item.nis as string}</TableCell>}<TableCell>{item.username as string}</TableCell>{userType !== "bk" && userType !== "admin_jurusan" && <TableCell><Badge className={(item.gender as string) === "L" ? "bg-blue-100" : "bg-pink-100"}>{item.gender === "L" ? "Laki-laki" : "Perempuan"}</Badge></TableCell>}{userType === "siswa" && <TableCell>{item.kelas as string}</TableCell>}{userType === "admin_jurusan" && <TableCell>{item.nama_jurusan as string}</TableCell>}</TableRow>))}{previewData.length > 20 && <TableRow><TableCell colSpan={6} className="text-center text-slate-500">... dan {previewData.length - 20} baris lainnya</TableCell></TableRow>}</TableBody></Table></div><div className="flex gap-3 justify-end"><Button variant="outline" onClick={() => { setImportDialogOpen(false); setPreviewData([]); setImportRawData([]); setImportStep("upload"); }} className="rounded-lg">Batal</Button><Button onClick={handleImport} disabled={isLoading} className="rounded-lg bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Impor Data</Button></div></div>)}
         </DialogContent>
       </Dialog>
 
       {/* DIALOG KONFIRMASI JURUSAN BARU */}
       <Dialog open={missingJurusanDialogOpen} onOpenChange={setMissingJurusanDialogOpen}>
-        <DialogContent className="rounded-xl max-w-md">
-          <DialogHeader>
-            <DialogTitle>Jurusan Tidak Ditemukan</DialogTitle>
-            <DialogDescription>Beberapa nama jurusan dalam file Excel tidak ditemukan di database.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="bg-yellow-50 p-3 rounded-lg">
-              <p className="text-sm font-medium text-yellow-800">Jurusan yang belum terdaftar:</p>
-              <ul className="list-disc list-inside mt-2 space-y-1">
-                {importJurusanMissing.map((jurusan, idx) => <li key={idx} className="text-sm text-yellow-700">{jurusan}</li>)}
-              </ul>
-            </div>
-            <p className="text-sm text-slate-600">Apakah Anda ingin menambahkan jurusan di atas ke database dan melanjutkan import?</p>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => { setMissingJurusanDialogOpen(false); setImportJurusanMissing([]); setImportDialogOpen(false); }} className="rounded-lg">Batalkan Impor</Button>
-            <Button onClick={continueImportAfterMissingJurusan} disabled={isAddingMissingJurusan} className="rounded-lg bg-green-600 hover:bg-green-700">
-              {isAddingMissingJurusan ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Menambahkan...</> : "Tambahkan Jurusan & Lanjutkan"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
+        <DialogContent className="rounded-xl max-w-md"><DialogHeader><DialogTitle>Jurusan Tidak Ditemukan</DialogTitle><DialogDescription>Beberapa nama jurusan dalam file Excel tidak ditemukan di database.</DialogDescription></DialogHeader><div className="space-y-4"><div className="bg-yellow-50 p-3 rounded-lg"><p className="text-sm font-medium text-yellow-800">Jurusan yang belum terdaftar:</p><ul className="list-disc list-inside mt-2 space-y-1">{importJurusanMissing.map((jurusan, idx) => <li key={idx} className="text-sm text-yellow-700">{jurusan}</li>)}</ul></div><p className="text-sm text-slate-600">Apakah Anda ingin menambahkan jurusan di atas ke database dan melanjutkan import?</p></div><DialogFooter className="gap-2"><Button variant="outline" onClick={() => { setMissingJurusanDialogOpen(false); setImportJurusanMissing([]); setImportDialogOpen(false); }} className="rounded-lg">Batalkan Impor</Button><Button onClick={continueImportAfterMissingJurusan} disabled={isAddingMissingJurusan} className="rounded-lg bg-green-600 hover:bg-green-700">{isAddingMissingJurusan ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Menambahkan...</> : "Tambahkan Jurusan & Lanjutkan"}</Button></DialogFooter></DialogContent>
       </Dialog>
     </div>
   );
