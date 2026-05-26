@@ -37,11 +37,11 @@ import {
 // ==================== TYPES ====================
 interface GuruImportData { nama: string; nik: string; username: string; gender: string; password?: string; nama_jurusan?: string; }
 interface SiswaImportData { nama: string; nis: string; username: string; gender: string; kelas: string; password?: string; }
-interface BaseUser { id: string | number; nama: string; username: string; peran: string; aktif: boolean; }
-interface GuruData extends BaseUser { id: number; nik: string; gender: string; peran: "guru"; id_jurusan?: number | null; }
-interface SiswaData extends BaseUser { id: number; nis: string; gender: string; id_kelas: number | null; nama_kelas: string | null; peran: "siswa"; }
-interface AdminJurusanData extends BaseUser { id: string; id_jurusan: number | null; jurusan_nama: string; peran: "admin_jurusan"; }
-interface BKData extends BaseUser { id: string; peran: "bk"; }
+interface BaseUser { id_akun: string; nama: string; username: string; peran: string; aktif: boolean; }
+interface GuruData extends BaseUser { id_guru: number; nik: string; gender: string; id_jurusan?: number | null; }
+interface SiswaData extends BaseUser { id_siswa: number; nis: string; gender: string; id_kelas: number | null; nama_kelas: string | null; }
+interface AdminJurusanData extends BaseUser { id_jurusan: number | null; jurusan_nama: string; }
+interface BKData extends BaseUser { }
 type UserItem = GuruData | SiswaData | AdminJurusanData | BKData;
 interface Kelas { id_kelas: number; nama: string; aktif: boolean; dibuat_pada: string; id_guru: number | null; guru_nama?: string | null; id_jurusan?: number | null; }
 interface GuruSimple { id_guru: number; nama: string; nik: string; id_jurusan?: number | null; }
@@ -70,7 +70,7 @@ export default function UserManagement() {
   const [showFilter, setShowFilter] = useState(false);
   const [filterSearchQuery, setFilterSearchQuery] = useState("");
   const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
+  const [selectedIds, setSelectedIds] = useState<(string)[]>([]);
   const [isProcessingSelected, setIsProcessingSelected] = useState(false);
 
   // Data state
@@ -143,9 +143,9 @@ export default function UserManagement() {
   const [bulkActionDialogOpen, setBulkActionDialogOpen] = useState(false);
   const [bulkActionType, setBulkActionType] = useState<"activate" | "deactivate">("deactivate");
   const [bulkActionData, setBulkActionData] = useState<{
-    users: { id: string | number; nama: string; aktif: boolean }[];
-    cannotProcess: { id: string | number; nama: string; reasons: string[] }[];
-    canProcessIds: (string | number)[];
+    users: { id_akun: string; nama: string; aktif: boolean }[];
+    cannotProcess: { id_akun: string; nama: string; reasons: string[] }[];
+    canProcessIds: string[];
   } | null>(null);
 
   // Jurusan missing saat import admin_jurusan
@@ -206,14 +206,23 @@ export default function UserManagement() {
         if (error) throw error;
         const guruIds = guruData?.map(g => g.id_guru) || [];
         const { data: akunData } = await supabase
-          .from("akun").select("id_guru, username").in("id_guru", guruIds);
-        const usernameMap = new Map<number, string>();
-        akunData?.forEach(akun => usernameMap.set(akun.id_guru, akun.username));
-        data = (guruData || []).map(g => ({
-          id: g.id_guru, nama: g.nama, username: usernameMap.get(g.id_guru) || "",
-          peran: "guru" as const, aktif: g.aktif, nik: g.nik?.toString() || "",
-          gender: g.gender, id_jurusan: g.id_jurusan,
-        }));
+          .from("akun").select("id_akun, id_guru, username").in("id_guru", guruIds);
+        const akunMap = new Map<number, { id_akun: string; username: string }>();
+        akunData?.forEach(akun => akunMap.set(akun.id_guru, { id_akun: akun.id_akun, username: akun.username }));
+        data = (guruData || []).map(g => {
+          const akun = akunMap.get(g.id_guru);
+          return {
+            id_akun: akun?.id_akun || "",
+            nama: g.nama,
+            username: akun?.username || "",
+            peran: "guru" as const,
+            aktif: g.aktif,
+            id_guru: g.id_guru,
+            nik: g.nik?.toString() || "",
+            gender: g.gender,
+            id_jurusan: g.id_jurusan,
+          };
+        });
       } else if (userType === "siswa") {
         if (!isAdminSuper && !isAdminJurusan) { setUserList([]); setIsFetching(false); return; }
         let siswaQuery = supabase
@@ -235,9 +244,9 @@ export default function UserManagement() {
         if (error) throw error;
         const siswaIds = siswaData?.map(s => s.id_siswa) || [];
         const { data: akunData } = await supabase
-          .from("akun").select("id_siswa, username").in("id_siswa", siswaIds);
-        const usernameMap = new Map<number, string>();
-        akunData?.forEach(akun => usernameMap.set(akun.id_siswa, akun.username));
+          .from("akun").select("id_akun, id_siswa, username").in("id_siswa", siswaIds);
+        const akunMap = new Map<number, { id_akun: string; username: string }>();
+        akunData?.forEach(akun => akunMap.set(akun.id_siswa, { id_akun: akun.id_akun, username: akun.username }));
         const kelasIds = siswaData?.map(s => s.id_kelas).filter(Boolean) as number[];
         const kelasMap = new Map<number, string>();
         if (kelasIds.length) {
@@ -245,12 +254,21 @@ export default function UserManagement() {
             .from("kelas").select("id_kelas, nama").in("id_kelas", kelasIds);
           kelasData?.forEach(k => kelasMap.set(k.id_kelas, k.nama));
         }
-        data = (siswaData || []).map(s => ({
-          id: s.id_siswa, nama: s.nama, username: usernameMap.get(s.id_siswa) || "",
-          peran: "siswa" as const, aktif: s.aktif, nis: s.nis?.toString() || "",
-          gender: s.gender, id_kelas: s.id_kelas,
-          nama_kelas: s.id_kelas ? kelasMap.get(s.id_kelas) || null : null,
-        }));
+        data = (siswaData || []).map(s => {
+          const akun = akunMap.get(s.id_siswa);
+          return {
+            id_akun: akun?.id_akun || "",
+            nama: s.nama,
+            username: akun?.username || "",
+            peran: "siswa" as const,
+            aktif: s.aktif,
+            id_siswa: s.id_siswa,
+            nis: s.nis?.toString() || "",
+            gender: s.gender,
+            id_kelas: s.id_kelas,
+            nama_kelas: s.id_kelas ? kelasMap.get(s.id_kelas) || null : null,
+          };
+        });
       } else if (userType === "admin_jurusan") {
         if (!isAdminSuper) { setUserList([]); setIsFetching(false); return; }
         const { data: akunData, error } = await supabase
@@ -267,8 +285,12 @@ export default function UserManagement() {
           jurusanData?.forEach(j => jurusanMap.set(j.id_jurusan, j.nama_jurusan));
         }
         data = (akunData || []).map(a => ({
-          id: a.id_akun, nama: a.nama, username: a.username, peran: "admin_jurusan" as const,
-          aktif: a.aktif, id_jurusan: a.id_jurusan,
+          id_akun: a.id_akun,
+          nama: a.nama,
+          username: a.username,
+          peran: "admin_jurusan" as const,
+          aktif: a.aktif,
+          id_jurusan: a.id_jurusan,
           jurusan_nama: a.id_jurusan ? jurusanMap.get(a.id_jurusan) || "-" : "-",
         }));
       } else if (userType === "bk") {
@@ -280,8 +302,11 @@ export default function UserManagement() {
           .order("nama", { ascending: true });
         if (error) throw error;
         data = (akunData || []).map(a => ({
-          id: a.id_akun, nama: a.nama, username: a.username,
-          peran: "bk" as const, aktif: a.aktif,
+          id_akun: a.id_akun,
+          nama: a.nama,
+          username: a.username,
+          peran: "bk" as const,
+          aktif: a.aktif,
         }));
       }
       setUserList(data);
@@ -356,7 +381,8 @@ export default function UserManagement() {
     fetchData();
     fetchGuruOptions();
     fetchKelas();
-  }, [fetchTotalCounts, fetchData, fetchGuruOptions, fetchKelas]);
+    fetchJurusan();
+  }, [fetchTotalCounts, fetchData, fetchGuruOptions, fetchKelas, fetchJurusan]);
 
   useEffect(() => { refreshAll(); }, [refreshAll]);
   useEffect(() => { resetPagination(); }, [searchQuery, filterKelas, userType, itemsPerPage]);
@@ -405,7 +431,6 @@ export default function UserManagement() {
   };
 
   // ========== CRUD ==========
-  // PERBAIKAN: openAddDialog dengan useCallback dan event handler
   const openAddDialog = useCallback((e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
@@ -432,7 +457,6 @@ export default function UserManagement() {
   };
 
   const handleAddUser = async () => {
-    // Validasi
     if (!addForm.nama.trim() || !addForm.username.trim()) {
       toast({ title: "Error", description: "Nama dan Username harus diisi", variant: "destructive" });
       return;
@@ -475,15 +499,15 @@ export default function UserManagement() {
         let jurusanId = null;
         if (isAdminJurusan && user?.id_jurusan) jurusanId = user.id_jurusan;
         else if (addForm.id_jurusan) jurusanId = parseInt(addForm.id_jurusan);
-        await supabase.from("guru").insert({
-          id_guru: nextId, nama: addForm.nama, nik: parseInt(addForm.nik),
-          gender: addForm.gender.toUpperCase(), aktif: true, dibuat_pada: now,
-          id_jurusan: jurusanId,
-        });
         await supabase.from("akun").insert({
           nama: addForm.nama, username: addForm.username, peran: "guru",
           aktif: true, dibuat_pada: now, id_guru: nextId, id_siswa: null,
           kata_sandi: hashedPassword,
+        });
+        await supabase.from("guru").insert({
+          id_guru: nextId, nama: addForm.nama, nik: parseInt(addForm.nik),
+          gender: addForm.gender.toUpperCase(), aktif: true, dibuat_pada: now,
+          id_jurusan: jurusanId,
         });
       } else if (addForm.peran === "siswa") {
         const { data: existingNis } = await supabase
@@ -501,15 +525,15 @@ export default function UserManagement() {
           }
         }
         const nextId = await getNextId("siswa");
-        await supabase.from("siswa").insert({
-          id_siswa: nextId, nama: addForm.nama, nis: parseInt(addForm.nis),
-          gender: addForm.gender.toUpperCase(), aktif: true, dibuat_pada: now,
-          id_kelas: kelasId,
-        });
         await supabase.from("akun").insert({
           nama: addForm.nama, username: addForm.username, peran: "siswa",
           aktif: true, dibuat_pada: now, id_guru: null, id_siswa: nextId,
           kata_sandi: hashedPassword,
+        });
+        await supabase.from("siswa").insert({
+          id_siswa: nextId, nama: addForm.nama, nis: parseInt(addForm.nis),
+          gender: addForm.gender.toUpperCase(), aktif: true, dibuat_pada: now,
+          id_kelas: kelasId,
         });
       } else if (addForm.peran === "admin_jurusan") {
         await supabase.from("akun").insert({
@@ -571,6 +595,7 @@ export default function UserManagement() {
     setEditDialogOpen(true);
   };
 
+  // ========== HANDLE UPDATE USER (DIPERBAIKI - SEMUA ROLE BISA BERUBAH) ==========
   const handleUpdateUser = async () => {
     if (!editingUser) return;
     if ((editForm.peran === "admin_jurusan" || editForm.peran === "bk") && !isAdminSuper) {
@@ -579,74 +604,145 @@ export default function UserManagement() {
     }
     setIsLoading(true);
     try {
+      // Cek username unik (kecuali untuk user yang sama)
       let query = supabase.from("akun").select("id_akun").eq("username", editForm.username);
-      if (editingUser.peran === "guru") query = query.neq("id_guru", editingUser.id as number);
-      else if (editingUser.peran === "siswa") query = query.neq("id_siswa", editingUser.id as number);
-      else query = query.neq("id_akun", editingUser.id as string);
+      if (editingUser.peran === "guru") query = query.neq("id_guru", (editingUser as GuruData).id_guru);
+      else if (editingUser.peran === "siswa") query = query.neq("id_siswa", (editingUser as SiswaData).id_siswa);
+      else query = query.neq("id_akun", editingUser.id_akun);
       const { data: existingUsername } = await query;
       if (existingUsername && existingUsername.length) throw new Error("Username sudah digunakan oleh pengguna lain");
 
       const updateData: any = { nama: editForm.nama, username: editForm.username, aktif: editForm.aktif };
       if (editForm.password.trim()) updateData.kata_sandi = await bcrypt.hash(editForm.password, 10);
 
-      if (editingUser.peran === "guru") {
-        const guruUser = editingUser as GuruData;
-        if (editForm.nik && editForm.nik !== guruUser.nik) {
-          const { data: existingNik } = await supabase
-            .from("guru").select("nik").eq("nik", parseInt(editForm.nik)).neq("id_guru", guruUser.id).maybeSingle();
-          if (existingNik) throw new Error("NIK sudah digunakan oleh guru lain");
-          await supabase.from("guru").update({ nik: parseInt(editForm.nik) }).eq("id_guru", guruUser.id);
-        }
-        let jurusanId = null;
-        if (editForm.id_jurusan && editForm.id_jurusan !== "none") jurusanId = parseInt(editForm.id_jurusan);
-        else if (isAdminJurusan && user?.id_jurusan) jurusanId = user.id_jurusan;
-        await supabase.from("guru").update({
-          nama: editForm.nama, gender: editForm.gender.toUpperCase(),
-          aktif: editForm.aktif, id_jurusan: jurusanId,
-        }).eq("id_guru", guruUser.id);
-        await supabase.from("akun").update(updateData).eq("id_guru", guruUser.id);
-      } else if (editingUser.peran === "siswa") {
-        const siswaUser = editingUser as SiswaData;
-        if (editForm.nis && editForm.nis !== siswaUser.nis) {
-          const { data: existingNis } = await supabase
-            .from("siswa").select("nis").eq("nis", parseInt(editForm.nis)).neq("id_siswa", siswaUser.id).maybeSingle();
-          if (existingNis) throw new Error("NIS sudah digunakan oleh siswa lain");
-          await supabase.from("siswa").update({ nis: parseInt(editForm.nis) }).eq("id_siswa", siswaUser.id);
-        }
-        let kelasId = null;
-        if (editForm.kelas_id && editForm.kelas_id !== "none") {
-          kelasId = parseInt(editForm.kelas_id);
-          if (isAdminJurusan && user?.id_jurusan) {
-            const { data: kelas } = await supabase
-              .from("kelas").select("id_jurusan").eq("id_kelas", kelasId).single();
-            if (!kelas || kelas.id_jurusan !== user.id_jurusan) throw new Error("Kelas tidak berada dalam jurusan Anda");
+      const oldRole = editingUser.peran;
+      const newRole = editForm.peran;
+      const roleChanged = oldRole !== newRole;
+
+      // SIMPAN DATA LAMA UNTUK DIHAPUS NANTI
+      let oldGuruId: number | null = null;
+      let oldSiswaId: number | null = null;
+
+      if (oldRole === "guru") {
+        oldGuruId = (editingUser as GuruData).id_guru;
+        if (newRole !== "guru") {
+          // Hapus data guru karena pindah role - TAPI JANGAN HAPUS DULU, HAPUS SETELAH AKUN UPDATE
+          // Kita simpan ID untuk dihapus setelah update akun
+        } else {
+          // Update data guru
+          let jurusanId = null;
+          if (editForm.id_jurusan && editForm.id_jurusan !== "none") jurusanId = parseInt(editForm.id_jurusan);
+          else if (isAdminJurusan && user?.id_jurusan) jurusanId = user.id_jurusan;
+          await supabase.from("guru").update({
+            nama: editForm.nama, gender: editForm.gender.toUpperCase(),
+            aktif: editForm.aktif, id_jurusan: jurusanId,
+          }).eq("id_guru", oldGuruId);
+          if (editForm.nik && editForm.nik !== (editingUser as GuruData).nik) {
+            await supabase.from("guru").update({ nik: parseInt(editForm.nik) }).eq("id_guru", oldGuruId);
           }
         }
-        await supabase.from("siswa").update({
-          nama: editForm.nama, gender: editForm.gender.toUpperCase(),
-          aktif: editForm.aktif, id_kelas: kelasId,
-        }).eq("id_siswa", siswaUser.id);
-        await supabase.from("akun").update(updateData).eq("id_siswa", siswaUser.id);
-      } else if (editingUser.peran === "admin_jurusan") {
-        if (editForm.peran !== "admin_jurusan") {
-          await supabase.from("akun").update({ ...updateData, peran: editForm.peran, id_jurusan: null }).eq("id_akun", editingUser.id);
+      } else if (oldRole === "siswa") {
+        oldSiswaId = (editingUser as SiswaData).id_siswa;
+        if (newRole !== "siswa") {
+          // Hapus data siswa nanti setelah update akun
         } else {
-          const data: any = { ...updateData, peran: "admin_jurusan" };
-          if (editForm.id_jurusan) data.id_jurusan = parseInt(editForm.id_jurusan);
-          else data.id_jurusan = null;
-          await supabase.from("akun").update(data).eq("id_akun", editingUser.id);
+          // Update data siswa
+          let kelasId = null;
+          if (editForm.kelas_id && editForm.kelas_id !== "none") {
+            kelasId = parseInt(editForm.kelas_id);
+            if (isAdminJurusan && user?.id_jurusan) {
+              const { data: kelas } = await supabase
+                .from("kelas").select("id_jurusan").eq("id_kelas", kelasId).single();
+              if (!kelas || kelas.id_jurusan !== user.id_jurusan) throw new Error("Kelas tidak berada dalam jurusan Anda");
+            }
+          }
+          await supabase.from("siswa").update({
+            nama: editForm.nama, gender: editForm.gender.toUpperCase(),
+            aktif: editForm.aktif, id_kelas: kelasId,
+          }).eq("id_siswa", oldSiswaId);
+          if (editForm.nis && editForm.nis !== (editingUser as SiswaData).nis) {
+            await supabase.from("siswa").update({ nis: parseInt(editForm.nis) }).eq("id_siswa", oldSiswaId);
+          }
         }
-      } else if (editingUser.peran === "bk") {
-        if (editForm.peran !== "bk") {
-          await supabase.from("akun").update({ ...updateData, peran: editForm.peran, id_jurusan: null }).eq("id_akun", editingUser.id);
-        } else {
-          await supabase.from("akun").update({ ...updateData, peran: "bk", id_jurusan: null }).eq("id_akun", editingUser.id);
+      } else if (oldRole === "admin_jurusan" || oldRole === "bk") {
+        if (newRole === "guru" || newRole === "siswa") {
+          updateData.id_guru = null;
+          updateData.id_siswa = null;
+          updateData.id_jurusan = null;
         }
       }
+
+      // Update akun utama
+      if (roleChanged) {
+        updateData.peran = newRole;
+      }
+
+      // Untuk kasus pindah role, kita perlu mengosongkan relasi lama
+      if (oldRole === "guru" && newRole !== "guru") {
+        updateData.id_guru = null;
+      }
+      if (oldRole === "siswa" && newRole !== "siswa") {
+        updateData.id_siswa = null;
+      }
+      if ((oldRole === "admin_jurusan" || oldRole === "bk") && newRole === "guru") {
+        updateData.id_guru = null;
+      }
+      if ((oldRole === "admin_jurusan" || oldRole === "bk") && newRole === "siswa") {
+        updateData.id_siswa = null;
+      }
+
+      const { error: updateAkunError } = await supabase
+        .from("akun")
+        .update(updateData)
+        .eq("id_akun", editingUser.id_akun);
+      if (updateAkunError) throw updateAkunError;
+
+      // HAPUS DATA LAMA SETELAH AKUN BERHASIL DIUPDATE
+      if (oldRole === "guru" && newRole !== "guru" && oldGuruId) {
+        await supabase.from("guru").delete().eq("id_guru", oldGuruId);
+      }
+      if (oldRole === "siswa" && newRole !== "siswa" && oldSiswaId) {
+        await supabase.from("siswa").delete().eq("id_siswa", oldSiswaId);
+      }
+
+      // Buat entri baru untuk role baru jika diperlukan
+      if (roleChanged) {
+        if (newRole === "guru" && oldRole !== "guru") {
+          const nextId = await getNextId("guru");
+          const jurusanId = (editForm.id_jurusan && editForm.id_jurusan !== "none") ? parseInt(editForm.id_jurusan) : (isAdminJurusan && user?.id_jurusan ? user.id_jurusan : null);
+          await supabase.from("guru").insert({
+            id_guru: nextId, nama: editForm.nama, nik: editForm.nik ? parseInt(editForm.nik) : null,
+            gender: editForm.gender?.toUpperCase() || "L", aktif: editForm.aktif,
+            dibuat_pada: new Date().toISOString(), id_jurusan: jurusanId,
+          });
+          await supabase.from("akun").update({ id_guru: nextId }).eq("id_akun", editingUser.id_akun);
+        } else if (newRole === "siswa" && oldRole !== "siswa") {
+          const nextId = await getNextId("siswa");
+          let kelasId = null;
+          if (editForm.kelas_id && editForm.kelas_id !== "none") kelasId = parseInt(editForm.kelas_id);
+          await supabase.from("siswa").insert({
+            id_siswa: nextId, nama: editForm.nama, nis: editForm.nis ? parseInt(editForm.nis) : null,
+            gender: editForm.gender?.toUpperCase() || "L", aktif: editForm.aktif,
+            dibuat_pada: new Date().toISOString(), id_kelas: kelasId,
+          });
+          await supabase.from("akun").update({ id_siswa: nextId }).eq("id_akun", editingUser.id_akun);
+        } else if (newRole === "admin_jurusan" && oldRole !== "admin_jurusan") {
+          if (editForm.id_jurusan && editForm.id_jurusan !== "none") {
+            await supabase.from("akun").update({ id_jurusan: parseInt(editForm.id_jurusan) }).eq("id_akun", editingUser.id_akun);
+          }
+        }
+      } else {
+        // Jika role tidak berubah tetapi admin_jurusan, update id_jurusan
+        if (newRole === "admin_jurusan" && editForm.id_jurusan && editForm.id_jurusan !== "none") {
+          await supabase.from("akun").update({ id_jurusan: parseInt(editForm.id_jurusan) }).eq("id_akun", editingUser.id_akun);
+        }
+      }
+
       toast({ title: "Berhasil", description: "Data pengguna berhasil diperbarui" });
       setEditDialogOpen(false);
       refreshAll();
     } catch (error: any) {
+      console.error("Update user error:", error);
       toast({ title: "Kesalahan", description: error.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
@@ -657,7 +753,7 @@ export default function UserManagement() {
   const checkUserRelatedData = async (userItem: UserItem): Promise<string[]> => {
     const related: string[] = [];
     if (userItem.peran === "guru") {
-      const id = userItem.id as number;
+      const id = (userItem as GuruData).id_guru;
       const { data: jadwalData } = await supabase.from("jadwal").select("id_jadwal").eq("id_guru", id);
       if (jadwalData?.length) related.push(`📚 Memiliki ${jadwalData.length} jadwal mengajar`);
       const { data: kelasData } = await supabase.from("kelas").select("id_kelas").eq("id_guru", id);
@@ -665,7 +761,7 @@ export default function UserManagement() {
       const { data: pklData } = await supabase.from("pkl").select("id_pkl").eq("id_guru", id);
       if (pklData?.length) related.push(`🏢 Membimbing ${pklData.length} PKL`);
     } else if (userItem.peran === "siswa") {
-      const id = userItem.id as number;
+      const id = (userItem as SiswaData).id_siswa;
       const { data: presHarian } = await supabase.from("presensi_harian").select("id_presensi_harian").eq("id_siswa", id);
       if (presHarian?.length) related.push(`📅 Memiliki ${presHarian.length} data presensi harian`);
       const { data: presMapel } = await supabase.from("presensi_siswa_mapel").select("id_pre_siswa").eq("id_siswa", id);
@@ -696,13 +792,15 @@ export default function UserManagement() {
     try {
       const newStatus = !deactivatingUser.aktif;
       if (deactivatingUser.peran === "guru") {
-        await supabase.from("guru").update({ aktif: newStatus }).eq("id_guru", deactivatingUser.id as number);
-        await supabase.from("akun").update({ aktif: newStatus }).eq("id_guru", deactivatingUser.id as number);
+        const id = (deactivatingUser as GuruData).id_guru;
+        await supabase.from("guru").update({ aktif: newStatus }).eq("id_guru", id);
+        await supabase.from("akun").update({ aktif: newStatus }).eq("id_guru", id);
       } else if (deactivatingUser.peran === "siswa") {
-        await supabase.from("siswa").update({ aktif: newStatus }).eq("id_siswa", deactivatingUser.id as number);
-        await supabase.from("akun").update({ aktif: newStatus }).eq("id_siswa", deactivatingUser.id as number);
+        const id = (deactivatingUser as SiswaData).id_siswa;
+        await supabase.from("siswa").update({ aktif: newStatus }).eq("id_siswa", id);
+        await supabase.from("akun").update({ aktif: newStatus }).eq("id_siswa", id);
       } else {
-        await supabase.from("akun").update({ aktif: newStatus }).eq("id_akun", deactivatingUser.id as string);
+        await supabase.from("akun").update({ aktif: newStatus }).eq("id_akun", deactivatingUser.id_akun);
       }
       toast({ title: "Berhasil", description: `Pengguna ${deactivatingUser.nama} telah ${newStatus ? "diaktifkan" : "dinonaktifkan"}.` });
       refreshAll();
@@ -721,9 +819,9 @@ export default function UserManagement() {
   };
   const handleSelectAll = () => {
     if (selectedIds.length === paginatedUserList.length && paginatedUserList.length > 0) setSelectedIds([]);
-    else setSelectedIds(paginatedUserList.map(u => u.id));
+    else setSelectedIds(paginatedUserList.map(u => u.id_akun));
   };
-  const handleSelectItem = (id: string | number) => {
+  const handleSelectItem = (id: string) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
@@ -732,34 +830,40 @@ export default function UserManagement() {
       toast({ title: "Tidak ada data dipilih", variant: "destructive" });
       return;
     }
-    const usersSelected = selectedIds.map(id => {
-      const u = userList.find(u => u.id === id);
-      return { id, nama: u?.nama || `ID ${id}`, aktif: u?.aktif ?? false, peran: u?.peran };
-    }).filter(u => u.peran) as { id: string | number; nama: string; aktif: boolean; peran: string }[];
-    const cannotProcess: { id: string | number; nama: string; reasons: string[] }[] = [];
-    const canProcessIds: (string | number)[] = [];
+    const usersSelected = selectedIds.map(id_akun => {
+      const u = userList.find(u => u.id_akun === id_akun);
+      return { id_akun, nama: u?.nama || `ID ${id_akun}`, aktif: u?.aktif ?? false, peran: u?.peran };
+    }).filter(u => u.peran) as { id_akun: string; nama: string; aktif: boolean; peran: string }[];
+    const cannotProcess: { id_akun: string; nama: string; reasons: string[] }[] = [];
+    const canProcessIds: string[] = [];
     if (action === "deactivate") {
       for (const u of usersSelected) {
         if (!u.aktif) continue;
         let reasons: string[] = [];
         if (u.peran === "guru") {
-          const { data: jadwalData } = await supabase.from("jadwal").select("id_jadwal").eq("id_guru", u.id as number);
-          if (jadwalData?.length) reasons.push(`📚 Memiliki ${jadwalData.length} jadwal`);
-          const { data: kelasData } = await supabase.from("kelas").select("id_kelas").eq("id_guru", u.id as number);
-          if (kelasData?.length) reasons.push(`🏫 Wali kelas ${kelasData.length} kelas`);
-          const { data: pklData } = await supabase.from("pkl").select("id_pkl").eq("id_guru", u.id as number);
-          if (pklData?.length) reasons.push(`🏢 Membimbing ${pklData.length} PKL`);
+          const guru = userList.find(gu => gu.id_akun === u.id_akun) as GuruData;
+          if (guru) {
+            const { data: jadwalData } = await supabase.from("jadwal").select("id_jadwal").eq("id_guru", guru.id_guru);
+            if (jadwalData?.length) reasons.push(`📚 Memiliki ${jadwalData.length} jadwal`);
+            const { data: kelasData } = await supabase.from("kelas").select("id_kelas").eq("id_guru", guru.id_guru);
+            if (kelasData?.length) reasons.push(`🏫 Wali kelas ${kelasData.length} kelas`);
+            const { data: pklData } = await supabase.from("pkl").select("id_pkl").eq("id_guru", guru.id_guru);
+            if (pklData?.length) reasons.push(`🏢 Membimbing ${pklData.length} PKL`);
+          }
         } else if (u.peran === "siswa") {
-          const { data: presHarian } = await supabase.from("presensi_harian").select("id_presensi_harian").eq("id_siswa", u.id as number);
-          if (presHarian?.length) reasons.push(`📅 ${presHarian.length} presensi harian`);
-          const { data: presMapel } = await supabase.from("presensi_siswa_mapel").select("id_pre_siswa").eq("id_siswa", u.id as number);
-          if (presMapel?.length) reasons.push(`📖 ${presMapel.length} presensi mapel`);
+          const siswa = userList.find(s => s.id_akun === u.id_akun) as SiswaData;
+          if (siswa) {
+            const { data: presHarian } = await supabase.from("presensi_harian").select("id_presensi_harian").eq("id_siswa", siswa.id_siswa);
+            if (presHarian?.length) reasons.push(`📅 ${presHarian.length} presensi harian`);
+            const { data: presMapel } = await supabase.from("presensi_siswa_mapel").select("id_pre_siswa").eq("id_siswa", siswa.id_siswa);
+            if (presMapel?.length) reasons.push(`📖 ${presMapel.length} presensi mapel`);
+          }
         }
-        if (reasons.length) cannotProcess.push({ id: u.id, nama: u.nama, reasons });
-        else canProcessIds.push(u.id);
+        if (reasons.length) cannotProcess.push({ id_akun: u.id_akun, nama: u.nama, reasons });
+        else canProcessIds.push(u.id_akun);
       }
     } else {
-      for (const u of usersSelected) { if (!u.aktif) canProcessIds.push(u.id); }
+      for (const u of usersSelected) { if (!u.aktif) canProcessIds.push(u.id_akun); }
     }
     setBulkActionData({ users: usersSelected, cannotProcess, canProcessIds });
     setBulkActionType(action);
@@ -771,18 +875,20 @@ export default function UserManagement() {
     const { canProcessIds } = bulkActionData;
     const newActiveStatus = bulkActionType === "activate";
     let successCount = 0, failCount = 0;
-    for (const id of canProcessIds) {
+    for (const id_akun of canProcessIds) {
       try {
-        const targetUser = userList.find(u => u.id === id);
+        const targetUser = userList.find(u => u.id_akun === id_akun);
         if (!targetUser) continue;
         if (targetUser.peran === "guru") {
-          await supabase.from("guru").update({ aktif: newActiveStatus }).eq("id_guru", id as number);
-          await supabase.from("akun").update({ aktif: newActiveStatus }).eq("id_guru", id as number);
+          const guru = targetUser as GuruData;
+          await supabase.from("guru").update({ aktif: newActiveStatus }).eq("id_guru", guru.id_guru);
+          await supabase.from("akun").update({ aktif: newActiveStatus }).eq("id_guru", guru.id_guru);
         } else if (targetUser.peran === "siswa") {
-          await supabase.from("siswa").update({ aktif: newActiveStatus }).eq("id_siswa", id as number);
-          await supabase.from("akun").update({ aktif: newActiveStatus }).eq("id_siswa", id as number);
+          const siswa = targetUser as SiswaData;
+          await supabase.from("siswa").update({ aktif: newActiveStatus }).eq("id_siswa", siswa.id_siswa);
+          await supabase.from("akun").update({ aktif: newActiveStatus }).eq("id_siswa", siswa.id_siswa);
         } else {
-          await supabase.from("akun").update({ aktif: newActiveStatus }).eq("id_akun", id as string);
+          await supabase.from("akun").update({ aktif: newActiveStatus }).eq("id_akun", id_akun);
         }
         successCount++;
       } catch { failCount++; }
@@ -1060,13 +1166,13 @@ export default function UserManagement() {
           }
           const nextId = await getNextId("guru");
           const hashedPassword = await bcrypt.hash(password, 10);
-          await supabase.from("guru").insert({
-            id_guru: nextId, nama, nik: parseInt(nik), gender, aktif: true,
-            dibuat_pada: new Date().toISOString(), id_jurusan: jurusanId,
-          });
           await supabase.from("akun").insert({
             nama, username, peran: "guru", aktif: true, dibuat_pada: new Date().toISOString(),
             id_guru: nextId, id_siswa: null, kata_sandi: hashedPassword,
+          });
+          await supabase.from("guru").insert({
+            id_guru: nextId, nama, nik: parseInt(nik), gender, aktif: true,
+            dibuat_pada: new Date().toISOString(), id_jurusan: jurusanId,
           });
           successCount++;
         }
@@ -1087,13 +1193,13 @@ export default function UserManagement() {
           if (!kelas) { skipCount++; continue; }
           const nextId = await getNextId("siswa");
           const hashedPassword = await bcrypt.hash(password, 10);
-          await supabase.from("siswa").insert({
-            id_siswa: nextId, nama, nis: parseInt(nis), gender, aktif: true,
-            dibuat_pada: new Date().toISOString(), id_kelas: kelas.id_kelas,
-          });
           await supabase.from("akun").insert({
             nama, username, peran: "siswa", aktif: true, dibuat_pada: new Date().toISOString(),
             id_guru: null, id_siswa: nextId, kata_sandi: hashedPassword,
+          });
+          await supabase.from("siswa").insert({
+            id_siswa: nextId, nama, nis: parseInt(nis), gender, aktif: true,
+            dibuat_pada: new Date().toISOString(), id_kelas: kelas.id_kelas,
           });
           successCount++;
         }
@@ -1367,10 +1473,10 @@ export default function UserManagement() {
                     {selectMode && (
                       <div className="flex gap-2 w-full sm:w-auto justify-center">
                         <Button onClick={() => handleBulkAction("activate")} disabled={selectedIds.length === 0} className="bg-green-600 hover:bg-green-700 rounded-xl text-xs">
-                          Aktifkan ({selectedIds.filter(id => !userList.find(u => u.id === id)?.aktif).length})
+                          Aktifkan ({selectedIds.filter(id => !userList.find(u => u.id_akun === id)?.aktif).length})
                         </Button>
                         <Button variant="destructive" onClick={() => handleBulkAction("deactivate")} disabled={selectedIds.length === 0} className="rounded-xl text-xs">
-                          Nonaktifkan ({selectedIds.filter(id => userList.find(u => u.id === id)?.aktif).length})
+                          Nonaktifkan ({selectedIds.filter(id => userList.find(u => u.id_akun === id)?.aktif).length})
                         </Button>
                       </div>
                     )}
@@ -1407,53 +1513,52 @@ export default function UserManagement() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {paginatedUserList.map(item => (
-                            <TableRow key={item.id} className="hover:bg-slate-50">
-                              {selectMode && (
+                          {paginatedUserList.map(item => {
+                            const isGuru = item.peran === "guru";
+                            const isSiswa = item.peran === "siswa";
+                            const isAdminJur = item.peran === "admin_jurusan";
+                            return (
+                              <TableRow key={item.id_akun} className="hover:bg-slate-50">
+                                {selectMode && (
+                                  <TableCell>
+                                    <Checkbox
+                                      checked={selectedIds.includes(item.id_akun)}
+                                      onCheckedChange={() => handleSelectItem(item.id_akun)}
+                                      className="data-[state=checked]:bg-[#2C5EAD] data-[state=checked]:border-[#2C5EAD]"
+                                    />
+                                  </TableCell>
+                                )}
+                                <TableCell className="whitespace-nowrap">{item.nama}</TableCell>
+                                <TableCell className="break-all min-w-[180px]">{item.username}</TableCell>
+                                {isGuru && <TableCell>{(item as GuruData).nik}</TableCell>}
+                                {isGuru && <TableCell>{(item as GuruData).id_jurusan ? jurusanList.find(j => j.id_jurusan === (item as GuruData).id_jurusan)?.nama_jurusan || "-" : "-"}</TableCell>}
+                                {isSiswa && <TableCell>{(item as SiswaData).nis}</TableCell>}
+                                {isSiswa && <TableCell>{(item as SiswaData).nama_kelas || "-"}</TableCell>}
+                                {isAdminJur && <TableCell>{(item as AdminJurusanData).jurusan_nama || "-"}</TableCell>}
                                 <TableCell>
-                                  <Checkbox
-                                    checked={selectedIds.includes(item.id)}
-                                    onCheckedChange={() => handleSelectItem(item.id)}
-                                    className="data-[state=checked]:bg-[#2C5EAD] data-[state=checked]:border-[#2C5EAD]"
-                                  />
+                                  <Badge className={item.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>
+                                    {item.aktif ? "Aktif" : "Nonaktif"}
+                                  </Badge>
                                 </TableCell>
-                              )}
-                              <TableCell className="whitespace-nowrap">{item.nama}</TableCell>
-                              <TableCell className="break-all min-w-[180px]">{item.username}</TableCell>
-                              {userType === "guru" && <TableCell>{(item as GuruData).nik}</TableCell>}
-                              {userType === "guru" && (
-                                <TableCell>
-                                  {(item as GuruData).id_jurusan
-                                    ? jurusanList.find(j => j.id_jurusan === (item as GuruData).id_jurusan)?.nama_jurusan || "-"
-                                    : "-"}
+                                <TableCell className="text-center">
+                                  <div className="flex gap-1 justify-center">
+                                    <Button variant="ghost" size="sm" onClick={() => openEditDialog(item)}>
+                                      <Edit className="h-4 w-4 text-[#2C5EAD]" />
+                                    </Button>
+                                    {item.aktif ? (
+                                      <Button variant="ghost" size="sm" onClick={() => confirmDeactivate(item)}>
+                                        <UserMinus className="h-4 w-4 text-red-500" />
+                                      </Button>
+                                    ) : (
+                                      <Button variant="ghost" size="sm" onClick={() => confirmActivate(item)}>
+                                        <UserPlus className="h-4 w-4 text-green-500" />
+                                      </Button>
+                                    )}
+                                  </div>
                                 </TableCell>
-                              )}
-                              {userType === "siswa" && <TableCell>{(item as SiswaData).nis}</TableCell>}
-                              {userType === "siswa" && <TableCell>{(item as SiswaData).nama_kelas || "-"}</TableCell>}
-                              {userType === "admin_jurusan" && <TableCell>{(item as AdminJurusanData).jurusan_nama || "-"}</TableCell>}
-                              <TableCell>
-                                <Badge className={item.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>
-                                  {item.aktif ? "Aktif" : "Nonaktif"}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <div className="flex gap-1 justify-center">
-                                  <Button variant="ghost" size="sm" onClick={() => openEditDialog(item)}>
-                                    <Edit className="h-4 w-4 text-[#2C5EAD]" />
-                                  </Button>
-                                  {item.aktif ? (
-                                    <Button variant="ghost" size="sm" onClick={() => confirmDeactivate(item)}>
-                                      <UserMinus className="h-4 w-4 text-red-500" />
-                                    </Button>
-                                  ) : (
-                                    <Button variant="ghost" size="sm" onClick={() => confirmActivate(item)}>
-                                      <UserPlus className="h-4 w-4 text-green-500" />
-                                    </Button>
-                                  )}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                              </TableRow>
+                            );
+                          })}
                           {paginatedUserList.length === 0 && (
                             <TableRow>
                               <TableCell colSpan={selectMode ? 10 : 9} className="text-center py-8 text-slate-500">
@@ -1641,7 +1746,7 @@ export default function UserManagement() {
         </div>
       </div>
 
-      {/* ========== DIALOG TAMBAH USER ========== */}
+      {/* DIALOG TAMBAH USER */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent className="rounded-2xl max-w-md">
           <DialogHeader>
@@ -1727,11 +1832,15 @@ export default function UserManagement() {
             {addForm.peran === "admin_jurusan" && (
               <div>
                 <Label>Jurusan</Label>
-                <Select value={addForm.id_jurusan} onValueChange={v => setAddForm({ ...addForm, id_jurusan: v })}>
+                <Select 
+                  value={addForm.id_jurusan || "none"} 
+                  onValueChange={v => setAddForm({ ...addForm, id_jurusan: v })}
+                >
                   <SelectTrigger className="rounded-xl">
                     <SelectValue placeholder="Pilih jurusan" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none" disabled>Pilih jurusan</SelectItem>
                     {jurusanList.map(j => (
                       <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>
                     ))}
@@ -1765,42 +1874,120 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* ========== DIALOG EDIT USER ========== */}
+      {/* DIALOG EDIT USER */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="rounded-2xl max-w-md">
+        <DialogContent className="rounded-2xl max-w-sm p-4 max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle><Edit className="h-5 w-5 inline mr-2 text-blue-600" /> Edit Pengguna</DialogTitle>
             <DialogDescription>Ubah informasi pengguna. Kosongkan kata sandi jika tidak ingin mengubah.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div><Label>Nama</Label><Input value={editForm.nama} onChange={e => setEditForm({ ...editForm, nama: e.target.value })} className="rounded-xl" /></div>
-            <div><Label>Nama Pengguna</Label><Input value={editForm.username} onChange={e => setEditForm({ ...editForm, username: e.target.value })} className="rounded-xl" /></div>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Nama</Label>
+              <Input value={editForm.nama} onChange={e => setEditForm({ ...editForm, nama: e.target.value })} className="rounded-lg text-sm h-9" />
+            </div>
+            <div>
+              <Label className="text-xs">Nama Pengguna</Label>
+              <Input value={editForm.username} onChange={e => setEditForm({ ...editForm, username: e.target.value })} className="rounded-lg text-sm h-9" />
+            </div>
             {editForm.peran !== "bk" && editForm.peran !== "admin_jurusan" && (
-              <div><Label>Jenis Kelamin</Label><Select value={editForm.gender} onValueChange={v => setEditForm({ ...editForm, gender: v })}><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>
+              <div>
+                <Label className="text-xs">Jenis Kelamin</Label>
+                <Select value={editForm.gender} onValueChange={v => setEditForm({ ...editForm, gender: v })}>
+                  <SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="L">Laki-laki</SelectItem>
+                    <SelectItem value="P">Perempuan</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             )}
-            {editForm.peran === "guru" && <div><Label>NIK</Label><Input value={editForm.nik} onChange={e => setEditForm({ ...editForm, nik: e.target.value })} className="rounded-xl" /></div>}
+            {editForm.peran === "guru" && (
+              <div>
+                <Label className="text-xs">NIK</Label>
+                <Input value={editForm.nik} onChange={e => setEditForm({ ...editForm, nik: e.target.value })} className="rounded-lg text-sm h-9" />
+              </div>
+            )}
             {editForm.peran === "guru" && isAdminSuper && (
-              <div><Label>Jurusan</Label><Select value={editForm.id_jurusan} onValueChange={v => setEditForm({ ...editForm, id_jurusan: v })}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>
+              <div>
+                <Label className="text-xs">Jurusan</Label>
+                <Select value={editForm.id_jurusan} onValueChange={v => setEditForm({ ...editForm, id_jurusan: v })}>
+                  <SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Tidak ada</SelectItem>
+                    {jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             )}
-            {editForm.peran === "siswa" && <div><Label>NIS</Label><Input value={editForm.nis} onChange={e => setEditForm({ ...editForm, nis: e.target.value })} className="rounded-xl" /></div>}
             {editForm.peran === "siswa" && (
-              <div><Label>Kelas</Label><Select value={editForm.kelas_id} onValueChange={v => setEditForm({ ...editForm, kelas_id: v })}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih kelas" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada kelas</SelectItem>{kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}</SelectContent></Select></div>
+              <>
+                <div>
+                  <Label className="text-xs">NIS</Label>
+                  <Input value={editForm.nis} onChange={e => setEditForm({ ...editForm, nis: e.target.value })} className="rounded-lg text-sm h-9" />
+                </div>
+                <div>
+                  <Label className="text-xs">Kelas</Label>
+                  <Select value={editForm.kelas_id} onValueChange={v => setEditForm({ ...editForm, kelas_id: v })}>
+                    <SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue placeholder="Pilih kelas" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Tidak ada kelas</SelectItem>
+                      {kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
             )}
             {editForm.peran === "admin_jurusan" && (
-              <div><Label>Jurusan</Label><Select value={editForm.id_jurusan} onValueChange={v => setEditForm({ ...editForm, id_jurusan: v })}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>
+              <div>
+                <Label className="text-xs">Jurusan</Label>
+                <Select 
+                  value={editForm.id_jurusan || "none"} 
+                  onValueChange={v => setEditForm({ ...editForm, id_jurusan: v })}
+                >
+                  <SelectTrigger className="rounded-lg h-9 text-sm">
+                    <SelectValue placeholder="Pilih jurusan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none" disabled>Pilih jurusan</SelectItem>
+                    {jurusanList.map(j => (
+                      <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             )}
-            <div><Label>Role</Label><Select value={editForm.peran} onValueChange={v => setEditForm({ ...editForm, peran: v as any })} disabled={!isAdminSuper}><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="guru">Guru</SelectItem><SelectItem value="siswa">Siswa</SelectItem>{isAdminSuper && <SelectItem value="admin_jurusan">Admin Jurusan</SelectItem>}{isAdminSuper && <SelectItem value="bk">BK</SelectItem>}</SelectContent></Select></div>
-            <div><Label>Kata Sandi Baru (Opsional)</Label><Input type="password" placeholder="Kosongkan jika tidak ingin mengubah" value={editForm.password} onChange={e => setEditForm({ ...editForm, password: e.target.value })} className="rounded-xl" /></div>
-            <div className="flex items-center space-x-2"><Checkbox id="edit_aktif" checked={editForm.aktif} onCheckedChange={(checked) => setEditForm({ ...editForm, aktif: checked === true })} /><Label htmlFor="edit_aktif">Aktif (centang agar pengguna dapat login)</Label></div>
+            <div>
+              <Label className="text-xs">Role</Label>
+              <Select value={editForm.peran} onValueChange={v => setEditForm({ ...editForm, peran: v as any })} disabled={!isAdminSuper}>
+                <SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="guru">Guru</SelectItem>
+                  <SelectItem value="siswa">Siswa</SelectItem>
+                  {isAdminSuper && <SelectItem value="admin_jurusan">Admin Jurusan</SelectItem>}
+                  {isAdminSuper && <SelectItem value="bk">BK</SelectItem>}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Kata Sandi Baru (Opsional)</Label>
+              <Input type="password" placeholder="Kosongkan jika tidak ingin mengubah" value={editForm.password} onChange={e => setEditForm({ ...editForm, password: e.target.value })} className="rounded-lg text-sm h-9" />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox id="edit_aktif" checked={editForm.aktif} onCheckedChange={(checked) => setEditForm({ ...editForm, aktif: checked === true })} />
+              <Label htmlFor="edit_aktif" className="text-xs">Aktif (centang agar pengguna dapat login)</Label>
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button>
-            <Button onClick={handleUpdateUser} disabled={isLoading} className="rounded-xl bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button>
+          <DialogFooter className="mt-3 gap-2">
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white rounded-lg text-xs h-8">Batal</Button>
+            <Button onClick={handleUpdateUser} disabled={isLoading} className="rounded-lg text-xs h-8 bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">
+              {isLoading && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}Simpan
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ========== DIALOG DEACTIVATE / ACTIVATE ========== */}
+      {/* DIALOG DEACTIVATE / ACTIVATE */}
       <Dialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
         <DialogContent className="rounded-2xl max-w-lg">
           <DialogHeader>
@@ -1826,7 +2013,7 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* ========== DIALOG BULK ACTION ========== */}
+      {/* DIALOG BULK ACTION */}
       <Dialog open={bulkActionDialogOpen} onOpenChange={setBulkActionDialogOpen}>
         <DialogContent className="rounded-2xl max-w-lg">
           <DialogHeader>
@@ -1837,7 +2024,7 @@ export default function UserManagement() {
             <div className="bg-amber-50 border p-3 rounded-lg">
               <p className="font-medium text-amber-800">⚠️ Beberapa pengguna memiliki data terkait:</p>
               <ul className="list-disc list-inside text-xs">
-                {bulkActionData.cannotProcess.map(c => <li key={c.id}>{c.nama}: {c.reasons.join(", ")}</li>)}
+                {bulkActionData.cannotProcess.map(c => <li key={c.id_akun}>{c.nama}: {c.reasons.join(", ")}</li>)}
               </ul>
               <p className="text-xs mt-1">Tetap dapat dinonaktifkan, data terkait tetap tersimpan.</p>
             </div>
@@ -1852,7 +2039,7 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* ========== DIALOG KELAS ========== */}
+      {/* KELAS DIALOGS */}
       <Dialog open={kelasDialogOpen} onOpenChange={setKelasDialogOpen}>
         <DialogContent className="rounded-2xl">
           <DialogHeader><DialogTitle>{editingKelas ? "Ubah Kelas" : "Tambah Kelas Baru"}</DialogTitle></DialogHeader>
@@ -1875,7 +2062,7 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* ========== DIALOG IMPOR KELAS ========== */}
+      {/* IMPORT KELAS DIALOGS */}
       <Dialog open={importKelasDialogOpen} onOpenChange={setImportKelasDialogOpen}>
         <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader><DialogTitle>Impor Kelas dari Excel</DialogTitle><DialogDescription>Unggah file Excel untuk menambah kelas secara massal</DialogDescription></DialogHeader>
@@ -1939,7 +2126,7 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* ========== DIALOG IMPOR USER ========== */}
+      {/* IMPORT USER DIALOG */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader><DialogTitle>Impor {userType === "guru" ? "Guru" : userType === "siswa" ? "Siswa" : userType === "admin_jurusan" ? "Admin Jurusan" : "BK"} dari Excel</DialogTitle><DialogDescription>Unggah file Excel untuk menambah data secara massal</DialogDescription></DialogHeader>
@@ -1997,7 +2184,7 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* ========== DIALOG KONFIRMASI JURUSAN BARU ========== */}
+      {/* DIALOG KONFIRMASI JURUSAN BARU */}
       <Dialog open={missingJurusanDialogOpen} onOpenChange={setMissingJurusanDialogOpen}>
         <DialogContent className="rounded-xl max-w-md">
           <DialogHeader>
