@@ -1,7 +1,5 @@
 // src/pages/attendance/AttendanceManagement.tsx
-// Tambahkan import Separator jika belum ada
 import { Separator } from "@/components/ui/separator";
-// src/pages/attendance/AttendanceManagement.tsx
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -60,6 +58,9 @@ import {
   ChevronDown,
   LogIn,
   LogOut,
+  Clock,
+  User,
+  CheckCircle,
 } from "lucide-react";
 import QRCode from "qrcode";
 
@@ -936,7 +937,7 @@ export default function AttendanceManagement() {
                 </TabsList>
               </div>
 
-              {/* TAB PRESENSI HARIAN */}
+              {/* TAB PRESENSI HARIAN (tidak berubah) */}
               <TabsContent value="harian" className="space-y-4 sm:space-y-5">
                 {(user?.peran === 'guru' && kelasListHarian.length === 0) ? (
                   <Alert className="rounded-lg bg-amber-50 border-amber-200">
@@ -996,34 +997,34 @@ export default function AttendanceManagement() {
                         </Button>
                       </div>
 
-                      {/* ========== TOMBOL PRESENSI MASUK & PULANG - DIPERBAGUS & DI TENGAH ========== */}
+                      {/* TOMBOL PRESENSI MASUK & PULANG - DESAIN PROFESIONAL */}
                       <div className="flex justify-center mt-2">
-                        <div className="flex items-center gap-3 bg-white rounded-xl p-1 shadow-sm border border-slate-200">
+                        <div className="inline-flex bg-white rounded-full p-1 shadow-md border border-slate-200 gap-1">
                           <button
                             onClick={() => setPresensiTypeHarian("masuk")}
                             className={`
-                              flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200
+                              relative flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-medium transition-all duration-300
                               ${presensiTypeHarian === "masuk"
-                                ? "bg-[#2C5EAD] text-white shadow-md"
-                                : "bg-white text-slate-600 hover:bg-slate-100 hover:text-[#2C5EAD]"
+                                ? "bg-[#2C5EAD] text-white shadow-md hover:shadow-lg hover:scale-105"
+                                : "bg-white text-slate-600 hover:bg-slate-100 hover:text-[#2C5EAD] hover:shadow-sm"
                               }
                             `}
                           >
-                            <LogIn className="h-4 w-4" />
-                            Presensi Masuk
+                            <LogIn className={`h-4 w-4 transition-transform ${presensiTypeHarian === "masuk" ? "animate-pulse" : ""}`} />
+                            <span>Presensi Masuk</span>
                           </button>
                           <button
                             onClick={() => setPresensiTypeHarian("pulang")}
                             className={`
-                              flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200
+                              relative flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-medium transition-all duration-300
                               ${presensiTypeHarian === "pulang"
-                                ? "bg-[#2C5EAD] text-white shadow-md"
-                                : "bg-white text-slate-600 hover:bg-slate-100 hover:text-[#2C5EAD]"
+                                ? "bg-[#2C5EAD] text-white shadow-md hover:shadow-lg hover:scale-105"
+                                : "bg-white text-slate-600 hover:bg-slate-100 hover:text-[#2C5EAD] hover:shadow-sm"
                               }
                             `}
                           >
-                            <LogOut className="h-4 w-4" />
-                            Presensi Pulang
+                            <LogOut className={`h-4 w-4 transition-transform ${presensiTypeHarian === "pulang" ? "animate-pulse" : ""}`} />
+                            <span>Presensi Pulang</span>
                           </button>
                         </div>
                       </div>
@@ -1102,7 +1103,6 @@ export default function AttendanceManagement() {
                                       </TableRow>
                                     );
                                   } else {
-                                    // Mode Pulang
                                     const isPulang = item.status_presensi === "Pulang";
                                     return (
                                       <TableRow key={item.id_siswa} className="hover:bg-slate-50 transition-colors">
@@ -1135,7 +1135,7 @@ export default function AttendanceManagement() {
                 )}
               </TabsContent>
 
-              {/* TAB PRESENSI MAPEL */}
+              {/* ========== TAB PRESENSI MAPEL - TAMPILAN KARTU DENGAN WARNA C4E2F5 ========== */}
               <TabsContent value="mapel" className="space-y-4 sm:space-y-5">
                 <div className="flex flex-col sm:flex-row gap-4 items-start">
                   <div className="w-full sm:w-64 flex-shrink-0">
@@ -1196,7 +1196,15 @@ export default function AttendanceManagement() {
                         <div className="border-b border-slate-200 mt-1">
                           <div className="flex flex-wrap gap-1">
                             {uniqueDays.map(day => (
-                              <button key={day} onClick={() => { setSelectedDay(day); setSelectedJadwal(null); }} className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-t-lg transition-all ${selectedDay === day ? "bg-[#2C5EAD] text-white shadow-sm" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
+                              <button
+                                key={day}
+                                onClick={() => { setSelectedDay(day); setSelectedJadwal(null); }}
+                                className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-t-lg transition-all ${
+                                  selectedDay === day
+                                    ? "bg-[#2C5EAD] text-white shadow-sm"
+                                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                }`}
+                              >
                                 {day}
                               </button>
                             ))}
@@ -1207,35 +1215,121 @@ export default function AttendanceManagement() {
                   </div>
                 </div>
 
+                {/* ========== REDESIGN KARTU JADWAL DENGAN HEADER C4E2F5 ========== */}
                 {selectedDay && jadwalByDay.length > 0 && (
-                  <div className="mt-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {jadwalByDay.map(jadwal => (
-                        <Card key={jadwal.id_jadwal} className={`cursor-pointer transition-all hover:shadow-md ${selectedJadwal?.id_jadwal === jadwal.id_jadwal ? "ring-2 ring-[#2C5EAD] bg-[#C4E2F5]" : "border-slate-200"}`} onClick={() => setSelectedJadwal(jadwal)}>
-                          <CardContent className="p-3 sm:p-4">
-                            <div className="flex justify-between items-start gap-2 flex-wrap">
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2"><BookOpen className="h-3.5 w-3.5 text-[#2C5EAD]" /><h4 className="font-semibold text-slate-800 text-sm">{jadwal.mata_pelajaran}</h4></div>
-                                <div className="text-xs text-slate-500 space-y-0.5"><p>⏰ {jadwal.jam}</p><p>👨‍🏫 {jadwal.guru}</p></div>
+                  <div className="mt-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                      {jadwalByDay.map((jadwal) => {
+                        const [jamMulai] = jadwal.jam.split(" - ");
+                        const isSelected = selectedJadwal?.id_jadwal === jadwal.id_jadwal;
+                        return (
+                          <Card
+                            key={jadwal.id_jadwal}
+                            className={`
+                              group relative overflow-hidden transition-all duration-200 cursor-pointer
+                              border-0 shadow-md hover:shadow-lg hover:-translate-y-1
+                              ${isSelected ? "ring-2 ring-[#2C5EAD]" : "border border-slate-200"}
+                            `}
+                            onClick={() => setSelectedJadwal(jadwal)}
+                          >
+                            {/* HEADER BERWARNA C4E2F5 */}
+                            <div className="bg-[#C4E2F5] px-4 py-3 flex justify-between items-start rounded-t-xl">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div className="bg-white/50 p-1.5 rounded-lg flex-shrink-0">
+                                  <BookOpen className="h-3.5 w-3.5 text-[#2C5EAD]" />
+                                </div>
+                                <h4 className="font-semibold text-slate-800 text-sm truncate">
+                                  {jadwal.mata_pelajaran}
+                                </h4>
                               </div>
-                              <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); generateQRCode(jadwal); }} disabled={isGeneratingQR} className="rounded-lg h-7 sm:h-8 px-2 text-xs border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"><QrCode className="h-3 w-3 mr-1" /> QR</Button>
+                              <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                                <span className="text-[10px] text-slate-600 bg-white/60 px-2 py-0.5 rounded-full">
+                                  {jadwal.hari.substring(0, 3)}
+                                </span>
+                                <span className="text-[10px] font-mono bg-white/60 px-2 py-0.5 rounded-full">
+                                  {jamMulai}
+                                </span>
+                              </div>
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))}
+
+                            {/* BODY PUTIH */}
+                            <CardContent className="p-4 pt-3 space-y-3 bg-white rounded-b-xl">
+                              <div className="flex items-center gap-2 text-xs text-slate-600">
+                                <div className="bg-purple-50 p-1.5 rounded-lg">
+                                  <User className="h-3 w-3 text-purple-600" />
+                                </div>
+                                <span className="font-medium">{jadwal.guru}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-slate-500">
+                                <div className="bg-amber-50 p-1.5 rounded-lg">
+                                  <Clock className="h-3 w-3 text-amber-600" />
+                                </div>
+                                <span className="font-mono">{jadwal.jam}</span>
+                              </div>
+
+                              {/* Tombol QR */}
+                              <div className="flex justify-end pt-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    generateQRCode(jadwal);
+                                  }}
+                                  disabled={isGeneratingQR}
+                                  className="rounded-full text-xs px-3 py-1 h-8 border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white transition-all"
+                                >
+                                  <QrCode className="h-3.5 w-3.5 mr-1.5" />
+                                  Generate QR
+                                </Button>
+                              </div>
+
+                              {/* Indikator terpilih */}
+                              {isSelected && (
+                                <div className="absolute bottom-2 left-2">
+                                  <div className="bg-[#2C5EAD] text-white rounded-full p-1 shadow-sm">
+                                    <CheckCircle className="h-3 w-3" />
+                                  </div>
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
 
                 {selectedDay && jadwalByDay.length === 0 && selectedKelasMapel && filteredJadwalList.length > 0 && (
-                  <div className="text-center py-6 text-slate-500 text-xs sm:text-sm">Tidak ada jadwal untuk hari {selectedDay}</div>
+                  <div className="text-center py-12 bg-slate-50 rounded-xl">
+                    <Calendar className="h-12 w-12 mx-auto text-slate-300 mb-2" />
+                    <p className="text-slate-500 text-sm">Tidak ada jadwal untuk hari {selectedDay}</p>
+                    <p className="text-slate-400 text-xs mt-1">Pilih hari lain di atas</p>
+                  </div>
                 )}
 
+                {/* Tabel presensi mapel (tetap sama) */}
                 {selectedJadwal && (
-                  <div className="mt-6 border-t pt-4">
+                  <div className="mt-8 border-t pt-5">
                     <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-                      <div><h3 className="text-sm sm:text-base font-semibold text-slate-800">Presensi {selectedJadwal.mata_pelajaran}</h3><p className="text-xs text-slate-500">{selectedJadwal.hari}, {selectedJadwal.jam} - {selectedJadwal.guru}</p></div>
-                      <Button variant="outline" onClick={() => fetchPresensiMapel()} disabled={isFetchingMapel} className="rounded-lg h-8 sm:h-9 px-3 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"><RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingMapel ? "animate-spin" : ""}`} /> Refresh</Button>
+                      <div>
+                        <h3 className="text-base sm:text-lg font-semibold text-slate-800 flex items-center gap-2">
+                          <BookOpen className="h-5 w-5 text-[#2C5EAD]" />
+                          Presensi {selectedJadwal.mata_pelajaran}
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {selectedJadwal.hari}, {selectedJadwal.jam} - {selectedJadwal.guru}
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={() => fetchPresensiMapel()}
+                        disabled={isFetchingMapel}
+                        className="rounded-lg h-8 sm:h-9 px-3 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white transition-all"
+                      >
+                        <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingMapel ? "animate-spin" : ""}`} />
+                        Refresh
+                      </Button>
                     </div>
                     <div className="border rounded-lg overflow-hidden shadow-sm">
                       <div className="overflow-x-auto">
@@ -1248,7 +1342,12 @@ export default function AttendanceManagement() {
                                 <TableHead key={status} className="text-center font-semibold text-xs sm:text-sm min-w-[80px]">
                                   <div className="flex flex-col items-center gap-1">
                                     <span>{status}</span>
-                                    <Checkbox checked={selectedBulkStatusMapel === status} onCheckedChange={() => handleBulkCheckboxMapel(status)} disabled={isBulkUpdatingMapel} className="data-[state=checked]:bg-[#2C5EAD] data-[state=checked]:border-[#2C5EAD] h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                    <Checkbox
+                                      checked={selectedBulkStatusMapel === status}
+                                      onCheckedChange={() => handleBulkCheckboxMapel(status)}
+                                      disabled={isBulkUpdatingMapel}
+                                      className="data-[state=checked]:bg-[#2C5EAD] data-[state=checked]:border-[#2C5EAD] h-3.5 w-3.5 sm:h-4 sm:w-4"
+                                    />
                                   </div>
                                 </TableHead>
                               ))}
@@ -1267,8 +1366,17 @@ export default function AttendanceManagement() {
                                   {STATUS_MAPEL.map(status => (
                                     <TableCell key={status} className="text-center align-middle">
                                       <div className="flex justify-center items-center">
-                                        <RadioGroup value={item.status || ""} onValueChange={(val) => updatePresensiMapel(item.id_siswa, item, val)} disabled={updatingStatus?.id === item.id_siswa && updatingStatus?.type === "mapel"} className="flex justify-center">
-                                          <RadioGroupItem value={status} id={`mapel-${item.id_siswa}-${status}`} className="data-[state=checked]:border-[#2C5EAD] data-[state=checked]:bg-[#2C5EAD] h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                        <RadioGroup
+                                          value={item.status || ""}
+                                          onValueChange={(val) => updatePresensiMapel(item.id_siswa, item, val)}
+                                          disabled={updatingStatus?.id === item.id_siswa && updatingStatus?.type === "mapel"}
+                                          className="flex justify-center"
+                                        >
+                                          <RadioGroupItem
+                                            value={status}
+                                            id={`mapel-${item.id_siswa}-${status}`}
+                                            className="data-[state=checked]:border-[#2C5EAD] data-[state=checked]:bg-[#2C5EAD] h-3.5 w-3.5 sm:h-4 sm:w-4"
+                                          />
                                         </RadioGroup>
                                       </div>
                                     </TableCell>

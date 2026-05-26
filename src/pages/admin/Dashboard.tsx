@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { 
   Users, 
   School, 
@@ -35,7 +37,8 @@ import {
   Star,
   Heart,
   Smile,
-  ThumbsUp
+  ThumbsUp,
+  FileText
 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart, Bar } from "recharts";
 
@@ -70,6 +73,15 @@ export default function AdminDashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
 
+  // State untuk toggle kategori pie chart
+  const [selectedCategories, setSelectedCategories] = useState({
+    hadir: true,
+    terlambat: true,
+    izin: true,
+    sakit: true,
+    alfa: true,
+  });
+
   // ==================== GREETING EFFECT ====================
   useEffect(() => {
     const hour = new Date().getHours();
@@ -81,7 +93,7 @@ export default function AdminDashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // ==================== FETCH PRESENSI DATA (didefinisikan lebih awal) ====================
+  // ==================== FETCH PRESENSI DATA ====================
   const fetchPresensiData = useCallback(async () => {
     try {
       const now = new Date();
@@ -165,7 +177,7 @@ export default function AdminDashboard() {
 
     fetchStats();
     fetchPresensiData();
-  }, [periode, fetchPresensiData]); // ✅ dependency sudah benar
+  }, [periode, fetchPresensiData]);
 
   // ==================== HANDLE REFRESH ====================
   const handleRefresh = () => {
@@ -185,14 +197,22 @@ export default function AdminDashboard() {
 
   // ==================== COLORS ====================
   const COLORS = ["#10b981", "#f59e0b", "#3b82f6", "#8b5cf6", "#ef4444"];
+  const categoryLabels = [
+    { key: "hadir", label: "Hadir", color: "#10b981" },
+    { key: "terlambat", label: "Terlambat", color: "#f59e0b" },
+    { key: "izin", label: "Izin", color: "#3b82f6" },
+    { key: "sakit", label: "Sakit", color: "#8b5cf6" },
+    { key: "alfa", label: "Alfa", color: "#ef4444" },
+  ];
 
-  const pieData = [
-    { name: "Hadir", value: summaryPresensi.hadir },
-    { name: "Terlambat", value: summaryPresensi.terlambat },
-    { name: "Izin", value: summaryPresensi.izin },
-    { name: "Sakit", value: summaryPresensi.sakit },
-    { name: "Alfa", value: summaryPresensi.alfa },
-  ].filter(item => item.value > 0);
+  // Filter pie data berdasarkan kategori yang dipilih
+  const pieData = categoryLabels
+    .filter(cat => selectedCategories[cat.key as keyof typeof selectedCategories])
+    .map(cat => ({
+      name: cat.label,
+      value: summaryPresensi[cat.key as keyof typeof summaryPresensi],
+    }))
+    .filter(item => item.value > 0);
 
   const totalPresensi = summaryPresensi.hadir + summaryPresensi.terlambat + summaryPresensi.izin + summaryPresensi.sakit + summaryPresensi.alfa;
   const kehadiranPersen = totalPresensi > 0 ? ((summaryPresensi.hadir + summaryPresensi.terlambat) / totalPresensi * 100).toFixed(1) : 0;
@@ -200,20 +220,10 @@ export default function AdminDashboard() {
   // ==================== LOADING STATE ====================
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="flex h-screen items-center justify-center bg-[#C4E2F5]">
         <div className="text-center space-y-4">
-          <div className="relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full blur-xl opacity-50 animate-pulse" />
-            <Loader2 className="h-16 w-16 animate-spin text-blue-600 relative mx-auto" />
-          </div>
-          <div className="space-y-2">
-            <p className="text-slate-600 font-medium">Memuat Dashboard Admin</p>
-            <div className="flex gap-1 justify-center">
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-            </div>
-          </div>
+          <Loader2 className="h-12 w-12 animate-spin text-[#2C5EAD] mx-auto" />
+          <p className="text-[#2C5EAD] font-medium">Memuat Dashboard Admin...</p>
         </div>
       </div>
     );
@@ -221,26 +231,27 @@ export default function AdminDashboard() {
 
   // ==================== MAIN RENDER ====================
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+    <div className="min-h-screen bg-[#F0F7FC]">
       
-      {/* HEADER SECTION */}
-      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
-        <div className="container mx-auto px-6 py-6">
+      {/* HEADER SECTION - gradasi palette */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] shadow-xl mx-4 mt-4">
+        <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
+        <div className="relative container mx-auto px-6 py-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div className="flex items-center gap-4">
-              <Avatar className="h-14 w-14 border-2 border-white/30 rounded-2xl">
-                <AvatarFallback className="bg-white/20 text-white text-xl font-bold rounded-2xl">
+              <Avatar className="h-14 w-14 border-2 border-white shadow-md rounded-xl">
+                <AvatarFallback className="bg-white/30 text-white text-xl font-bold rounded-xl">
                   {user?.nama?.charAt(0) || "A"}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 text-blue-100 text-sm">
                   {greeting === "Selamat Pagi" ? <Sun className="h-4 w-4" /> : 
                    greeting === "Selamat Malam" ? <Moon className="h-4 w-4" /> : 
                    <Cloud className="h-4 w-4" />}
-                  <p className="text-sm text-blue-100">{greeting}</p>
+                  <p className="text-sm">{greeting}</p>
                 </div>
-                <h1 className="text-2xl lg:text-3xl font-bold">Dashboard Admin</h1>
+                <h1 className="text-2xl lg:text-3xl font-bold text-white">Dashboard Admin</h1>
                 <p className="text-blue-100 text-sm">
                   Selamat datang kembali, <span className="font-semibold">{user?.nama}</span>
                 </p>
@@ -248,14 +259,14 @@ export default function AdminDashboard() {
             </div>
             
             <div className="flex items-center gap-3">
-              <div className="bg-white/10 rounded-xl px-4 py-2 backdrop-blur-sm text-center">
-                <p className="text-xs text-blue-100">{formatDate(currentTime)}</p>
-                <p className="text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
+              <div className="bg-[#2C5EAD] rounded-xl px-4 py-2 text-center shadow-md">
+                <p className="text-xs text-white/90">{formatDate(currentTime)}</p>
+                <p className="text-xl font-semibold text-white">{currentTime.toLocaleTimeString("id-ID")}</p>
               </div>
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="bg-white/10 hover:bg-white/20 text-white rounded-xl"
+                className="bg-[#2C5EAD] hover:bg-[#2C5EAD]/80 text-white rounded-xl shadow-md"
                 onClick={handleRefresh}
                 disabled={refreshing}
               >
@@ -269,71 +280,79 @@ export default function AdminDashboard() {
       {/* MAIN CONTENT */}
       <div className="container mx-auto px-4 py-8 space-y-8">
         
-        {/* STATS CARDS */}
+        {/* STATS CARDS - background putih dengan shadow tebal */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+          <Card className="rounded-xl border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-all duration-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-blue-600 font-medium">Total Siswa</p>
-                  <p className="text-2xl font-bold text-blue-900">{stats.siswa}</p>
+                  <p className="text-xs text-slate-500 font-medium">Total Siswa</p>
+                  <p className="text-2xl font-bold text-slate-800">{stats.siswa}</p>
                 </div>
-                <Users className="h-8 w-8 text-blue-500" />
+                <div className="p-2 rounded-full bg-[#C4E2F5]">
+                  <Users className="h-5 w-5 text-[#2C5EAD]" />
+                </div>
               </div>
-              <p className="text-xs text-blue-500 mt-1">Siswa aktif</p>
+              <p className="text-[10px] text-slate-400 mt-1">Siswa aktif</p>
             </CardContent>
           </Card>
           
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
+          <Card className="rounded-xl border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-all duration-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-emerald-600 font-medium">Total Guru</p>
-                  <p className="text-2xl font-bold text-emerald-900">{stats.guru}</p>
+                  <p className="text-xs text-slate-500 font-medium">Total Guru</p>
+                  <p className="text-2xl font-bold text-slate-800">{stats.guru}</p>
                 </div>
-                <UserCheck className="h-8 w-8 text-emerald-500" />
+                <div className="p-2 rounded-full bg-emerald-100">
+                  <UserCheck className="h-5 w-5 text-emerald-600" />
+                </div>
               </div>
-              <p className="text-xs text-emerald-500 mt-1">Guru aktif</p>
+              <p className="text-[10px] text-slate-400 mt-1">Guru aktif</p>
             </CardContent>
           </Card>
           
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+          <Card className="rounded-xl border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-all duration-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-purple-600 font-medium">Total Kelas</p>
-                  <p className="text-2xl font-bold text-purple-900">{stats.kelas}</p>
+                  <p className="text-xs text-slate-500 font-medium">Total Kelas</p>
+                  <p className="text-2xl font-bold text-slate-800">{stats.kelas}</p>
                 </div>
-                <School className="h-8 w-8 text-purple-500" />
+                <div className="p-2 rounded-full bg-purple-100">
+                  <School className="h-5 w-5 text-purple-600" />
+                </div>
               </div>
-              <p className="text-xs text-purple-500 mt-1">Kelas aktif</p>
+              <p className="text-[10px] text-slate-400 mt-1">Kelas aktif</p>
             </CardContent>
           </Card>
           
-          <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
+          <Card className="rounded-xl border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-all duration-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-amber-600 font-medium">Mata Pelajaran</p>
-                  <p className="text-2xl font-bold text-amber-900">{stats.mapel}</p>
+                  <p className="text-xs text-slate-500 font-medium">Mata Pelajaran</p>
+                  <p className="text-2xl font-bold text-slate-800">{stats.mapel}</p>
                 </div>
-                <BookOpen className="h-8 w-8 text-amber-500" />
+                <div className="p-2 rounded-full bg-amber-100">
+                  <BookOpen className="h-5 w-5 text-amber-600" />
+                </div>
               </div>
-              <p className="text-xs text-amber-500 mt-1">Total mapel</p>
+              <p className="text-[10px] text-slate-400 mt-1">Total mapel</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* SUMMARY CARD */}
-        <Card className="rounded-2xl border-0 shadow-xl overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-5">
+        {/* SUMMARY CARD - Header solid #1591DC */}
+        <Card className="rounded-xl border-0 shadow-xl overflow-hidden">
+          <CardHeader className="bg-[#1591DC] text-white p-5">
             <div className="flex items-center gap-3">
-              <div className="bg-white/10 p-2 rounded-xl">
+              <div className="bg-white/20 p-2 rounded-xl">
                 <Activity className="h-5 w-5" />
               </div>
               <div>
                 <CardTitle className="text-lg">Ringkasan Presensi</CardTitle>
-                <CardDescription className="text-slate-300 text-xs">
+                <CardDescription className="text-blue-100 text-xs">
                   {periode === "minggu" ? "7 Hari Terakhir" : "30 Hari Terakhir"}
                 </CardDescription>
               </div>
@@ -372,13 +391,16 @@ export default function AdminDashboard() {
             
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-slate-600" />
+                <TrendingUp className="h-5 w-5 text-[#2C5EAD]" />
                 <span className="text-sm text-slate-600">Total Kehadiran</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold text-emerald-600">{kehadiranPersen}%</span>
+                <span className="text-2xl font-bold text-[#2C5EAD]">{kehadiranPersen}%</span>
                 <span className="text-xs text-slate-400">dari {totalPresensi} presensi</span>
               </div>
+            </div>
+            <div className="mt-3">
+              <Progress value={parseFloat(kehadiranPersen)} className="h-2 [&>div]:bg-[#1591DC]" />
             </div>
           </CardContent>
         </Card>
@@ -386,9 +408,9 @@ export default function AdminDashboard() {
         {/* CHARTS GRID */}
         <div className="grid gap-6 lg:grid-cols-2">
           
-          {/* LINE CHART CARD */}
-          <Card className="rounded-2xl border-0 shadow-xl overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-5">
+          {/* LINE CHART CARD - Header solid #4BB8FA */}
+          <Card className="rounded-xl border-0 shadow-xl overflow-hidden">
+            <CardHeader className="bg-[#4BB8FA] text-white p-5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <LineChartIcon className="h-5 w-5" />
@@ -399,7 +421,11 @@ export default function AdminDashboard() {
                     onClick={() => setPeriode("minggu")}
                     variant="ghost"
                     size="sm"
-                    className={`rounded-lg text-white ${periode === "minggu" ? "bg-white/20" : "bg-white/10"}`}
+                    className={`rounded-lg text-white text-xs transition-all ${
+                      periode === "minggu" 
+                        ? "bg-[#2C5EAD] text-white shadow-md" 
+                        : "bg-white/10 hover:bg-white/20"
+                    }`}
                   >
                     1 Minggu
                   </Button>
@@ -407,13 +433,17 @@ export default function AdminDashboard() {
                     onClick={() => setPeriode("bulan")}
                     variant="ghost"
                     size="sm"
-                    className={`rounded-lg text-white ${periode === "bulan" ? "bg-white/20" : "bg-white/10"}`}
+                    className={`rounded-lg text-white text-xs transition-all ${
+                      periode === "bulan" 
+                        ? "bg-[#2C5EAD] text-white shadow-md" 
+                        : "bg-white/10 hover:bg-white/20"
+                    }`}
                   >
                     1 Bulan
                   </Button>
                 </div>
               </div>
-              <CardDescription className="text-slate-300 text-xs">
+              <CardDescription className="text-blue-50 text-xs">
                 Grafik perkembangan presensi siswa
               </CardDescription>
             </CardHeader>
@@ -438,15 +468,62 @@ export default function AdminDashboard() {
                           boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
                           backgroundColor: 'white'
                         }}
+                        cursor={{ stroke: '#94a3b8', strokeWidth: 1 }}
                       />
                       <Legend 
                         wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
+                        iconType="circle"
                       />
-                      <Line type="monotone" dataKey="hadir" stroke="#10b981" name="Hadir" strokeWidth={2} dot={{ r: 3 }} />
-                      <Line type="monotone" dataKey="terlambat" stroke="#f59e0b" name="Terlambat" strokeWidth={2} dot={{ r: 3 }} />
-                      <Line type="monotone" dataKey="izin" stroke="#3b82f6" name="Izin" strokeWidth={2} dot={{ r: 3 }} />
-                      <Line type="monotone" dataKey="sakit" stroke="#8b5cf6" name="Sakit" strokeWidth={2} dot={{ r: 3 }} />
-                      <Line type="monotone" dataKey="alfa" stroke="#ef4444" name="Alfa" strokeWidth={2} dot={{ r: 3 }} />
+                      <Line 
+                        type="monotone" 
+                        dataKey="hadir" 
+                        stroke="#10b981" 
+                        name="Hadir" 
+                        strokeWidth={2.5} 
+                        dot={{ r: 3.5, strokeWidth: 2 }}
+                        activeDot={{ r: 6 }}
+                        animationDuration={800}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="terlambat" 
+                        stroke="#f59e0b" 
+                        name="Terlambat" 
+                        strokeWidth={2.5} 
+                        dot={{ r: 3.5, strokeWidth: 2 }}
+                        activeDot={{ r: 6 }}
+                        animationDuration={800}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="izin" 
+                        stroke="#3b82f6" 
+                        name="Izin" 
+                        strokeWidth={2.5} 
+                        dot={{ r: 3.5, strokeWidth: 2 }}
+                        activeDot={{ r: 6 }}
+                        animationDuration={800}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="sakit" 
+                        stroke="#8b5cf6" 
+                        name="Sakit" 
+                        strokeWidth={2.5} 
+                        dot={{ r: 3.5, strokeWidth: 2 }}
+                        activeDot={{ r: 6 }}
+                        animationDuration={800}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="alfa" 
+                        stroke="#ef4444" 
+                        name="Alfa" 
+                        strokeWidth={2.5} 
+                        dot={{ r: 3.5, strokeWidth: 2 }}
+                        activeDot={{ r: 6 }}
+                        animationDuration={800}
+                      />
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
@@ -461,18 +538,43 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          {/* PIE CHART CARD */}
-          <Card className="rounded-2xl border-0 shadow-xl overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-5">
+          {/* PIE CHART CARD - Interaktif dengan checkbox filter */}
+          <Card className="rounded-xl border-0 shadow-xl overflow-hidden">
+            <CardHeader className="bg-[#4BB8FA] text-white p-5">
               <div className="flex items-center gap-2">
                 <PieChartIcon className="h-5 w-5" />
                 <CardTitle className="text-lg">Distribusi Status Presensi</CardTitle>
               </div>
-              <CardDescription className="text-slate-300 text-xs">
-                Persentase berdasarkan total presensi
+              <CardDescription className="text-blue-50 text-xs">
+                Pilih kategori yang ingin ditampilkan
               </CardDescription>
             </CardHeader>
             <CardContent className="p-5">
+              {/* Filter checkboxes */}
+              <div className="flex flex-wrap gap-4 mb-6 justify-center">
+                {categoryLabels.map((cat) => (
+                  <div key={cat.key} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`pie-${cat.key}`}
+                      checked={selectedCategories[cat.key as keyof typeof selectedCategories]}
+                      onCheckedChange={(checked) =>
+                        setSelectedCategories((prev) => ({
+                          ...prev,
+                          [cat.key]: checked === true,
+                        }))
+                      }
+                      className="data-[state=checked]:bg-[#2C5EAD] data-[state=checked]:border-[#2C5EAD]"
+                    />
+                    <Label
+                      htmlFor={`pie-${cat.key}`}
+                      className="text-sm text-slate-700 cursor-pointer"
+                      style={{ color: cat.color }}
+                    >
+                      {cat.label}
+                    </Label>
+                  </div>
+                ))}
+              </div>
               <div className="h-80">
                 {pieData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -481,14 +583,21 @@ export default function AdminDashboard() {
                         data={pieData}
                         cx="50%"
                         cy="50%"
-                        labelLine={false}
+                        labelLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
                         label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="value"
+                        animationDuration={800}
+                        animationBegin={0}
                       >
                         {pieData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={categoryLabels.find(c => c.label === entry.name)?.color || COLORS[index % COLORS.length]} 
+                            stroke="white"
+                            strokeWidth={2}
+                          />
                         ))}
                       </Pie>
                       <Tooltip 
@@ -498,9 +607,11 @@ export default function AdminDashboard() {
                           boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
                           backgroundColor: 'white'
                         }}
+                        formatter={(value: number, name: string) => [`${value} kali`, name]}
                       />
                       <Legend 
                         wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
+                        iconType="circle"
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -508,7 +619,8 @@ export default function AdminDashboard() {
                   <div className="flex h-full items-center justify-center text-slate-400">
                     <div className="text-center">
                       <PieChartIcon className="h-12 w-12 mx-auto mb-2 text-slate-300" />
-                      <p>Belum ada data presensi</p>
+                      <p>Tidak ada data untuk kategori yang dipilih</p>
+                      <p className="text-xs mt-1">Centang minimal satu kategori</p>
                     </div>
                   </div>
                 )}
@@ -517,18 +629,19 @@ export default function AdminDashboard() {
           </Card>
         </div>
 
-        {/* TIPS SECTION */}
-        <Card className="rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50">
+        {/* TIPS SECTION - menggunakan warna palette */}
+        <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-[#C4E2F5]/50 to-[#4BB8FA]/20">
           <CardContent className="p-5">
             <div className="flex items-start gap-4">
-              <div className="bg-indigo-100 p-3 rounded-xl">
-                <Sparkles className="h-6 w-6 text-indigo-600" />
+              <div className="bg-[#2C5EAD]/10 p-3 rounded-xl">
+                <Sparkles className="h-6 w-6 text-[#2C5EAD]" />
               </div>
               <div>
                 <h3 className="font-semibold text-slate-800 mb-1">Informasi Dashboard</h3>
                 <p className="text-sm text-slate-600">
                   Dashboard ini menampilkan ringkasan data sekolah, termasuk jumlah siswa, guru, kelas, 
                   dan mata pelajaran. Grafik presensi menunjukkan tren kehadiran siswa dalam periode yang dipilih.
+                  Pada diagram lingkaran, Anda dapat memilih kategori yang ingin ditampilkan.
                 </p>
               </div>
             </div>
@@ -549,14 +662,3 @@ export default function AdminDashboard() {
     </div>
   );
 }
-
-// Komponen FileText dengan tipe props yang benar
-const FileText = (props: SVGProps<SVGSVGElement>) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    <polyline points="14 2 14 8 20 8" />
-    <line x1="16" y1="13" x2="8" y2="13" />
-    <line x1="16" y1="17" x2="8" y2="17" />
-    <polyline points="10 9 9 9 8 9" />
-  </svg>
-);
