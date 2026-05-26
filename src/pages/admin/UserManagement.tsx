@@ -587,9 +587,20 @@ export default function UserManagement() {
     setCurrentPage(1);
   };
 
-  // ========== CRUD UNIFIED (sama seperti sebelumnya) ==========
+  // ========== CRUD UNIFIED ==========
   const openAddDialog = () => {
-    setAddForm({ nama: "", username: "", password: "", gender: "", nik: "", nis: "", kelas_id: "", peran: userType, id_jurusan: "" });
+    // Perbaikan: set id_jurusan default menjadi "none" untuk guru
+    setAddForm({ 
+      nama: "", 
+      username: "", 
+      password: "", 
+      gender: "", 
+      nik: "", 
+      nis: "", 
+      kelas_id: "", 
+      peran: userType,
+      id_jurusan: userType === "guru" ? "none" : "" 
+    });
     setAddDialogOpen(true);
   };
 
@@ -640,9 +651,13 @@ export default function UserManagement() {
         const { data: existingNik } = await supabase.from("guru").select("nik").eq("nik", parseInt(addForm.nik)).maybeSingle();
         if (existingNik) throw new Error("NIK sudah digunakan");
         const nextId = await getNextId("guru");
+        // Perbaikan: konversi "none" menjadi null
         let jurusanId = null;
-        if (isAdminJurusan && user?.id_jurusan) jurusanId = user.id_jurusan;
-        else if (addForm.id_jurusan) jurusanId = parseInt(addForm.id_jurusan);
+        if (isAdminJurusan && user?.id_jurusan) {
+          jurusanId = user.id_jurusan;
+        } else if (addForm.id_jurusan && addForm.id_jurusan !== "none") {
+          jurusanId = parseInt(addForm.id_jurusan);
+        }
         await supabase.from("guru").insert({ id_guru: nextId, nama: addForm.nama, nik: parseInt(addForm.nik), gender: addForm.gender.toUpperCase(), aktif: true, dibuat_pada: now, id_jurusan: jurusanId });
         await supabase.from("akun").insert({ nama: addForm.nama, username: addForm.username, peran: "guru", aktif: true, dibuat_pada: now, id_guru: nextId, id_siswa: null, kata_sandi: hashedPassword });
       } else if (addForm.peran === "siswa") {
@@ -682,16 +697,60 @@ export default function UserManagement() {
     setEditingUser(userItem);
     if (userItem.peran === "guru") {
       const guru = userItem as GuruData;
-      setEditForm({ nama: guru.nama, username: guru.username, password: "", gender: guru.gender, nik: guru.nik, nis: "", kelas_id: "", peran: "guru", id_jurusan: guru.id_jurusan?.toString() || "", aktif: guru.aktif });
+      setEditForm({ 
+        nama: guru.nama, 
+        username: guru.username, 
+        password: "", 
+        gender: guru.gender, 
+        nik: guru.nik, 
+        nis: "", 
+        kelas_id: "", 
+        peran: "guru", 
+        id_jurusan: guru.id_jurusan?.toString() || "none", // perbaikan: default "none"
+        aktif: guru.aktif 
+      });
     } else if (userItem.peran === "siswa") {
       const siswa = userItem as SiswaData;
-      setEditForm({ nama: siswa.nama, username: siswa.username, password: "", gender: siswa.gender, nik: "", nis: siswa.nis, kelas_id: siswa.id_kelas?.toString() || "", peran: "siswa", id_jurusan: "", aktif: siswa.aktif });
+      setEditForm({ 
+        nama: siswa.nama, 
+        username: siswa.username, 
+        password: "", 
+        gender: siswa.gender, 
+        nik: "", 
+        nis: siswa.nis, 
+        kelas_id: siswa.id_kelas?.toString() || "none", 
+        peran: "siswa", 
+        id_jurusan: "", 
+        aktif: siswa.aktif 
+      });
     } else if (userItem.peran === "admin_jurusan") {
       const adminJur = userItem as AdminJurusanData;
-      setEditForm({ nama: adminJur.nama, username: adminJur.username, password: "", gender: "", nik: "", nis: "", kelas_id: "", peran: "admin_jurusan", id_jurusan: adminJur.id_jurusan?.toString() || "", aktif: adminJur.aktif });
+      setEditForm({ 
+        nama: adminJur.nama, 
+        username: adminJur.username, 
+        password: "", 
+        gender: "", 
+        nik: "", 
+        nis: "", 
+        kelas_id: "", 
+        peran: "admin_jurusan", 
+        id_jurusan: adminJur.id_jurusan?.toString() || "", 
+        aktif: adminJur.aktif 
+      });
     } else if (userItem.peran === "bk") {
       const bk = userItem as BKData;
-      setEditForm({ nama: bk.nama, username: bk.username, password: "", gender: "", nik: "", nis: "", kelas_id: "", peran: "bk", id_jurusan: "", aktif: bk.aktif });
+      setEditForm({ 
+        nama: bk.nama, 
+        username: bk.username, 
+        password: "", 
+        gender: "", 
+        nik: "", 
+        nis: "", 
+        kelas_id: "", 
+        peran: "bk", 
+        id_jurusan: "", 
+        aktif: bk.aktif 
+      });
     }
     setEditDialogOpen(true);
   };
@@ -721,10 +780,19 @@ export default function UserManagement() {
           if (existingNik) throw new Error("NIK sudah digunakan oleh guru lain");
           await supabase.from("guru").update({ nik: parseInt(editForm.nik) }).eq("id_guru", guruUser.id);
         }
+        // Perbaikan: konversi "none" menjadi null
         let jurusanId = null;
-        if (editForm.id_jurusan && editForm.id_jurusan !== "none") jurusanId = parseInt(editForm.id_jurusan);
-        else if (isAdminJurusan && user?.id_jurusan) jurusanId = user.id_jurusan;
-        await supabase.from("guru").update({ nama: editForm.nama, gender: editForm.gender.toUpperCase(), aktif: editForm.aktif, id_jurusan: jurusanId }).eq("id_guru", guruUser.id);
+        if (editForm.id_jurusan && editForm.id_jurusan !== "none") {
+          jurusanId = parseInt(editForm.id_jurusan);
+        } else if (isAdminJurusan && user?.id_jurusan) {
+          jurusanId = user.id_jurusan;
+        }
+        await supabase.from("guru").update({ 
+          nama: editForm.nama, 
+          gender: editForm.gender.toUpperCase(), 
+          aktif: editForm.aktif, 
+          id_jurusan: jurusanId 
+        }).eq("id_guru", guruUser.id);
         await supabase.from("akun").update(updateData).eq("id_guru", guruUser.id);
       } else if (editingUser.peran === "siswa") {
         const siswaUser = editingUser as SiswaData;
@@ -741,7 +809,12 @@ export default function UserManagement() {
             if (!kelas || kelas.id_jurusan !== user.id_jurusan) throw new Error("Kelas tidak berada dalam jurusan Anda");
           }
         }
-        await supabase.from("siswa").update({ nama: editForm.nama, gender: editForm.gender.toUpperCase(), aktif: editForm.aktif, id_kelas: kelasId }).eq("id_siswa", siswaUser.id);
+        await supabase.from("siswa").update({ 
+          nama: editForm.nama, 
+          gender: editForm.gender.toUpperCase(), 
+          aktif: editForm.aktif, 
+          id_kelas: kelasId 
+        }).eq("id_siswa", siswaUser.id);
         await supabase.from("akun").update(updateData).eq("id_siswa", siswaUser.id);
       } else if (editingUser.peran === "admin_jurusan") {
         if (editForm.peran !== "admin_jurusan") {
@@ -1521,7 +1594,7 @@ export default function UserManagement() {
         <div className="text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Manajemen Pengguna &amp; Kelas - SmartAS</p></div>
       </div>
 
-      {/* DIALOGS (sama seperti sebelumnya, tidak ada perubahan) */}
+      {/* DIALOGS */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent className="rounded-2xl max-w-md">
           <DialogHeader><DialogTitle><Plus className="h-5 w-5 inline mr-2 text-emerald-600" /> Tambah {addForm.peran === "guru" ? "Guru" : addForm.peran === "siswa" ? "Siswa" : addForm.peran === "admin_jurusan" ? "Admin Jurusan" : "BK"}</DialogTitle><DialogDescription>Isi data pengguna baru. Kata sandi default "password123".</DialogDescription></DialogHeader>
@@ -1530,7 +1603,18 @@ export default function UserManagement() {
             <div><Label>Nama Pengguna</Label><Input value={addForm.username} onChange={e => setAddForm({...addForm, username: e.target.value})} className="rounded-xl" /></div>
             {addForm.peran !== "bk" && addForm.peran !== "admin_jurusan" && <div><Label>Jenis Kelamin</Label><Select value={addForm.gender} onValueChange={v => setAddForm({...addForm, gender: v})}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jenis kelamin" /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>}
             {addForm.peran === "guru" && <div><Label>NIK</Label><Input value={addForm.nik} onChange={e => setAddForm({...addForm, nik: e.target.value})} className="rounded-xl" /></div>}
-            {addForm.peran === "guru" && isAdminSuper && <div><Label>Jurusan</Label><Select value={addForm.id_jurusan} onValueChange={v => setAddForm({...addForm, id_jurusan: v})}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan (opsional)" /></SelectTrigger><SelectContent><SelectItem value="">Tidak ada</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
+            {addForm.peran === "guru" && isAdminSuper && (
+              <div>
+                <Label>Jurusan</Label>
+                <Select value={addForm.id_jurusan} onValueChange={v => setAddForm({...addForm, id_jurusan: v})}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan (opsional)" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Tidak ada</SelectItem> {/* Perbaikan: value "none" */}
+                    {jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {addForm.peran === "siswa" && <div><Label>NIS</Label><Input value={addForm.nis} onChange={e => setAddForm({...addForm, nis: e.target.value})} className="rounded-xl" /></div>}
             {addForm.peran === "siswa" && <div><Label>Kelas</Label><Select value={addForm.kelas_id} onValueChange={v => setAddForm({...addForm, kelas_id: v})}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih kelas (opsional)" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada kelas</SelectItem>{kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}</SelectContent></Select></div>}
             {addForm.peran === "admin_jurusan" && <div><Label>Jurusan</Label><Select value={addForm.id_jurusan} onValueChange={v => setAddForm({...addForm, id_jurusan: v})}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
@@ -1548,7 +1632,18 @@ export default function UserManagement() {
             <div><Label>Nama Pengguna</Label><Input value={editForm.username} onChange={e => setEditForm({...editForm, username: e.target.value})} className="rounded-xl" /></div>
             {editForm.peran !== "bk" && editForm.peran !== "admin_jurusan" && <div><Label>Jenis Kelamin</Label><Select value={editForm.gender} onValueChange={v => setEditForm({...editForm, gender: v})}><SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>}
             {editForm.peran === "guru" && <div><Label>NIK</Label><Input value={editForm.nik} onChange={e => setEditForm({...editForm, nik: e.target.value})} className="rounded-xl" /></div>}
-            {editForm.peran === "guru" && isAdminSuper && <div><Label>Jurusan</Label><Select value={editForm.id_jurusan} onValueChange={v => setEditForm({...editForm, id_jurusan: v})}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent><SelectItem value="">Tidak ada</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
+            {editForm.peran === "guru" && isAdminSuper && (
+              <div>
+                <Label>Jurusan</Label>
+                <Select value={editForm.id_jurusan} onValueChange={v => setEditForm({...editForm, id_jurusan: v})}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Tidak ada</SelectItem> {/* Perbaikan: value "none" */}
+                    {jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {editForm.peran === "siswa" && <div><Label>NIS</Label><Input value={editForm.nis} onChange={e => setEditForm({...editForm, nis: e.target.value})} className="rounded-xl" /></div>}
             {editForm.peran === "siswa" && <div><Label>Kelas</Label><Select value={editForm.kelas_id} onValueChange={v => setEditForm({...editForm, kelas_id: v})}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih kelas" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada kelas</SelectItem>{kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}</SelectContent></Select></div>}
             {editForm.peran === "admin_jurusan" && <div><Label>Jurusan</Label><Select value={editForm.id_jurusan} onValueChange={v => setEditForm({...editForm, id_jurusan: v})}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
