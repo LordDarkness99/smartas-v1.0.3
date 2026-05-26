@@ -499,11 +499,11 @@ export default function UserManagement() {
         let jurusanId = null;
         if (isAdminJurusan && user?.id_jurusan) jurusanId = user.id_jurusan;
         else if (addForm.id_jurusan) jurusanId = parseInt(addForm.id_jurusan);
-        await supabase.from("akun").insert({
+        const { data: newAkun } = await supabase.from("akun").insert({
           nama: addForm.nama, username: addForm.username, peran: "guru",
           aktif: true, dibuat_pada: now, id_guru: nextId, id_siswa: null,
           kata_sandi: hashedPassword,
-        });
+        }).select("id_akun").single();
         await supabase.from("guru").insert({
           id_guru: nextId, nama: addForm.nama, nik: parseInt(addForm.nik),
           gender: addForm.gender.toUpperCase(), aktif: true, dibuat_pada: now,
@@ -595,7 +595,7 @@ export default function UserManagement() {
     setEditDialogOpen(true);
   };
 
-  // ========== HANDLE UPDATE USER (DIPERBAIKI - SEMUA ROLE BISA BERUBAH) ==========
+  // ========== HANDLE UPDATE USER (DIPERBAIKI) ==========
   const handleUpdateUser = async () => {
     if (!editingUser) return;
     if ((editForm.peran === "admin_jurusan" || editForm.peran === "bk") && !isAdminSuper) {
@@ -619,15 +619,13 @@ export default function UserManagement() {
       const newRole = editForm.peran;
       const roleChanged = oldRole !== newRole;
 
-      // SIMPAN DATA LAMA UNTUK DIHAPUS NANTI
-      let oldGuruId: number | null = null;
-      let oldSiswaId: number | null = null;
-
+      // Update atau hapus data di tabel spesifik berdasarkan role lama dan baru
       if (oldRole === "guru") {
-        oldGuruId = (editingUser as GuruData).id_guru;
+        const guru = editingUser as GuruData;
         if (newRole !== "guru") {
-          // Hapus data guru karena pindah role - TAPI JANGAN HAPUS DULU, HAPUS SETELAH AKUN UPDATE
-          // Kita simpan ID untuk dihapus setelah update akun
+          // Hapus data guru karena pindah role
+          await supabase.from("guru").delete().eq("id_guru", guru.id_guru);
+          updateData.id_guru = null;
         } else {
           // Update data guru
           let jurusanId = null;
@@ -636,15 +634,17 @@ export default function UserManagement() {
           await supabase.from("guru").update({
             nama: editForm.nama, gender: editForm.gender.toUpperCase(),
             aktif: editForm.aktif, id_jurusan: jurusanId,
-          }).eq("id_guru", oldGuruId);
-          if (editForm.nik && editForm.nik !== (editingUser as GuruData).nik) {
-            await supabase.from("guru").update({ nik: parseInt(editForm.nik) }).eq("id_guru", oldGuruId);
+          }).eq("id_guru", guru.id_guru);
+          // Update NIK jika berubah
+          if (editForm.nik && editForm.nik !== guru.nik) {
+            await supabase.from("guru").update({ nik: parseInt(editForm.nik) }).eq("id_guru", guru.id_guru);
           }
         }
       } else if (oldRole === "siswa") {
-        oldSiswaId = (editingUser as SiswaData).id_siswa;
+        const siswa = editingUser as SiswaData;
         if (newRole !== "siswa") {
-          // Hapus data siswa nanti setelah update akun
+          await supabase.from("siswa").delete().eq("id_siswa", siswa.id_siswa);
+          updateData.id_siswa = null;
         } else {
           // Update data siswa
           let kelasId = null;
@@ -659,12 +659,13 @@ export default function UserManagement() {
           await supabase.from("siswa").update({
             nama: editForm.nama, gender: editForm.gender.toUpperCase(),
             aktif: editForm.aktif, id_kelas: kelasId,
-          }).eq("id_siswa", oldSiswaId);
-          if (editForm.nis && editForm.nis !== (editingUser as SiswaData).nis) {
-            await supabase.from("siswa").update({ nis: parseInt(editForm.nis) }).eq("id_siswa", oldSiswaId);
+          }).eq("id_siswa", siswa.id_siswa);
+          if (editForm.nis && editForm.nis !== siswa.nis) {
+            await supabase.from("siswa").update({ nis: parseInt(editForm.nis) }).eq("id_siswa", siswa.id_siswa);
           }
         }
       } else if (oldRole === "admin_jurusan" || oldRole === "bk") {
+        // Tidak ada tabel terpisah, hanya akun. Jika pindah ke guru/siswa, nanti buat entri baru.
         if (newRole === "guru" || newRole === "siswa") {
           updateData.id_guru = null;
           updateData.id_siswa = null;
@@ -672,40 +673,18 @@ export default function UserManagement() {
         }
       }
 
-      // Update akun utama
       if (roleChanged) {
         updateData.peran = newRole;
       }
 
-      // Untuk kasus pindah role, kita perlu mengosongkan relasi lama
-      if (oldRole === "guru" && newRole !== "guru") {
-        updateData.id_guru = null;
-      }
-      if (oldRole === "siswa" && newRole !== "siswa") {
-        updateData.id_siswa = null;
-      }
-      if ((oldRole === "admin_jurusan" || oldRole === "bk") && newRole === "guru") {
-        updateData.id_guru = null;
-      }
-      if ((oldRole === "admin_jurusan" || oldRole === "bk") && newRole === "siswa") {
-        updateData.id_siswa = null;
-      }
-
+      // Update akun utama menggunakan id_akun
       const { error: updateAkunError } = await supabase
         .from("akun")
         .update(updateData)
         .eq("id_akun", editingUser.id_akun);
       if (updateAkunError) throw updateAkunError;
 
-      // HAPUS DATA LAMA SETELAH AKUN BERHASIL DIUPDATE
-      if (oldRole === "guru" && newRole !== "guru" && oldGuruId) {
-        await supabase.from("guru").delete().eq("id_guru", oldGuruId);
-      }
-      if (oldRole === "siswa" && newRole !== "siswa" && oldSiswaId) {
-        await supabase.from("siswa").delete().eq("id_siswa", oldSiswaId);
-      }
-
-      // Buat entri baru untuk role baru jika diperlukan
+      // Jika role baru memerlukan entri di tabel guru/siswa dan sebelumnya tidak ada, buat entri baru
       if (roleChanged) {
         if (newRole === "guru" && oldRole !== "guru") {
           const nextId = await getNextId("guru");
@@ -841,6 +820,7 @@ export default function UserManagement() {
         if (!u.aktif) continue;
         let reasons: string[] = [];
         if (u.peran === "guru") {
+          // butuh id_guru, cari dari userList
           const guru = userList.find(gu => gu.id_akun === u.id_akun) as GuruData;
           if (guru) {
             const { data: jadwalData } = await supabase.from("jadwal").select("id_jadwal").eq("id_guru", guru.id_guru);
