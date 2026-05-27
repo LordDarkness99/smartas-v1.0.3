@@ -1,5 +1,5 @@
 // src/pages/admin/PKLManagement.tsx
-// Versi tanpa id_jurusan pada tabel pkl. Filter admin jurusan hanya pada siswa (via kelas)
+// Versi dengan recoloring agar konsisten dengan palette aplikasi lain (#2C5EAD, #1591DC, #4BB8FA)
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -217,7 +217,7 @@ export default function PklManagement() {
     }
   };
 
-  // ========== FETCH LOKASI PKL (tanpa filter id_jurusan) ==========
+  // ========== FETCH LOKASI PKL ==========
   const fetchPKL = async () => {
     setIsFetchingPKL(true);
     try {
@@ -336,7 +336,7 @@ export default function PklManagement() {
     }
   };
 
-  // ========== FETCH KELAS & SISWA (dengan filter jurusan untuk admin jurusan) ==========
+  // ========== FETCH KELAS & SISWA ==========
   const fetchKelas = async () => {
     try {
       let query = supabase
@@ -377,7 +377,6 @@ export default function PklManagement() {
         query = query.eq("id_kelas", parseInt(selectedKelas));
       }
       
-      // Filter untuk admin jurusan: hanya siswa yang kelasnya memiliki id_jurusan miliknya
       if (isRoleAdminJurusan && user?.id_jurusan) {
         query = query.eq("kelas.id_jurusan", user.id_jurusan);
       }
@@ -432,7 +431,7 @@ export default function PklManagement() {
     }
   };
 
-  // ========== IMPORT EXCEL (tanpa id_jurusan untuk lokasi) ==========
+  // ========== IMPORT EXCEL ==========
   const downloadTemplate = (type: "lokasi" | "assignment") => {
     let headers: string[];
     let data: any[][];
@@ -622,18 +621,18 @@ export default function PklManagement() {
   // ==================== LOADING STATE ====================
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="flex h-screen items-center justify-center bg-[#F0F7FC]">
         <div className="text-center space-y-4">
           <div className="relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full blur-xl opacity-50 animate-pulse" />
-            <Loader2 className="h-16 w-16 animate-spin text-blue-600 relative mx-auto" />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] rounded-full blur-xl opacity-50 animate-pulse" />
+            <Loader2 className="h-16 w-16 animate-spin text-[#2C5EAD] relative mx-auto" />
           </div>
           <div className="space-y-2">
             <p className="text-slate-600 font-medium">Memuat Manajemen PKL</p>
             <div className="flex gap-1 justify-center">
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              <div className="w-2 h-2 bg-[#2C5EAD] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="w-2 h-2 bg-[#2C5EAD] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <div className="w-2 h-2 bg-[#2C5EAD] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
             </div>
           </div>
         </div>
@@ -643,32 +642,33 @@ export default function PklManagement() {
 
   // ==================== MAIN RENDER ====================
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+    <div className="min-h-screen bg-[#F0F7FC]">
       {/* HEADER SECTION */}
-      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-3xl shadow-xl mx-4 mt-4">
-        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] shadow-xl mx-4 mt-4">
+        <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
+        <div className="relative container mx-auto px-4 sm:px-6 py-4 sm:py-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-3 sm:gap-4">
-              <div className="bg-white/20 p-2 sm:p-3 rounded-2xl backdrop-blur-sm">
-                <Building2 className="h-6 w-6 sm:h-8 sm:w-8" />
+              <div className="bg-white/20 p-2 sm:p-3 rounded-xl backdrop-blur-sm">
+                <Building2 className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 text-blue-100 text-sm">
                   {greeting === "Selamat Pagi" ? <Sun className="h-3 w-3 sm:h-4 sm:w-4" /> : 
                    greeting === "Selamat Malam" ? <Moon className="h-3 w-3 sm:h-4 sm:w-4" /> : 
                    <Cloud className="h-3 w-3 sm:h-4 sm:w-4" />}
-                  <p className="text-xs sm:text-sm text-blue-100">{greeting}</p>
+                  <p className="text-xs sm:text-sm">{greeting}</p>
                 </div>
-                <h1 className="text-base sm:text-2xl lg:text-3xl font-bold leading-tight">Manajemen PKL</h1>
+                <h1 className="text-base sm:text-2xl lg:text-3xl font-bold text-white leading-tight">Manajemen PKL</h1>
                 <p className="text-blue-100 text-xs sm:text-sm">Kelola lokasi PKL dan atur siswa yang sedang PKL</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="bg-white/10 rounded-xl px-3 py-1 sm:px-4 sm:py-2 backdrop-blur-sm text-center">
-                <p className="text-[10px] sm:text-xs text-blue-100">{formatDate(currentTime)}</p>
-                <p className="text-base sm:text-xl font-semibold">{currentTime.toLocaleTimeString("id-ID")}</p>
+              <div className="bg-[#2C5EAD] rounded-xl px-3 py-1 sm:px-4 sm:py-2 text-center shadow-md">
+                <p className="text-[10px] sm:text-xs text-white/90">{formatDate(currentTime)}</p>
+                <p className="text-base sm:text-xl font-semibold text-white">{currentTime.toLocaleTimeString("id-ID")}</p>
               </div>
-              <Button variant="ghost" size="icon" className="bg-white/10 hover:bg-white/20 text-white rounded-xl" onClick={handleRefresh}>
+              <Button variant="ghost" size="icon" className="bg-[#2C5EAD] hover:bg-[#2C5EAD]/80 text-white rounded-xl h-10 w-10 shadow-md" onClick={handleRefresh}>
                 <RefreshCw className="h-5 w-5" />
               </Button>
             </div>
@@ -679,47 +679,55 @@ export default function PklManagement() {
       <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8">
         {/* STATS CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-white">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] sm:text-xs text-blue-600 font-medium">Total Lokasi PKL</p>
-                  <p className="text-lg sm:text-2xl font-bold text-blue-900">{pklList.length}</p>
+                  <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Total Lokasi PKL</p>
+                  <p className="text-lg sm:text-2xl font-bold text-[#2C5EAD]">{pklList.length}</p>
                 </div>
-                <Building2 className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" />
+                <div className="p-2 rounded-full bg-[#C4E2F5]">
+                  <Building2 className="h-5 w-5 text-[#2C5EAD]" />
+                </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-white">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Siswa PKL</p>
-                  <p className="text-lg sm:text-2xl font-bold text-emerald-900">{siswaList.filter(s => s.id_pkl).length}</p>
+                  <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Siswa PKL</p>
+                  <p className="text-lg sm:text-2xl font-bold text-[#2C5EAD]">{siswaList.filter(s => s.id_pkl).length}</p>
                 </div>
-                <Briefcase className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />
+                <div className="p-2 rounded-full bg-emerald-100">
+                  <Briefcase className="h-5 w-5 text-emerald-600" />
+                </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-white">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] sm:text-xs text-purple-600 font-medium">Guru Pendamping</p>
-                  <p className="text-lg sm:text-2xl font-bold text-purple-900">{guruList.length}</p>
+                  <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Guru Pendamping</p>
+                  <p className="text-lg sm:text-2xl font-bold text-[#2C5EAD]">{guruList.length}</p>
                 </div>
-                <User className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" />
+                <div className="p-2 rounded-full bg-purple-100">
+                  <User className="h-5 w-5 text-purple-600" />
+                </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-white">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] sm:text-xs text-amber-600 font-medium">Total Kelas</p>
-                  <p className="text-lg sm:text-2xl font-bold text-amber-900">{kelasList.length}</p>
+                  <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Total Kelas</p>
+                  <p className="text-lg sm:text-2xl font-bold text-[#2C5EAD]">{kelasList.length}</p>
                 </div>
-                <School className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" />
+                <div className="p-2 rounded-full bg-amber-100">
+                  <School className="h-5 w-5 text-amber-600" />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -727,23 +735,23 @@ export default function PklManagement() {
 
         {/* MAIN TABS CARD */}
         <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 sm:p-6">
+          <CardHeader className="bg-[#1591DC] text-white p-4 sm:p-6">
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="bg-white/10 p-1.5 sm:p-2 rounded-xl"><Briefcase className="h-5 w-5 sm:h-6 sm:w-6" /></div>
+              <div className="bg-white/20 p-1.5 sm:p-2 rounded-xl"><Briefcase className="h-5 w-5 sm:h-6 sm:w-6" /></div>
               <div>
                 <CardTitle className="text-base sm:text-xl">Manajemen PKL</CardTitle>
-                <CardDescription className="text-slate-300 text-xs sm:text-sm">Kelola lokasi PKL dan atur siswa yang sedang PKL</CardDescription>
+                <CardDescription className="text-blue-100 text-xs sm:text-sm">Kelola lokasi PKL dan atur siswa yang sedang PKL</CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "lokasi" | "siswa")} className="space-y-4 sm:space-y-6">
               <div className="flex justify-center">
-                <TabsList className="bg-slate-100 p-1 rounded-xl w-auto inline-flex">
-                  <TabsTrigger value="lokasi" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2 px-3 sm:px-4 py-1 text-xs sm:text-sm">
+                <TabsList className="bg-[#2C5EAD] p-1 rounded-xl">
+                  <TabsTrigger value="lokasi" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4 gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
                     <Building2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Lokasi PKL
                   </TabsTrigger>
-                  <TabsTrigger value="siswa" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2 px-3 sm:px-4 py-1 text-xs sm:text-sm">
+                  <TabsTrigger value="siswa" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4 gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
                     <Users className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Atur Siswa PKL
                   </TabsTrigger>
                 </TabsList>
@@ -755,11 +763,11 @@ export default function PklManagement() {
                   <div className="flex gap-2 flex-wrap justify-center sm:justify-start">
                     {canWrite && (
                       <>
-                        <Button onClick={openAddPKL} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600">
-                          <Plus className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" /> Tambah Lokasi
+                        <Button onClick={openAddPKL} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] hover:shadow-md">
+                          <Plus className="mr-1 h-3 w-3" /> Tambah Lokasi
                         </Button>
-                        <Button variant="outline" onClick={() => { setImportType("lokasi"); setImportDialogOpen(true); }} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">
-                          <Upload className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" /> Import Excel
+                        <Button variant="outline" onClick={() => { setImportType("lokasi"); setImportDialogOpen(true); }} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">
+                          <Upload className="mr-1 h-3 w-3" /> Import Excel
                         </Button>
                       </>
                     )}
@@ -769,12 +777,12 @@ export default function PklManagement() {
                   </div>
                   <div className="flex gap-2 justify-center sm:justify-end">
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400" />
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                       <Input placeholder="Cari lokasi PKL..." value={searchLokasi} onChange={(e) => setSearchLokasi(e.target.value)} className="pl-8 pr-8 rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full sm:w-64" />
                       {searchLokasi && <button onClick={() => setSearchLokasi("")} className="absolute right-3 top-1/2"><X className="h-3.5 w-3.5 text-slate-400" /></button>}
                     </div>
-                    <Button variant="outline" onClick={fetchPKL} disabled={isFetchingPKL} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm">
-                      <RefreshCw className={`mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5 ${isFetchingPKL ? "animate-spin" : ""}`} /> Refresh
+                    <Button variant="outline" onClick={fetchPKL} disabled={isFetchingPKL} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">
+                      <RefreshCw className={`mr-1 h-3 w-3 ${isFetchingPKL ? "animate-spin" : ""}`} /> Refresh
                     </Button>
                   </div>
                 </div>
@@ -797,8 +805,8 @@ export default function PklManagement() {
                             <TableCell className="font-medium text-xs sm:text-sm">{pkl.tempat_pkl}</TableCell>
                             <TableCell><code className="text-[10px] sm:text-xs bg-slate-100 px-2 py-1 rounded-lg">{pkl.koordinat_pkl || "-"}</code></TableCell>
                             <TableCell><div className="flex items-center gap-2"><div className="bg-purple-100 p-1.5 rounded-lg"><User className="h-3 w-3 text-purple-600" /></div><span className="text-xs sm:text-sm">{pkl.guru_nama}</span></div></TableCell>
-                            <TableCell>{pkl.aktif ? <Badge className="bg-green-100 text-green-700 rounded-full gap-1 text-xs"><CheckCircle className="h-3 w-3" /> Aktif</Badge> : <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 rounded-full gap-1 text-xs"><PowerOff className="h-3 w-3" /> Nonaktif</Badge>}</TableCell>
-                            {canWrite && <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditPKL(pkl)} className="h-7 w-7 p-0 rounded-lg"><Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" /></Button><Button variant="ghost" size="sm" onClick={() => confirmToggleActive(pkl)} className="h-7 w-7 p-0 rounded-lg">{pkl.aktif ? <PowerOff className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500" /> : <Power className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500" />}</Button></div></TableCell>}
+                            <TableCell>{pkl.aktif ? <Badge className="bg-emerald-100 text-emerald-700 rounded-full gap-1 text-xs"><CheckCircle className="h-3 w-3" /> Aktif</Badge> : <Badge variant="outline" className="bg-rose-50 text-rose-600 border-rose-200 rounded-full gap-1 text-xs"><PowerOff className="h-3 w-3" /> Nonaktif</Badge>}</TableCell>
+                            {canWrite && <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditPKL(pkl)} className="h-7 w-7 p-0 rounded-lg"><Edit className="h-3.5 w-3.5 text-[#2C5EAD]" /></Button><Button variant="ghost" size="sm" onClick={() => confirmToggleActive(pkl)} className="h-7 w-7 p-0 rounded-lg">{pkl.aktif ? <PowerOff className="h-3.5 w-3.5 text-red-500" /> : <Power className="h-3.5 w-3.5 text-green-500" />}</Button></div></TableCell>}
                           </TableRow>
                         ))}
                         {paginatedPklList.length === 0 && <TableRow><TableCell colSpan={canWrite ? 5 : 4} className="text-center py-8 text-slate-500">{searchLokasi ? "Tidak ada lokasi PKL yang cocok" : "Belum ada lokasi PKL"}</TableCell></TableRow>}
@@ -823,18 +831,20 @@ export default function PklManagement() {
                       </PopoverTrigger>
                       <PopoverContent className="w-64 p-0" align="start" sideOffset={5}>
                         <div className="p-2 border-b bg-slate-50">
-                          <div className="flex gap-1 mb-2 flex-wrap">{["all","X","XI","XII"].map(jenjang=><Button key={jenjang} variant={kelasJenjangFilter===jenjang?"default":"ghost"} size="sm" className={`h-7 px-2 text-xs rounded-md`} onClick={()=>setKelasJenjangFilter(jenjang)}>{jenjang==="all"?"Semua":jenjang}</Button>)}</div>
+                          <div className="flex gap-1 mb-2 flex-wrap">
+                            {["all","X","XI","XII"].map(jenjang=><Button key={jenjang} variant={kelasJenjangFilter===jenjang?"default":"ghost"} size="sm" className={`h-7 px-2 text-xs rounded-md ${kelasJenjangFilter===jenjang?"bg-[#2C5EAD] text-white":"text-slate-600 hover:bg-slate-100"}`} onClick={()=>setKelasJenjangFilter(jenjang)}>{jenjang==="all"?"Semua":jenjang}</Button>)}
+                          </div>
                           <div className="relative"><Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400"/><Input placeholder="Cari kelas..." value={kelasSearchQuery} onChange={(e)=>setKelasSearchQuery(e.target.value)} className="pl-7 h-8 text-sm rounded-lg" onClick={(e)=>e.stopPropagation()}/>{kelasSearchQuery&&<button onClick={()=>setKelasSearchQuery("")} className="absolute right-2 top-1/2"><X className="h-3.5 w-3.5 text-slate-400"/></button>}</div>
                         </div>
                         <div className="max-h-60 overflow-y-auto">
-                          {filteredKelasOptions.length===0?<div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada kelas yang cocok</div>:filteredKelasOptions.map(kelas=><button key={kelas.id_kelas} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${selectedKelas===kelas.id_kelas.toString()?"bg-blue-50 text-blue-700 font-medium":"text-slate-700"}`} onClick={()=>{setSelectedKelas(kelas.id_kelas.toString());setPopoverKelasOpen(false);setKelasSearchQuery("");setKelasJenjangFilter("all");}}>{kelas.nama}</button>)}
+                          {filteredKelasOptions.length===0?<div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada kelas yang cocok</div>:filteredKelasOptions.map(kelas=><button key={kelas.id_kelas} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${selectedKelas===kelas.id_kelas.toString()?"bg-[#C4E2F5] text-[#2C5EAD] font-medium":"text-slate-700"}`} onClick={()=>{setSelectedKelas(kelas.id_kelas.toString());setPopoverKelasOpen(false);setKelasSearchQuery("");setKelasJenjangFilter("all");}}>{kelas.nama}</button>)}
                         </div>
                       </PopoverContent>
                     </Popover>
                   </div>
-                  {canWrite && <Button variant="outline" onClick={()=>{setImportType("assignment");setImportDialogOpen(true);}} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><Upload className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5"/> Import Assignment</Button>}
-                  <div className="relative flex-1 min-w-[200px] w-full sm:w-auto"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400"/><Input placeholder="Cari siswa (NIS/Nama)..." value={searchSiswa} onChange={(e)=>setSearchSiswa(e.target.value)} className="pl-8 pr-8 rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full"/>{searchSiswa&&<button onClick={()=>setSearchSiswa("")} className="absolute right-3 top-1/2"><X className="h-3.5 w-3.5 text-slate-400"/></button>}</div>
-                  <Button variant="outline" onClick={fetchSiswa} disabled={isFetchingSiswa} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><RefreshCw className={`mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5 ${isFetchingSiswa?"animate-spin":""}`}/> Refresh</Button>
+                  {canWrite && <Button variant="outline" onClick={()=>{setImportType("assignment");setImportDialogOpen(true);}} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"><Upload className="mr-1 h-3 w-3"/> Import Assignment</Button>}
+                  <div className="relative flex-1 min-w-[200px] w-full sm:w-auto"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400"/><Input placeholder="Cari siswa (NIS/Nama)..." value={searchSiswa} onChange={(e)=>setSearchSiswa(e.target.value)} className="pl-8 pr-8 rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full"/>{searchSiswa&&<button onClick={()=>setSearchSiswa("")} className="absolute right-3 top-1/2"><X className="h-3.5 w-3.5 text-slate-400"/></button>}</div>
+                  <Button variant="outline" onClick={fetchSiswa} disabled={isFetchingSiswa} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"><RefreshCw className={`mr-1 h-3 w-3 ${isFetchingSiswa?"animate-spin":""}`}/> Refresh</Button>
                 </div>
 
                 <div className="border rounded-xl overflow-hidden shadow-sm">
@@ -844,14 +854,14 @@ export default function PklManagement() {
                         <TableRow className="bg-slate-50"><TableHead className="text-xs sm:text-sm font-semibold">NIS</TableHead><TableHead className="text-xs sm:text-sm font-semibold">Nama Siswa</TableHead><TableHead className="text-xs sm:text-sm font-semibold">Kelas</TableHead><TableHead className="text-center text-xs sm:text-sm font-semibold">Status</TableHead><TableHead className="text-xs sm:text-sm font-semibold">Lokasi PKL</TableHead><TableHead className="text-xs sm:text-sm font-semibold w-72">Atur Status</TableHead></TableRow>
                       </TableHeader>
                       <TableBody>
-                        {isFetchingSiswa?<TableRow><TableCell colSpan={6} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-500"/></TableCell></TableRow>:paginatedSiswaList.length===0?<TableRow><TableCell colSpan={6} className="text-center py-8 text-slate-500 text-xs sm:text-sm">{searchSiswa?"Tidak ada siswa yang cocok":"Tidak ada data siswa"}</TableCell></TableRow>:paginatedSiswaList.map(siswa=>(
+                        {isFetchingSiswa?<TableRow><TableCell colSpan={6} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#2C5EAD]"/></TableCell></TableRow>:paginatedSiswaList.length===0?<TableRow><TableCell colSpan={6} className="text-center py-8 text-slate-500 text-xs sm:text-sm">{searchSiswa?"Tidak ada siswa yang cocok":"Tidak ada data siswa"}</TableCell></TableRow>:paginatedSiswaList.map(siswa=>(
                           <TableRow key={siswa.id_siswa} className="hover:bg-slate-50 transition-colors">
                             <TableCell className="font-mono text-xs sm:text-sm">{siswa.nis}</TableCell>
                             <TableCell className="font-medium text-xs sm:text-sm">{siswa.nama}</TableCell>
                             <TableCell className="text-xs sm:text-sm">{siswa.kelas_nama}</TableCell>
-                            <TableCell className="text-center">{siswa.id_pkl?<Badge className="bg-blue-100 text-blue-700 rounded-full text-xs"><Briefcase className="h-3 w-3 mr-1"/> PKL</Badge>:<Badge className="bg-green-100 text-green-700 rounded-full text-xs"><Home className="h-3 w-3 mr-1"/> Sekolah</Badge>}</TableCell>
+                            <TableCell className="text-center">{siswa.id_pkl?<Badge className="bg-blue-100 text-blue-700 rounded-full text-xs"><Briefcase className="h-3 w-3 mr-1"/> PKL</Badge>:<Badge className="bg-emerald-100 text-emerald-700 rounded-full text-xs"><Home className="h-3 w-3 mr-1"/> Sekolah</Badge>}</TableCell>
                             <TableCell className="text-xs sm:text-sm">{siswa.tempat_pkl||"-"}</TableCell>
-                            <TableCell>{canWrite?<div className="flex items-center gap-2"><Popover open={pklSearchPopoverOpen===siswa.id_siswa} onOpenChange={(open)=>{setPklSearchPopoverOpen(open?siswa.id_siswa:null);setPklSearchQuery("");}}><PopoverTrigger asChild><Button variant="outline" className="w-[200px] sm:w-[240px] justify-between rounded-xl h-8 sm:h-9 text-xs sm:text-sm font-normal" disabled={updatingSiswa===siswa.id_siswa}>{siswa.id_pkl?`🏭 ${siswa.tempat_pkl}`:"🏫 Sekolah"}<ChevronDown className="h-3.5 w-3.5 opacity-50"/></Button></PopoverTrigger><PopoverContent className="w-[280px] sm:w-[300px] p-0" align="start" sideOffset={5}><div className="p-2 border-b bg-slate-50"><div className="relative"><Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400"/><Input placeholder="Cari lokasi PKL..." value={pklSearchQuery} onChange={(e)=>setPklSearchQuery(e.target.value)} className="pl-7 h-8 text-sm rounded-lg" onClick={(e)=>e.stopPropagation()}/>{pklSearchQuery&&<button onClick={()=>setPklSearchQuery("")} className="absolute right-2 top-1/2"><X className="h-3.5 w-3.5 text-slate-400"/></button>}</div></div><div className="max-h-60 overflow-y-auto"><button className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors flex items-center gap-2 ${!siswa.id_pkl?"bg-blue-50 text-blue-700 font-medium":"text-slate-700"}`} onClick={()=>{updateSiswaPKL(siswa.id_siswa,null);setPklSearchPopoverOpen(null);setPklSearchQuery("");}}><Home className="h-4 w-4"/> Sekolah (tidak PKL)</button>{pklList.filter(p=>p.aktif&&p.tempat_pkl.toLowerCase().includes(pklSearchQuery.toLowerCase())).length===0&&pklSearchQuery?<div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada lokasi PKL yang cocok</div>:pklList.filter(p=>p.aktif&&p.tempat_pkl.toLowerCase().includes(pklSearchQuery.toLowerCase())).map(pkl=><button key={pkl.id_pkl} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors flex items-center gap-2 ${siswa.id_pkl===pkl.id_pkl?"bg-blue-50 text-blue-700 font-medium":"text-slate-700"}`} onClick={()=>{updateSiswaPKL(siswa.id_siswa,pkl.id_pkl);setPklSearchPopoverOpen(null);setPklSearchQuery("");}}><Briefcase className="h-4 w-4"/> {pkl.tempat_pkl}</button>)}</div></PopoverContent></Popover>{updatingSiswa===siswa.id_siswa&&<Loader2 className="h-4 w-4 animate-spin text-blue-500"/>}</div>:<div className="text-xs text-slate-500 italic">Mode baca saja</div>}</TableCell>
+                            <TableCell>{canWrite?<div className="flex items-center gap-2"><Popover open={pklSearchPopoverOpen===siswa.id_siswa} onOpenChange={(open)=>{setPklSearchPopoverOpen(open?siswa.id_siswa:null);setPklSearchQuery("");}}><PopoverTrigger asChild><Button variant="outline" className="w-[200px] sm:w-[240px] justify-between rounded-xl h-8 sm:h-9 text-xs sm:text-sm font-normal border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white" disabled={updatingSiswa===siswa.id_siswa}>{siswa.id_pkl?`🏭 ${siswa.tempat_pkl}`:"🏫 Sekolah"}<ChevronDown className="h-3.5 w-3.5 opacity-50"/></Button></PopoverTrigger><PopoverContent className="w-[280px] sm:w-[300px] p-0" align="start" sideOffset={5}><div className="p-2 border-b bg-slate-50"><div className="relative"><Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400"/><Input placeholder="Cari lokasi PKL..." value={pklSearchQuery} onChange={(e)=>setPklSearchQuery(e.target.value)} className="pl-7 h-8 text-sm rounded-lg" onClick={(e)=>e.stopPropagation()}/>{pklSearchQuery&&<button onClick={()=>setPklSearchQuery("")} className="absolute right-2 top-1/2"><X className="h-3.5 w-3.5 text-slate-400"/></button>}</div></div><div className="max-h-60 overflow-y-auto"><button className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors flex items-center gap-2 ${!siswa.id_pkl?"bg-[#C4E2F5] text-[#2C5EAD] font-medium":"text-slate-700"}`} onClick={()=>{updateSiswaPKL(siswa.id_siswa,null);setPklSearchPopoverOpen(null);setPklSearchQuery("");}}><Home className="h-4 w-4"/> Sekolah (tidak PKL)</button>{pklList.filter(p=>p.aktif&&p.tempat_pkl.toLowerCase().includes(pklSearchQuery.toLowerCase())).length===0&&pklSearchQuery?<div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada lokasi PKL yang cocok</div>:pklList.filter(p=>p.aktif&&p.tempat_pkl.toLowerCase().includes(pklSearchQuery.toLowerCase())).map(pkl=><button key={pkl.id_pkl} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors flex items-center gap-2 ${siswa.id_pkl===pkl.id_pkl?"bg-[#C4E2F5] text-[#2C5EAD] font-medium":"text-slate-700"}`} onClick={()=>{updateSiswaPKL(siswa.id_siswa,pkl.id_pkl);setPklSearchPopoverOpen(null);setPklSearchQuery("");}}><Briefcase className="h-4 w-4"/> {pkl.tempat_pkl}</button>)}</div></PopoverContent></Popover>{updatingSiswa===siswa.id_siswa&&<Loader2 className="h-4 w-4 animate-spin text-[#2C5EAD]"/>}</div>:<div className="text-xs text-slate-500 italic">Mode baca saja</div>}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -859,15 +869,25 @@ export default function PklManagement() {
                   </div>
                 </div>
                 {totalSiswaPages > 1 && <div className="flex justify-center items-center gap-2 pt-2 flex-wrap">...</div>}
-                <Alert className="rounded-xl bg-blue-50 border-blue-200 max-w-3xl mx-auto"><MapPin className="h-4 w-4 text-blue-600"/><AlertDescription className="text-blue-700 text-xs sm:text-sm"><strong className="text-blue-800">Informasi Penting:</strong><ul className="list-disc list-inside mt-2 space-y-1 text-xs sm:text-sm"><li>Siswa dengan status <strong>Sekolah</strong> akan melakukan presensi harian dan presensi mapel di lokasi sekolah.</li><li>Siswa dengan status <strong>PKL</strong> hanya dapat melakukan presensi harian di lokasi PKL yang ditentukan.</li><li>Setiap lokasi PKL memiliki <strong>guru pendamping</strong> yang bertanggung jawab.</li></ul></AlertDescription></Alert>
+                <Alert className="rounded-xl bg-blue-50 border-blue-200 max-w-3xl mx-auto"><MapPin className="h-4 w-4 text-[#2C5EAD]"/><AlertDescription className="text-blue-700 text-xs sm:text-sm"><strong className="text-[#2C5EAD]">Informasi Penting:</strong><ul className="list-disc list-inside mt-2 space-y-1 text-xs sm:text-sm"><li>Siswa dengan status <strong>Sekolah</strong> akan melakukan presensi harian dan presensi mapel di lokasi sekolah.</li><li>Siswa dengan status <strong>PKL</strong> hanya dapat melakukan presensi harian di lokasi PKL yang ditentukan.</li><li>Setiap lokasi PKL memiliki <strong>guru pendamping</strong> yang bertanggung jawab.</li></ul></AlertDescription></Alert>
               </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
 
         {/* TIPS SECTION */}
-        <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50 max-w-3xl mx-auto">
-          <CardContent className="p-4 sm:p-5"><div className="flex items-start gap-3 sm:gap-4"><div className="bg-indigo-100 p-2 sm:p-3 rounded-xl flex-shrink-0"><Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600"/></div><div><h3 className="font-semibold text-slate-800 text-sm sm:text-base mb-1">Tips Mengelola PKL</h3><p className="text-xs sm:text-sm text-slate-600">Gunakan fitur import Excel untuk menambahkan banyak lokasi PKL atau assignment siswa sekaligus. Pastikan data guru pendamping sudah terdaftar sebelum melakukan import lokasi PKL.</p></div></div></CardContent>
+        <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-[#C4E2F5]/50 to-[#4BB8FA]/20 max-w-3xl mx-auto">
+          <CardContent className="p-4 sm:p-5">
+            <div className="flex items-start gap-3 sm:gap-4">
+              <div className="bg-[#2C5EAD]/10 p-2 sm:p-3 rounded-xl flex-shrink-0">
+                <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-[#2C5EAD]" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-800 text-sm sm:text-base mb-1">Tips Mengelola PKL</h3>
+                <p className="text-xs sm:text-sm text-slate-600">Gunakan fitur import Excel untuk menambahkan banyak lokasi PKL atau assignment siswa sekaligus. Pastikan data guru pendamping sudah terdaftar sebelum melakukan import lokasi PKL.</p>
+              </div>
+            </div>
+          </CardContent>
         </Card>
 
         <div className="text-center pt-4"><Separator className="mb-4"/><p className="text-xs text-slate-400">© {new Date().getFullYear()} Manajemen PKL - SmartAS</p><p className="text-[10px] text-slate-300 mt-1">Sistem Informasi Akademik</p></div>
@@ -876,17 +896,17 @@ export default function PklManagement() {
       {/* Dialog Import */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogContent className="max-w-[95vw] sm:max-w-2xl rounded-2xl p-4 sm:p-6">
-          <DialogHeader><DialogTitle className="text-base sm:text-xl flex items-center gap-2"><Upload className="h-5 w-5 text-blue-600"/> {importType==="lokasi"?"Import Lokasi PKL":"Import Assignment Siswa PKL"}</DialogTitle><DialogDescription className="text-xs sm:text-sm">Upload file Excel (.xlsx, .xls, .csv) dengan format yang sesuai.{importType==="lokasi"?" Kolom: tempat_pkl (wajib), koordinat_pkl (opsional), guru_nik (NIK guru pendamping, opsional).":" Kolom: nis (wajib), tempat_pkl (wajib, nama tempat PKL harus sudah ada dan aktif di database)."}</DialogDescription></DialogHeader>
-          <div className="space-y-4"><div className="flex gap-4 flex-wrap"><Button variant="outline" onClick={()=>downloadTemplate(importType)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><Download className="mr-1.5 h-3.5 w-3.5"/> Download Template</Button><div className="relative"><input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} disabled={isImporting} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/><Button disabled={isImporting} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm"><Upload className="mr-1.5 h-3.5 w-3.5"/> {isImporting?"Memproses...":"Pilih File"}</Button></div></div>{importError&&<Alert variant="destructive" className="rounded-xl"><AlertCircle className="h-4 w-4"/><AlertDescription className="text-xs sm:text-sm">{importError}</AlertDescription></Alert>}{importPreview.length>0&&<><Alert className="rounded-xl bg-emerald-50 border-emerald-200 max-w-md mx-auto"><CheckCircle className="h-4 w-4 text-emerald-600"/><AlertDescription className="text-emerald-700 text-xs sm:text-sm">{importPreview.length} data siap diimport</AlertDescription></Alert><div className="border rounded-xl overflow-auto max-h-64"><Table><TableHeader><TableRow className="bg-slate-50">{Object.keys(importPreview[0]||{}).map(key=><TableHead key={key} className="font-semibold text-xs sm:text-sm">{key}</TableHead>)}</TableRow></TableHeader><TableBody>{importPreview.slice(0,5).map((row,idx)=><TableRow key={idx}>{Object.values(row).map((val:any,i)=><TableCell key={i} className="text-xs sm:text-sm">{val}</TableCell>)}</TableRow>)}{importPreview.length>5&&<TableRow><TableCell colSpan={Object.keys(importPreview[0]).length} className="text-center text-slate-500 text-xs sm:text-sm">... dan {importPreview.length-5} data lainnya</TableCell></TableRow>}</TableBody></Table></div><div className="flex justify-center"><Button onClick={handleImport} disabled={isImporting} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600">{isImporting&&<Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin"/>} Import Data</Button></div></>}</div>
+          <DialogHeader><DialogTitle className="text-base sm:text-xl flex items-center gap-2"><Upload className="h-5 w-5 text-[#2C5EAD]"/> {importType==="lokasi"?"Import Lokasi PKL":"Import Assignment Siswa PKL"}</DialogTitle><DialogDescription className="text-xs sm:text-sm">Upload file Excel (.xlsx, .xls, .csv) dengan format yang sesuai.{importType==="lokasi"?" Kolom: tempat_pkl (wajib), koordinat_pkl (opsional), guru_nik (NIK guru pendamping, opsional).":" Kolom: nis (wajib), tempat_pkl (wajib, nama tempat PKL harus sudah ada dan aktif di database)."}</DialogDescription></DialogHeader>
+          <div className="space-y-4"><div className="flex gap-4 flex-wrap"><Button variant="outline" onClick={()=>downloadTemplate(importType)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"><Download className="mr-1.5 h-3.5 w-3.5"/> Download Template</Button><div className="relative"><input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} disabled={isImporting} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/><Button disabled={isImporting} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]"><Upload className="mr-1.5 h-3.5 w-3.5"/> {isImporting?"Memproses...":"Pilih File"}</Button></div></div>{importError&&<Alert variant="destructive" className="rounded-xl"><AlertCircle className="h-4 w-4"/><AlertDescription className="text-xs sm:text-sm">{importError}</AlertDescription></Alert>}{importPreview.length>0&&<><Alert className="rounded-xl bg-emerald-50 border-emerald-200 max-w-md mx-auto"><CheckCircle className="h-4 w-4 text-emerald-600"/><AlertDescription className="text-emerald-700 text-xs sm:text-sm">{importPreview.length} data siap diimport</AlertDescription></Alert><div className="border rounded-xl overflow-auto max-h-64"><Table><TableHeader><TableRow className="bg-slate-50">{Object.keys(importPreview[0]||{}).map(key=><TableHead key={key} className="font-semibold text-xs sm:text-sm">{key}</TableHead>)}</TableRow></TableHeader><TableBody>{importPreview.slice(0,5).map((row,idx)=><TableRow key={idx}>{Object.values(row).map((val:any,i)=><TableCell key={i} className="text-xs sm:text-sm">{val}</TableCell>)}</TableRow>)}{importPreview.length>5&&<TableRow><TableCell colSpan={Object.keys(importPreview[0]).length} className="text-center text-slate-500 text-xs sm:text-sm">... dan {importPreview.length-5} data lainnya</TableCell></TableRow>}</TableBody></Table></div><div className="flex justify-center"><Button onClick={handleImport} disabled={isImporting} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isImporting&&<Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin"/>} Import Data</Button></div></>}</div>
         </DialogContent>
       </Dialog>
 
       {/* Dialog Lokasi PKL */}
       <Dialog open={pklDialogOpen} onOpenChange={setPklDialogOpen}>
         <DialogContent className="rounded-2xl max-w-[95vw] sm:max-w-lg p-4 sm:p-6">
-          <DialogHeader><DialogTitle className="text-base sm:text-xl flex items-center gap-2"><Building2 className="h-5 w-5 text-blue-600"/> {editingPKL?"Edit Lokasi PKL":"Tambah Lokasi PKL"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-base sm:text-xl flex items-center gap-2"><Building2 className="h-5 w-5 text-[#2C5EAD]"/> {editingPKL?"Edit Lokasi PKL":"Tambah Lokasi PKL"}</DialogTitle></DialogHeader>
           <div className="space-y-4"><div><Label className="text-xs sm:text-sm">Tempat / Nama Perusahaan</Label><Input value={pklForm.tempat_pkl} onChange={(e)=>setPklForm({...pklForm,tempat_pkl:e.target.value})} className="rounded-xl mt-1 h-8 sm:h-9 text-xs sm:text-sm" placeholder="Contoh: PT. Maju Jaya"/></div><div><Label className="text-xs sm:text-sm">Koordinat (Opsional)</Label><Input value={pklForm.koordinat_pkl} onChange={(e)=>setPklForm({...pklForm,koordinat_pkl:e.target.value})} placeholder="-6.200000,106.816666" className="rounded-xl mt-1 h-8 sm:h-9 text-xs sm:text-sm"/><p className="text-[10px] sm:text-xs text-slate-400 mt-1">Format: latitude,longitude</p></div><div><Label className="text-xs sm:text-sm">Guru Pendamping (NIK)</Label><Select value={pklForm.id_guru||"0"} onValueChange={(v)=>setPklForm({...pklForm,id_guru:v})}><SelectTrigger className="rounded-xl mt-1 h-8 sm:h-9 text-xs sm:text-sm"><SelectValue placeholder="Pilih guru pendamping"/></SelectTrigger><SelectContent className="rounded-xl"><SelectItem value="0">- Tidak ada -</SelectItem>{guruList.map(guru=><SelectItem key={guru.id_guru} value={guru.id_guru.toString()}>{guru.nik} - {guru.nama}</SelectItem>)}</SelectContent></Select></div></div>
-          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4"><Button variant="outline" onClick={()=>setPklDialogOpen(false)} className="w-full sm:w-auto text-xs sm:text-sm">Batal</Button><Button onClick={handleSavePKL} disabled={isSavingPKL} className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 w-full sm:w-auto text-xs sm:text-sm">{isSavingPKL&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Simpan</Button></DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4"><Button variant="outline" onClick={()=>setPklDialogOpen(false)} className="rounded-xl w-full sm:w-auto text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button><Button onClick={handleSavePKL} disabled={isSavingPKL} className="rounded-xl bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] w-full sm:w-auto text-xs sm:text-sm">{isSavingPKL&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Simpan</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -895,7 +915,7 @@ export default function PklManagement() {
         <DialogContent className="rounded-2xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
           <DialogHeader><DialogTitle className="text-base sm:text-xl flex items-center gap-2 text-orange-600">{togglingPKL?.aktif?<PowerOff className="h-5 w-5"/>:<Power className="h-5 w-5"/>}{togglingPKL?.aktif?"Nonaktifkan Lokasi PKL":"Aktifkan Lokasi PKL"}</DialogTitle></DialogHeader>
           <DialogDescription className="text-xs sm:text-sm">{togglingPKL?.aktif?<>Yakin ingin <strong>menonaktifkan</strong> lokasi PKL <strong>{togglingPKL?.tempat_pkl}</strong>?<br/>Lokasi yang nonaktif tidak akan muncul di pilihan assignment siswa.</>:<>Yakin ingin <strong>mengaktifkan</strong> kembali lokasi PKL <strong>{togglingPKL?.tempat_pkl}</strong>?</>}</DialogDescription>
-          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4"><Button variant="outline" onClick={()=>setToggleActiveDialogOpen(false)} className="w-full sm:w-auto text-xs sm:text-sm">Batal</Button><Button variant={togglingPKL?.aktif?"destructive":"default"} onClick={handleToggleActive} disabled={isSavingPKL} className={`w-full sm:w-auto text-xs sm:text-sm ${!togglingPKL?.aktif?"bg-green-600 hover:bg-green-700":""}`}>{isSavingPKL&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}{togglingPKL?.aktif?"Nonaktifkan":"Aktifkan"}</Button></DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4"><Button variant="outline" onClick={()=>setToggleActiveDialogOpen(false)} className="rounded-xl w-full sm:w-auto text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button><Button variant={togglingPKL?.aktif?"destructive":"default"} onClick={handleToggleActive} disabled={isSavingPKL} className={`rounded-xl w-full sm:w-auto text-xs sm:text-sm ${!togglingPKL?.aktif?"bg-green-600 hover:bg-green-700":""}`}>{isSavingPKL&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}{togglingPKL?.aktif?"Nonaktifkan":"Aktifkan"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -137,7 +137,6 @@ function isTimeOverlap(jam1: string, jam2: string): boolean {
   return t1.start < t2.end && t2.start < t1.end;
 }
 
-// ==================== FUNGSI WARNA UNTUK MAPEL (KONSISTEN) ====================
 const getColorForMapel = (mapel: string): string => {
   const colorPalette = [
     "border-l-blue-500",
@@ -162,16 +161,14 @@ const getColorForMapel = (mapel: string): string => {
   return colorPalette[index];
 };
 
-// ==================== FUNGSI STATUS WAKTU ====================
 const getWaktuStatus = (jamMulai: string) => {
   const now = new Date();
   const [hour, minute] = jamMulai.split(":").map(Number);
   const jamDate = new Date();
   jamDate.setHours(hour, minute, 0);
-  
   if (now > jamDate) {
-    return { 
-      status: "selesai", 
+    return {
+      status: "selesai",
       bgBadge: "bg-slate-100 text-slate-600",
       icon: <CheckCircle2 className="h-3 w-3" />,
       label: "Selesai"
@@ -179,15 +176,15 @@ const getWaktuStatus = (jamMulai: string) => {
   }
   const selisih = jamDate.getTime() - now.getTime();
   if (selisih < 3600000) {
-    return { 
-      status: "sebentar", 
+    return {
+      status: "sebentar",
       bgBadge: "bg-amber-100 text-amber-700",
       icon: <AlertCircle className="h-3 w-3" />,
       label: "Segera"
     };
   }
-  return { 
-    status: "akan datang", 
+  return {
+    status: "akan datang",
     bgBadge: "bg-emerald-100 text-emerald-700",
     icon: <Clock className="h-3 w-3" />,
     label: "Akan Datang"
@@ -313,7 +310,6 @@ export default function ScheduleManagement() {
   const [mapelCurrentPage, setMapelCurrentPage] = useState(1);
   const mapelItemsPerPage = 10;
 
-  // ========== SMART JAM INPUT ==========
   const formatJamInput = useCallback((raw: string): string => {
     let cleaned = raw.trim();
     if (/^\d{2}:\d{2} - \d{2}:\d{2}$/.test(cleaned)) return cleaned;
@@ -332,8 +328,8 @@ export default function ScheduleManagement() {
       const formatHhMm = (t: string): string => {
         t = t.replace(/[^0-9]/g, '');
         if (t.length === 2) return `${t}:00`;
-        if (t.length === 3) return `${t.slice(0,2)}:${t.slice(2)}`;
-        if (t.length === 4) return `${t.slice(0,2)}:${t.slice(2,4)}`;
+        if (t.length === 3) return `${t.slice(0, 2)}:${t.slice(2)}`;
+        if (t.length === 4) return `${t.slice(0, 2)}:${t.slice(2, 4)}`;
         return t;
       };
       start = formatHhMm(start);
@@ -383,7 +379,6 @@ export default function ScheduleManagement() {
     return colors[hari] || "bg-slate-100 text-slate-700";
   };
 
-  // FETCH DATA (logika asli)
   const fetchKelas = async () => {
     let query = supabase
       .from("kelas")
@@ -431,7 +426,6 @@ export default function ScheduleManagement() {
       const { data, error } = await (query as any);
       if (error) throw error;
       setJadwalList(data || []);
-      
       const activeJadwal = data?.filter((j: any) => j.aktif === true) || [];
       const totalKelas = new Set(activeJadwal.map((j: any) => j.id_kelas)).size;
       const totalMapel = new Set(activeJadwal.map((j: any) => j.id_mapel)).size;
@@ -448,9 +442,9 @@ export default function ScheduleManagement() {
       setStatistik({
         totalJadwal: activeJadwal.length,
         totalKelas, totalMapel, totalGuru,
-        hariTersibuk: Object.entries(hariCount).sort((a,b)=>b[1]-a[1])[0]?.[0] || "-",
-        jamTersibuk: Object.entries(jamCount).sort((a,b)=>b[1]-a[1])[0]?.[0] || "-",
-        guruTersibuk: Object.entries(guruCount).sort((a,b)=>b[1]-a[1])[0]?.[0] || "-",
+        hariTersibuk: Object.entries(hariCount).sort((a, b) => b[1] - a[1])[0]?.[0] || "-",
+        jamTersibuk: Object.entries(jamCount).sort((a, b) => b[1] - a[1])[0]?.[0] || "-",
+        guruTersibuk: Object.entries(guruCount).sort((a, b) => b[1] - a[1])[0]?.[0] || "-",
       });
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -472,7 +466,6 @@ export default function ScheduleManagement() {
     if (activeTab === "jadwal" && selectedKelas) fetchJadwal();
   }, [selectedKelas, selectedHari, activeTab]);
 
-  // OVERLAP CHECKS (logika asli)
   const checkOverlapJadwal = async (kelasId: number, mapelId: number, hari: string, jam: string, excludeId?: number): Promise<boolean> => {
     let query = supabase
       .from("jadwal")
@@ -498,7 +491,6 @@ export default function ScheduleManagement() {
     return data?.some(j => isTimeOverlap(j.jam, jam)) || false;
   };
 
-  // CRUD JADWAL (logika asli)
   const openAddJadwal = () => {
     if (!canWrite) return;
     setEditingJadwal(null);
@@ -625,7 +617,6 @@ export default function ScheduleManagement() {
     }
   };
 
-  // CRUD MAPEL (logika asli)
   const openAddMapel = () => {
     if (!canWrite) return;
     setEditingMapel(null);
@@ -695,7 +686,6 @@ export default function ScheduleManagement() {
     }
   };
 
-  // IMPORT MAPEL (logika asli)
   const downloadTemplateMapel = () => {
     const headers = ["nama"];
     const data = [["Matematika"], ["Fisika"], ["Kimia"], ["Biologi"], ["Bahasa Indonesia"]];
@@ -760,7 +750,6 @@ export default function ScheduleManagement() {
     }
   };
 
-  // IMPORT JADWAL (logika asli)
   const downloadJadwalTemplate = () => {
     const headers = ["kelas", "mapel", "nik_guru", "hari", "jam"];
     const data = [
@@ -897,9 +886,9 @@ export default function ScheduleManagement() {
         }
       }
       await fetchMapel();
-      toast({ 
-        title: "Berhasil", 
-        description: `${addedCount} mata pelajaran berhasil ditambahkan.` 
+      toast({
+        title: "Berhasil",
+        description: `${addedCount} mata pelajaran berhasil ditambahkan.`
       });
       const updatedPreview = await processJadwalPreview(importJadwalRawData);
       setImportJadwalPreviewRows(updatedPreview);
@@ -907,10 +896,10 @@ export default function ScheduleManagement() {
       setImportJadwalStep("preview");
       setImportJadwalDialogOpen(true);
     } catch (error: any) {
-      toast({ 
-        title: "Gagal Menambahkan Mapel", 
-        description: error.message, 
-        variant: "destructive" 
+      toast({
+        title: "Gagal Menambahkan Mapel",
+        description: error.message,
+        variant: "destructive"
       });
     } finally {
       setIsAddingMissingMapels(false);
@@ -921,10 +910,10 @@ export default function ScheduleManagement() {
     if (!canWrite) return;
     const validRows = importJadwalPreviewRows.filter(row => row.isValid);
     if (validRows.length === 0) {
-      toast({ 
-        title: "Tidak Ada Data Valid", 
-        description: "Tidak ada baris yang valid untuk diimpor. Perbaiki error terlebih dahulu.", 
-        variant: "destructive" 
+      toast({
+        title: "Tidak Ada Data Valid",
+        description: "Tidak ada baris yang valid untuk diimpor. Perbaiki error terlebih dahulu.",
+        variant: "destructive"
       });
       return;
     }
@@ -941,9 +930,9 @@ export default function ScheduleManagement() {
           row.jam
         );
         if (isOverlapMapel) {
-          failures.push({ 
-            row: row.rowIndex, 
-            error: `Jadwal tumpang tindih dengan jadwal lain di kelas ${row.kelas} untuk mapel ${row.mapel} pada hari ${row.hari} jam ${row.jam}` 
+          failures.push({
+            row: row.rowIndex,
+            error: `Jadwal tumpang tindih dengan jadwal lain di kelas ${row.kelas} untuk mapel ${row.mapel} pada hari ${row.hari} jam ${row.jam}`
           });
           failCount++;
           continue;
@@ -954,9 +943,9 @@ export default function ScheduleManagement() {
           row.jam
         );
         if (isGuruOverlap) {
-          failures.push({ 
-            row: row.rowIndex, 
-            error: `Guru dengan NIK ${row.nik_guru} sudah memiliki jadwal lain di hari ${row.hari} pada jam yang tumpang tindih` 
+          failures.push({
+            row: row.rowIndex,
+            error: `Guru dengan NIK ${row.nik_guru} sudah memiliki jadwal lain di hari ${row.hari} pada jam yang tumpang tindih`
           });
           failCount++;
           continue;
@@ -978,9 +967,9 @@ export default function ScheduleManagement() {
       }
     }
     if (successCount > 0) {
-      toast({ 
-        title: "Import Selesai", 
-        description: `${successCount} jadwal berhasil diimpor${failCount > 0 ? `, ${failCount} gagal` : ""}.` 
+      toast({
+        title: "Import Selesai",
+        description: `${successCount} jadwal berhasil diimpor${failCount > 0 ? `, ${failCount} gagal` : ""}.`
       });
       if (selectedKelas) {
         fetchJadwal();
@@ -988,10 +977,10 @@ export default function ScheduleManagement() {
     }
     if (failures.length > 0) {
       console.error("Import failures:", failures);
-      toast({ 
-        title: "Beberapa jadwal gagal diimpor", 
-        description: `Cek console untuk detail error. ${failCount} jadwal gagal.`, 
-        variant: "destructive" 
+      toast({
+        title: "Beberapa jadwal gagal diimpor",
+        description: `Cek console untuk detail error. ${failCount} jadwal gagal.`,
+        variant: "destructive"
       });
     }
     setImportJadwalDialogOpen(false);
@@ -1001,7 +990,6 @@ export default function ScheduleManagement() {
     setIsImportingJadwal(false);
   };
 
-  // BULK ACTION MAPEL (logika asli)
   const handleSelectAll = () => {
     const filtered = filteredMapel;
     if (selectedMapelIds.length === filtered.length && filtered.length > 0) setSelectedMapelIds([]);
@@ -1045,7 +1033,6 @@ export default function ScheduleManagement() {
     setIsProcessingBulk(false);
   };
 
-  // ========== FILTER MAPEL DENGAN SORTING KHUSUS: AKTIF DULU, LALU NONAKTIF ==========
   const filteredMapel = useMemo(() => {
     let filtered = [...mapelData];
     if (statusFilter === "aktif") filtered = filtered.filter(m => m.aktif === true);
@@ -1088,10 +1075,9 @@ export default function ScheduleManagement() {
     );
   }
 
-  // ==================== RENDER UTAMA DENGAN DESAIN BARU ====================
   return (
     <div className="min-h-screen bg-[#F0F7FC]">
-      {/* HEADER dengan gradasi palette */}
+      {/* HEADER */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] shadow-xl mx-4 mt-4">
         <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
         <div className="relative container mx-auto px-4 sm:px-6 py-4 sm:py-6">
@@ -1113,11 +1099,11 @@ export default function ScheduleManagement() {
                 <p className="text-[10px] sm:text-xs text-white/90">{formatDate(currentTime)}</p>
                 <p className="text-base sm:text-xl font-semibold text-white">{currentTime.toLocaleTimeString("id-ID")}</p>
               </div>
-              <Button 
-                variant="ghost" 
-                size="icon" 
+              <Button
+                variant="ghost"
+                size="icon"
                 className="bg-[#2C5EAD] hover:bg-[#2C5EAD]/80 text-white rounded-xl h-10 w-10 shadow-md"
-                onClick={handleRefresh} 
+                onClick={handleRefresh}
                 disabled={refreshing}
               >
                 <RefreshCw className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
@@ -1128,55 +1114,41 @@ export default function ScheduleManagement() {
       </div>
 
       <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8">
-        {/* STATS CARDS (4 kartu) - gradasi lembut sesuai palette */}
+        {/* STATS CARDS - LATAR PUTIH */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-[#2C5EAD]/10 to-[#1591DC]/10">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-md bg-white">
             <CardContent className="p-3 sm:p-4">
               <div className="flex justify-between">
-                <div><p className="text-[10px] sm:text-xs text-[#2C5EAD] font-medium">Total Kelas</p><p className="text-lg sm:text-2xl font-bold text-[#2C5EAD]">{kelasList.length}</p></div>
+                <div><p className="text-[10px] sm:text-xs text-slate-500 font-medium">Total Kelas</p><p className="text-lg sm:text-2xl font-bold text-[#2C5EAD]">{kelasList.length}</p></div>
                 <School className="h-6 w-6 sm:h-8 sm:w-8 text-[#1591DC]" />
               </div>
             </CardContent>
           </Card>
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-emerald-100">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-md bg-white">
             <CardContent className="p-3 sm:p-4">
               <div className="flex justify-between">
-                <div><p className="text-[10px] sm:text-xs text-emerald-600 font-medium">Total Mapel</p><p className="text-lg sm:text-2xl font-bold text-emerald-900">{mapelData.length}</p></div>
-                <BookOpen className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />
+                <div><p className="text-[10px] sm:text-xs text-slate-500 font-medium">Total Mapel</p><p className="text-lg sm:text-2xl font-bold text-[#2C5EAD]">{mapelData.length}</p></div>
+                <BookOpen className="h-6 w-6 sm:h-8 sm:w-8 text-[#1591DC]" />
               </div>
             </CardContent>
           </Card>
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-md bg-white">
             <CardContent className="p-3 sm:p-4">
               <div className="flex justify-between">
-                <div><p className="text-[10px] sm:text-xs text-purple-600 font-medium">Total Guru</p><p className="text-lg sm:text-2xl font-bold text-purple-900">{guruList.length}</p></div>
-                <User className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" />
+                <div><p className="text-[10px] sm:text-xs text-slate-500 font-medium">Total Guru</p><p className="text-lg sm:text-2xl font-bold text-[#2C5EAD]">{guruList.length}</p></div>
+                <User className="h-6 w-6 sm:h-8 sm:w-8 text-[#1591DC]" />
               </div>
             </CardContent>
           </Card>
-          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
+          <Card className="rounded-xl sm:rounded-2xl border-0 shadow-md bg-white">
             <CardContent className="p-3 sm:p-4">
               <div className="flex justify-between">
-                <div><p className="text-[10px] sm:text-xs text-amber-600 font-medium">Total Jadwal Aktif</p><p className="text-lg sm:text-2xl font-bold text-amber-900">{statistik.totalJadwal}</p></div>
-                <Calendar className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" />
+                <div><p className="text-[10px] sm:text-xs text-slate-500 font-medium">Total Jadwal Aktif</p><p className="text-lg sm:text-2xl font-bold text-[#2C5EAD]">{statistik.totalJadwal}</p></div>
+                <Calendar className="h-6 w-6 sm:h-8 sm:w-8 text-[#1591DC]" />
               </div>
             </CardContent>
           </Card>
         </div>
-
-        {/* DETAIL STATISTIK JADWAL (jika ada) - dengan gradasi #2C5EAD ke #1591DC */}
-        {activeTab === "jadwal" && selectedKelas && jadwalList.length > 0 && (
-          <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] text-white">
-            <CardContent className="p-4 sm:p-5">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 text-center">
-                <div><p className="text-[10px] sm:text-xs text-blue-100">Total Jadwal Aktif</p><p className="text-xl sm:text-2xl font-bold">{statistik.totalJadwal}</p></div>
-                <div><p className="text-[10px] sm:text-xs text-blue-100">Hari Tersibuk</p><p className="text-base sm:text-lg font-semibold">{statistik.hariTersibuk}</p></div>
-                <div><p className="text-[10px] sm:text-xs text-blue-100">Jam Tersibuk</p><p className="text-base sm:text-lg font-semibold">{statistik.jamTersibuk}</p></div>
-                <div><p className="text-[10px] sm:text-xs text-blue-100">Guru Tersibuk</p><p className="text-base sm:text-lg font-semibold truncate">{statistik.guruTersibuk}</p></div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* MAIN TABS CARD */}
         <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
@@ -1190,19 +1162,19 @@ export default function ScheduleManagement() {
                 </div>
               </div>
               {activeTab === "jadwal" && canWrite && (
-                <div className="flex gap-1 bg-white/20 p-1 rounded-xl self-start md:self-auto">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className={`rounded-lg text-white text-xs sm:text-sm ${viewMode === "table" ? "bg-white/30" : ""}`} 
+                <div className="flex gap-1 bg-[#2C5EAD] p-1 rounded-xl self-start md:self-auto">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`rounded-lg text-white text-xs sm:text-sm ${viewMode === "table" ? "bg-white/20 text-white" : "hover:bg-white/10"}`}
                     onClick={() => setViewMode("table")}
                   >
                     <LayoutGrid className="h-3.5 w-3.5 mr-1" />Tabel
                   </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className={`rounded-lg text-white text-xs sm:text-sm ${viewMode === "card" ? "bg-white/30" : ""}`} 
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`rounded-lg text-white text-xs sm:text-sm ${viewMode === "card" ? "bg-white/20 text-white" : "hover:bg-white/10"}`}
                     onClick={() => setViewMode("card")}
                   >
                     <List className="h-3.5 w-3.5 mr-1" />Kartu
@@ -1329,8 +1301,8 @@ export default function ScheduleManagement() {
                               const borderColor = getColorForMapel(j.mapel?.nama || "-");
                               const isLast = idx === jadwalList.length - 1;
                               return (
-                                <TableRow 
-                                  key={j.id_jadwal} 
+                                <TableRow
+                                  key={j.id_jadwal}
                                   className={`relative border-l-[6px] ${borderColor} ${!isLast ? 'border-b border-gray-100' : ''} hover:bg-slate-50/80 transition-colors`}
                                 >
                                   <TableCell className="font-mono text-sm py-3 whitespace-nowrap">{j.jam}</TableCell>
@@ -1379,8 +1351,8 @@ export default function ScheduleManagement() {
                       const waktuStatus = getWaktuStatus(jamMulai);
                       const borderColor = getColorForMapel(j.mapel?.nama || "-");
                       return (
-                        <div 
-                          key={j.id_jadwal} 
+                        <div
+                          key={j.id_jadwal}
                           className={`relative rounded-xl border border-gray-200 bg-white shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden ${borderColor} border-l-[6px]`}
                         >
                           <CardContent className="p-4 sm:p-5 relative">
@@ -1405,7 +1377,7 @@ export default function ScheduleManagement() {
                             </div>
                             {canWrite && (
                               <div className="flex gap-2 mt-3 pt-3 border-t">
-                                <Button variant="ghost" size="sm" onClick={() => openEditJadwal(j)} className="flex-1 text-xs"><Edit className="h-3.5 w-3.5 mr-1" /> Edit</Button>
+                                <Button variant="ghost" size="sm" onClick={() => openEditJadwal(j)} className="flex-1 text-xs text-[#2C5EAD]"><Edit className="h-3.5 w-3.5 mr-1" /> Edit</Button>
                                 {j.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)} className="flex-1 text-red-500 text-xs"><UserMinus className="h-3.5 w-3.5 mr-1" /> Nonaktif</Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)} className="flex-1 text-green-500 text-xs"><UserPlus className="h-3.5 w-3.5 mr-1" /> Aktif</Button>}
                               </div>
                             )}
@@ -1494,13 +1466,13 @@ export default function ScheduleManagement() {
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                     <p className="text-xs sm:text-sm text-slate-600">Menampilkan {((mapelCurrentPage - 1) * mapelItemsPerPage) + 1}-{Math.min(mapelCurrentPage * mapelItemsPerPage, filteredMapel.length)} dari {filteredMapel.length} mata pelajaran</p>
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setMapelCurrentPage(p => Math.max(1, p - 1))} disabled={mapelCurrentPage === 1} className="rounded-lg h-7 sm:h-8 text-xs">Sebelumnya</Button>
+                      <Button variant="outline" size="sm" onClick={() => setMapelCurrentPage(p => Math.max(1, p - 1))} disabled={mapelCurrentPage === 1} className="rounded-lg h-7 sm:h-8 text-xs border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Sebelumnya</Button>
                       <div className="flex items-center gap-1">
                         {Array.from({ length: Math.min(mapelTotalPages, 5) }, (_, i) => i + 1).map((page) => (
-                          <Button key={page} variant={mapelCurrentPage === page ? "default" : "outline"} size="sm" onClick={() => setMapelCurrentPage(page)} className="rounded-lg h-7 w-7 sm:h-8 sm:w-8 p-0 text-xs">{page}</Button>
+                          <Button key={page} variant={mapelCurrentPage === page ? "default" : "outline"} size="sm" onClick={() => setMapelCurrentPage(page)} className="rounded-lg h-7 w-7 sm:h-8 sm:w-8 p-0 text-xs border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">{page}</Button>
                         ))}
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => setMapelCurrentPage(p => Math.min(mapelTotalPages, p + 1))} disabled={mapelCurrentPage === mapelTotalPages} className="rounded-lg h-7 sm:h-8 text-xs">Berikutnya</Button>
+                      <Button variant="outline" size="sm" onClick={() => setMapelCurrentPage(p => Math.min(mapelTotalPages, p + 1))} disabled={mapelCurrentPage === mapelTotalPages} className="rounded-lg h-7 sm:h-8 text-xs border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Berikutnya</Button>
                     </div>
                   </div>
                 )}
@@ -1509,7 +1481,7 @@ export default function ScheduleManagement() {
           </CardContent>
         </Card>
 
-        {/* TIPS SECTION - gradasi dari C4E2F5 ke 4BB8FA */}
+        {/* TIPS SECTION */}
         <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-[#C4E2F5]/50 to-[#4BB8FA]/20 max-w-3xl mx-auto">
           <CardContent className="p-4 sm:p-5">
             <div className="flex gap-3 sm:gap-4">
@@ -1534,7 +1506,7 @@ export default function ScheduleManagement() {
         </div>
       </div>
 
-      {/* ========== DIALOG JADWAL (dengan smart jam) ========== */}
+      {/* DIALOG JADWAL */}
       <Dialog open={jadwalDialogOpen} onOpenChange={setJadwalDialogOpen}>
         <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-2xl p-4 sm:p-6">
           <DialogHeader>
@@ -1672,12 +1644,12 @@ export default function ScheduleManagement() {
 
             <div>
               <Label className="text-slate-700 font-medium text-xs sm:text-sm">Jam (Format: HH:MM - HH:MM)</Label>
-              <Input 
-                placeholder="07:00 - 08:30" 
-                value={jadwalForm.jam} 
-                onChange={(e) => setJadwalForm({ ...jadwalForm, jam: e.target.value })} 
+              <Input
+                placeholder="07:00 - 08:30"
+                value={jadwalForm.jam}
+                onChange={(e) => setJadwalForm({ ...jadwalForm, jam: e.target.value })}
                 onBlur={handleJamBlur}
-                className="rounded-lg mt-1 h-9 text-sm" 
+                className="rounded-lg mt-1 h-9 text-sm"
               />
               {formErrors.jam && <p className="text-red-500 text-xs mt-1">{formErrors.jam}</p>}
               <p className="text-xs text-slate-500 mt-1">Contoh: 07:00 - 08:30, atau cukup ketik <strong>07:00 08:30</strong> (otomatis diformat)</p>
@@ -1692,7 +1664,7 @@ export default function ScheduleManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* ========== DIALOG TOGGLE JADWAL ========== */}
+      {/* DIALOG TOGGLE JADWAL */}
       <Dialog open={toggleJadwalDialogOpen} onOpenChange={setToggleJadwalDialogOpen}>
         <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
           <DialogHeader>
@@ -1718,7 +1690,7 @@ export default function ScheduleManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* ========== DIALOG MAPEL ========== */}
+      {/* DIALOG MAPEL */}
       <Dialog open={mapelDialogOpen} onOpenChange={setMapelDialogOpen}>
         <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
           <DialogHeader>
@@ -1740,7 +1712,7 @@ export default function ScheduleManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* ========== DIALOG TOGGLE MAPEL ========== */}
+      {/* DIALOG TOGGLE MAPEL */}
       <Dialog open={toggleMapelDialogOpen} onOpenChange={setToggleMapelDialogOpen}>
         <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
           <DialogHeader>
@@ -1764,7 +1736,7 @@ export default function ScheduleManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* ========== DIALOG IMPORT MAPEL ========== */}
+      {/* DIALOG IMPORT MAPEL */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-2xl p-4 sm:p-6">
           <DialogHeader>
@@ -1776,7 +1748,7 @@ export default function ScheduleManagement() {
               <div className="flex flex-col items-center gap-2">
                 <Upload className="h-8 w-8 text-slate-400" />
                 <label htmlFor="file-input" className="cursor-pointer">
-                  <span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk upload</span>
+                  <span className="text-sm font-medium text-[#2C5EAD] hover:text-[#2C5EAD]/80">Klik untuk upload</span>
                   <input id="file-input" type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="hidden" disabled={isImporting} />
                 </label>
                 <p className="text-xs text-slate-500">atau drag & drop file Excel di sini</p>
@@ -1808,7 +1780,7 @@ export default function ScheduleManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* ========== DIALOG IMPORT JADWAL ========== */}
+      {/* DIALOG IMPORT JADWAL */}
       <Dialog open={importJadwalDialogOpen} onOpenChange={setImportJadwalDialogOpen}>
         <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
@@ -1821,7 +1793,7 @@ export default function ScheduleManagement() {
                 <div className="flex flex-col items-center gap-2">
                   <Upload className="h-8 w-8 text-slate-400" />
                   <label htmlFor="jadwal-file-input" className="cursor-pointer">
-                    <span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk upload</span>
+                    <span className="text-sm font-medium text-[#2C5EAD] hover:text-[#2C5EAD]/80">Klik untuk upload</span>
                     <input id="jadwal-file-input" type="file" accept=".xlsx,.xls" onChange={handleJadwalFileUpload} className="hidden" disabled={isImportingJadwal} />
                   </label>
                   <p className="text-xs text-slate-500">atau drag & drop file Excel di sini</p>
@@ -1901,7 +1873,7 @@ export default function ScheduleManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* ========== DIALOG MISSING MAPEL UNTUK JADWAL ========== */}
+      {/* DIALOG MISSING MAPEL UNTUK JADWAL */}
       <Dialog open={missingMapelDialogOpen} onOpenChange={setMissingMapelDialogOpen}>
         <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
           <DialogHeader>
@@ -1926,7 +1898,7 @@ export default function ScheduleManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* ========== DIALOG BULK ACTION ========== */}
+      {/* DIALOG BULK ACTION */}
       <Dialog open={bulkActionDialogOpen} onOpenChange={setBulkActionDialogOpen}>
         <DialogContent className="rounded-xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
           <DialogHeader>
@@ -1944,4 +1916,4 @@ export default function ScheduleManagement() {
       </Dialog>
     </div>
   );
-} 
+}

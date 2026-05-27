@@ -34,12 +34,14 @@ export function AppLayout() {
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="flex h-9 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-black text-sm italic shadow-md shadow-indigo-200 uppercase tracking-tighter">
+              {/* Avatar dengan warna palette yang diminta */}
+              <div className="flex h-9 w-12 items-center justify-center rounded-2xl bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] text-white font-black text-sm italic shadow-md shadow-[#2C5EAD]/20 uppercase tracking-tighter">
                 {userInitials}
               </div>
 
+              {/* Tombol hamburger - warna disesuaikan dengan palette */}
               <SidebarTrigger>
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-indigo-50 text-indigo-700 transition-all active:scale-90">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-[#C4E2F5] text-[#2C5EAD] transition-all active:scale-90">
                   <Menu className="h-7 w-7" />
                 </div>
               </SidebarTrigger>
