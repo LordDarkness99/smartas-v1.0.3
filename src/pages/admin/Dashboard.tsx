@@ -82,6 +82,14 @@ export default function AdminDashboard() {
     alfa: true,
   });
 
+  // Helper: format tanggal lokal YYYY-MM-DD
+  const formatLocalDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // ==================== GREETING EFFECT ====================
   useEffect(() => {
     const hour = new Date().getHours();
@@ -93,25 +101,31 @@ export default function AdminDashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // ==================== FETCH PRESENSI DATA (dengan semua tanggal dalam rentang) ====================
+  // ==================== FETCH PRESENSI DATA (dengan rentang yang benar) ====================
   const fetchPresensiData = useCallback(async () => {
     try {
       const now = new Date();
       let startDate: Date;
+      
       if (periode === "minggu") {
+        // Mulai dari hari Senin minggu ini
         startDate = new Date(now);
-        startDate.setDate(now.getDate() - 6);
+        const dayOfWeek = now.getDay(); // 0 Minggu, 1 Senin, ... 6 Sabtu
+        // Hitung selisih ke Senin sebelumnya: jika hari ini Senin (1) => 0, jika Minggu (0) => 6
+        const daysToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+        startDate.setDate(now.getDate() - daysToMonday);
       } else {
-        startDate = new Date(now);
-        startDate.setMonth(now.getMonth() - 1);
+        // Mulai dari tanggal 1 bulan ini
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
       }
-      // Set ke 00:00:00 untuk konsistensi
+      
+      // Set jam ke 00:00:00 untuk konsistensi
       startDate.setHours(0, 0, 0, 0);
       const endDate = new Date(now);
       endDate.setHours(23, 59, 59, 999);
       
-      const start = startDate.toISOString().split("T")[0];
-      const end = endDate.toISOString().split("T")[0];
+      const start = formatLocalDate(startDate);
+      const end = formatLocalDate(endDate);
 
       const { data, error } = await supabase
         .from("presensi_harian")
@@ -125,7 +139,7 @@ export default function AdminDashboard() {
       const presensiMap: Record<string, { hadir: number; terlambat: number; izin: number; sakit: number; alfa: number }> = {};
       
       for (const pres of data || []) {
-        const tanggal = new Date(pres.waktu_presensi).toISOString().split("T")[0];
+        const tanggal = formatLocalDate(new Date(pres.waktu_presensi));
         if (!presensiMap[tanggal]) {
           presensiMap[tanggal] = { hadir: 0, terlambat: 0, izin: 0, sakit: 0, alfa: 0 };
         }
@@ -138,11 +152,11 @@ export default function AdminDashboard() {
         }
       }
 
-      // Buat seluruh tanggal dalam rentang
+      // Buat seluruh tanggal dalam rentang (termasuk yang tanpa data)
       const allDates: string[] = [];
       const currentDate = new Date(startDate);
       while (currentDate <= endDate) {
-        allDates.push(currentDate.toISOString().split("T")[0]);
+        allDates.push(formatLocalDate(currentDate));
         currentDate.setDate(currentDate.getDate() + 1);
       }
 
@@ -243,7 +257,6 @@ export default function AdminDashboard() {
     .filter(item => item.value > 0);
 
   const totalPresensi = summaryPresensi.hadir + summaryPresensi.terlambat + summaryPresensi.izin + summaryPresensi.sakit + summaryPresensi.alfa;
-  // Perbaikan: kehadiranPersen bertipe number (bukan string)
   const kehadiranPersen = totalPresensi > 0
     ? parseFloat(((summaryPresensi.hadir + summaryPresensi.terlambat) / totalPresensi * 100).toFixed(1))
     : 0;
@@ -384,7 +397,7 @@ export default function AdminDashboard() {
               <div>
                 <CardTitle className="text-lg">Ringkasan Presensi</CardTitle>
                 <CardDescription className="text-blue-100 text-xs">
-                  {periode === "minggu" ? "7 Hari Terakhir" : "30 Hari Terakhir"}
+                  {periode === "minggu" ? "Senin s/d hari ini" : "1 s/d hari ini"}
                 </CardDescription>
               </div>
             </div>
@@ -475,7 +488,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
               <CardDescription className="text-blue-50 text-xs">
-                Grafik perkembangan presensi siswa
+                {periode === "minggu" ? "Senin s/d hari ini" : "Tanggal 1 s/d hari ini"}
               </CardDescription>
             </CardHeader>
             <CardContent className="p-5">
@@ -581,7 +594,6 @@ export default function AdminDashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-5">
-              {/* Filter checkboxes */}
               <div className="flex flex-wrap gap-4 mb-6 justify-center">
                 {categoryLabels.map((cat) => (
                   <div key={cat.key} className="flex items-center gap-2">
@@ -660,7 +672,7 @@ export default function AdminDashboard() {
           </Card>
         </div>
 
-        {/* TIPS SECTION - menggunakan warna palette */}
+        {/* TIPS SECTION */}
         <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-[#C4E2F5]/50 to-[#4BB8FA]/20">
           <CardContent className="p-5">
             <div className="flex items-start gap-4">
@@ -670,8 +682,8 @@ export default function AdminDashboard() {
               <div>
                 <h3 className="font-semibold text-slate-800 mb-1">Informasi Dashboard</h3>
                 <p className="text-sm text-slate-600">
-                  Dashboard ini menampilkan ringkasan data sekolah, termasuk jumlah siswa, guru, kelas, 
-                  dan mata pelajaran. Grafik presensi menunjukkan tren kehadiran siswa dalam periode yang dipilih.
+                  Dashboard ini menampilkan ringkasan data sekolah. Grafik presensi menunjukkan tren kehadiran siswa
+                  dengan periode <strong>1 minggu (Senin s/d hari ini)</strong> atau <strong>1 bulan (tanggal 1 s/d hari ini)</strong>.
                   Pada diagram lingkaran, Anda dapat memilih kategori yang ingin ditampilkan.
                 </p>
               </div>
