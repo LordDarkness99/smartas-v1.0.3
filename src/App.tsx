@@ -23,6 +23,7 @@ import AttendanceReport from "@/pages/report/AttendanceReport";
 // Guru pages
 import GuruDashboard from "@/pages/guru/Dashboard";
 import ScheduleView from "@/pages/schedule/ScheduleView";
+import AttendanceManagementGuru from "@/pages/guru/AttendanceManagement";
 
 // BK & Admin Jurusan (gunakan komponen yang sama dengan filter role)
 // Dashboard sederhana untuk BK dan Admin Jurusan bisa menggunakan AdminDashboard yang sudah ada,
@@ -104,7 +105,7 @@ function App() {
           >
             <Route index element={<GuruDashboard />} />
             <Route path="dashboard" element={<GuruDashboard />} />
-            <Route path="attendance" element={<AttendanceManagement />} />
+            <Route path="attendance" element={<AttendanceManagementGuru />} />
             <Route path="schedule" element={<ScheduleView />} />
             <Route path="reports" element={<AttendanceReport />} />
             <Route path="face-registration" element={<FaceRegistration />} />

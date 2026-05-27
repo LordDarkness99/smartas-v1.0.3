@@ -128,9 +128,7 @@ export default function AttendanceManagement() {
   const [selectedKelasMapel, setSelectedKelasMapel] = useState<string>("");
   const [waliKelasIds, setWaliKelasIds] = useState<number[]>([]);
 
-  const [selectedTanggal, setSelectedTanggal] = useState<string>(
-    new Date().toISOString().split("T")[0]
-  );
+  // Presensi Harian - hanya untuk hari ini
   const [presensiHarian, setPresensiHarian] = useState<PresensiHarian[]>([]);
   const [isFetchingHarian, setIsFetchingHarian] = useState(false);
   const [isSavingHarian, setIsSavingHarian] = useState(false);
@@ -144,7 +142,6 @@ export default function AttendanceManagement() {
   // Dialog konfirmasi Presensi Harian
   const [confirmHarianOpen, setConfirmHarianOpen] = useState(false);
   const [pendingHarianKelas, setPendingHarianKelas] = useState<string>("");
-  const [pendingHarianTanggal, setPendingHarianTanggal] = useState<string>("");
 
   const [popoverHarianOpen, setPopoverHarianOpen] = useState(false);
   const [kelasHarianSearchQuery, setKelasHarianSearchQuery] = useState("");
@@ -196,6 +193,13 @@ export default function AttendanceManagement() {
     }
     return true;
   });
+
+  // Helper untuk tanggal dan hari
+  const getTodayDate = () => new Date().toISOString().split("T")[0];
+  const getTodayDayName = () => {
+    const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+    return days[new Date().getDay()];
+  };
 
   // ========== GREETING & CLOCK ==========
   useEffect(() => {
@@ -424,6 +428,7 @@ export default function AttendanceManagement() {
     setPendingHarianPulang(new Map());
     setPendingBulkPulang(null);
     setPendingBulkStatus(null);
+    const today = getTodayDate();
     try {
       const { data: siswaData, error: siswaError } = await supabase
         .from("siswa")
@@ -441,8 +446,8 @@ export default function AttendanceManagement() {
         id_pkl: s.id_pkl,
       }));
 
-      const startDate = `${selectedTanggal}T00:00:00`;
-      const endDate = `${selectedTanggal}T23:59:59`;
+      const startDate = `${today}T00:00:00`;
+      const endDate = `${today}T23:59:59`;
       
       let query = supabase
         .from("presensi_harian")
@@ -494,6 +499,7 @@ export default function AttendanceManagement() {
   };
 
   const savePresensiHarian = async () => {
+    const today = getTodayDate();
     if (presensiTypeHarian === "masuk") {
       if (pendingHarianMasuk.size === 0) {
         toast({ title: "Info", description: "Tidak ada perubahan yang perlu disimpan" });
@@ -548,8 +554,8 @@ export default function AttendanceManagement() {
                 });
               }
             } else {
-              const startDate = `${selectedTanggal}T00:00:00`;
-              const endDate = `${selectedTanggal}T23:59:59`;
+              const startDate = `${today}T00:00:00`;
+              const endDate = `${today}T23:59:59`;
               await supabase
                 .from("presensi_harian")
                 .delete()
@@ -643,27 +649,14 @@ export default function AttendanceManagement() {
     setPendingHarianPulang(new Map());
   };
 
-  // Handler untuk konfirmasi pilih kelas/tanggal harian
+  // Handler untuk konfirmasi pilih kelas harian
   const handleSelectKelasHarian = (kelasId: string) => {
     setPendingHarianKelas(kelasId);
-    setPendingHarianTanggal(selectedTanggal);
     setConfirmHarianOpen(true);
-  };
-
-  const handleTanggalChange = (tanggal: string) => {
-    if (selectedKelasHarian) {
-      setPendingHarianKelas(selectedKelasHarian);
-      setPendingHarianTanggal(tanggal);
-      setConfirmHarianOpen(true);
-    } else {
-      setSelectedTanggal(tanggal);
-      toast({ title: "Info", description: "Pilih kelas terlebih dahulu" });
-    }
   };
 
   const confirmHarian = () => {
     setSelectedKelasHarian(pendingHarianKelas);
-    setSelectedTanggal(pendingHarianTanggal);
     setConfirmHarianOpen(false);
     setAutoAlfaProcessedHarian(false);
     fetchPresensiHarian();
@@ -886,8 +879,6 @@ export default function AttendanceManagement() {
     };
   }, [qrRefreshInterval]);
 
-  // Auto-fetch harian dihapus, diganti dengan konfirmasi dialog
-
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#C4E2F5]">
@@ -1011,9 +1002,28 @@ export default function AttendanceManagement() {
                             </PopoverContent>
                           </Popover>
                         </div>
-                        <div className="flex-1 sm:w-40">
-                          <Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal</Label>
-                          <Input type="date" value={selectedTanggal} onChange={(e) => handleTanggalChange(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm w-full" />
+                        <div className="flex-1">
+                          <Label className="text-slate-700 text-xs sm:text-sm font-medium">Hari Presensi</Label>
+                          <div className="flex flex-wrap gap-2 mt-1">
+                            {["Senin", "Selasa", "Rabu", "Kamis", "Jumat"].map(day => {
+                              const isToday = day === getTodayDayName();
+                              return (
+                                <Button
+                                  key={day}
+                                  type="button"
+                                  variant={isToday ? "default" : "outline"}
+                                  disabled={!isToday}
+                                  className={`rounded-full px-4 py-1 h-8 text-xs ${isToday ? "bg-[#2C5EAD] text-white hover:bg-[#1e4a8a]" : "opacity-50 cursor-not-allowed"}`}
+                                  onClick={() => {
+                                    toast({ title: "Info", description: `Presensi hanya untuk hari ini (${getTodayDate()})` });
+                                  }}
+                                >
+                                  {day}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-1">Hanya hari ini yang dapat dipilih untuk presensi</p>
                         </div>
                         <Button variant="outline" onClick={() => fetchPresensiHarian()} disabled={!selectedKelasHarian || isFetchingHarian} className="rounded-lg h-8 sm:h-9 px-3 text-xs sm:text-sm shrink-0 border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">
                           <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isFetchingHarian ? "animate-spin" : ""}`} /> Refresh
@@ -1127,7 +1137,7 @@ export default function AttendanceManagement() {
                 )}
               </TabsContent>
 
-              {/* TAB PRESENSI MAPEL */}
+              {/* TAB PRESENSI MAPEL (tidak berubah) */}
               <TabsContent value="mapel" className="space-y-4 sm:space-y-5">
                 <div className="flex flex-col sm:flex-row gap-4 items-start">
                   <div className="w-full sm:w-64 flex-shrink-0">
@@ -1315,7 +1325,7 @@ export default function AttendanceManagement() {
               <p>Anda akan mengaktifkan sesi presensi untuk:</p>
               <div className="bg-slate-50 p-3 rounded-lg">
                 <p><strong>Kelas:</strong> {kelasListHarian.find(k => k.id_kelas.toString() === pendingHarianKelas)?.nama || pendingHarianKelas}</p>
-                <p><strong>Tanggal:</strong> {pendingHarianTanggal}</p>
+                <p><strong>Tanggal:</strong> {getTodayDate()} ({getTodayDayName()})</p>
                 <p><strong>Jenis:</strong> {presensiTypeHarian === "masuk" ? "Presensi Masuk" : "Presensi Pulang"}</p>
               </div>
               <p className="text-xs text-amber-600 mt-2">
