@@ -440,7 +440,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      insert_missing_presensi_harian: {
+        Args: { p_end_date: string; p_start_date: string; p_status: string }
+        Returns: undefined
+      }
+      insert_missing_presensi_mapel: {
+        Args: { p_date: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

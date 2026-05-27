@@ -93,7 +93,7 @@ export default function AdminDashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // ==================== FETCH PRESENSI DATA ====================
+  // ==================== FETCH PRESENSI DATA (dengan semua tanggal dalam rentang) ====================
   const fetchPresensiData = useCallback(async () => {
     try {
       const now = new Date();
@@ -105,8 +105,13 @@ export default function AdminDashboard() {
         startDate = new Date(now);
         startDate.setMonth(now.getMonth() - 1);
       }
+      // Set ke 00:00:00 untuk konsistensi
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(now);
+      endDate.setHours(23, 59, 59, 999);
+      
       const start = startDate.toISOString().split("T")[0];
-      const end = now.toISOString().split("T")[0];
+      const end = endDate.toISOString().split("T")[0];
 
       const { data, error } = await supabase
         .from("presensi_harian")
@@ -116,27 +121,50 @@ export default function AdminDashboard() {
 
       if (error) throw error;
 
-      const grouped: Record<string, { hadir: number; terlambat: number; izin: number; sakit: number; alfa: number }> = {};
-      let totalHadir = 0, totalTerlambat = 0, totalIzin = 0, totalSakit = 0, totalAlfa = 0;
-
+      // Map untuk menyimpan data per tanggal
+      const presensiMap: Record<string, { hadir: number; terlambat: number; izin: number; sakit: number; alfa: number }> = {};
+      
       for (const pres of data || []) {
         const tanggal = new Date(pres.waktu_presensi).toISOString().split("T")[0];
-        if (!grouped[tanggal]) {
-          grouped[tanggal] = { hadir: 0, terlambat: 0, izin: 0, sakit: 0, alfa: 0 };
+        if (!presensiMap[tanggal]) {
+          presensiMap[tanggal] = { hadir: 0, terlambat: 0, izin: 0, sakit: 0, alfa: 0 };
         }
         switch (pres.status_presensi) {
-          case "Hadir": grouped[tanggal].hadir++; totalHadir++; break;
-          case "Terlambat": grouped[tanggal].terlambat++; totalTerlambat++; break;
-          case "Izin": grouped[tanggal].izin++; totalIzin++; break;
-          case "Sakit": grouped[tanggal].sakit++; totalSakit++; break;
-          case "Alfa": grouped[tanggal].alfa++; totalAlfa++; break;
+          case "Hadir": presensiMap[tanggal].hadir++; break;
+          case "Terlambat": presensiMap[tanggal].terlambat++; break;
+          case "Izin": presensiMap[tanggal].izin++; break;
+          case "Sakit": presensiMap[tanggal].sakit++; break;
+          case "Alfa": presensiMap[tanggal].alfa++; break;
         }
       }
 
-      const chartData = Object.entries(grouped).map(([tanggal, counts]) => ({
+      // Buat seluruh tanggal dalam rentang
+      const allDates: string[] = [];
+      const currentDate = new Date(startDate);
+      while (currentDate <= endDate) {
+        allDates.push(currentDate.toISOString().split("T")[0]);
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      // Gabungkan dengan data presensi (isi 0 jika tidak ada)
+      const chartData = allDates.map(tanggal => ({
         tanggal,
-        ...counts,
-      })).sort((a, b) => a.tanggal.localeCompare(b.tanggal));
+        hadir: presensiMap[tanggal]?.hadir || 0,
+        terlambat: presensiMap[tanggal]?.terlambat || 0,
+        izin: presensiMap[tanggal]?.izin || 0,
+        sakit: presensiMap[tanggal]?.sakit || 0,
+        alfa: presensiMap[tanggal]?.alfa || 0,
+      }));
+
+      // Hitung total summary
+      let totalHadir = 0, totalTerlambat = 0, totalIzin = 0, totalSakit = 0, totalAlfa = 0;
+      for (const item of chartData) {
+        totalHadir += item.hadir;
+        totalTerlambat += item.terlambat;
+        totalIzin += item.izin;
+        totalSakit += item.sakit;
+        totalAlfa += item.alfa;
+      }
 
       setPresensiData(chartData);
       setSummaryPresensi({
@@ -215,7 +243,10 @@ export default function AdminDashboard() {
     .filter(item => item.value > 0);
 
   const totalPresensi = summaryPresensi.hadir + summaryPresensi.terlambat + summaryPresensi.izin + summaryPresensi.sakit + summaryPresensi.alfa;
-  const kehadiranPersen = totalPresensi > 0 ? ((summaryPresensi.hadir + summaryPresensi.terlambat) / totalPresensi * 100).toFixed(1) : 0;
+  // Perbaikan: kehadiranPersen bertipe number (bukan string)
+  const kehadiranPersen = totalPresensi > 0
+    ? parseFloat(((summaryPresensi.hadir + summaryPresensi.terlambat) / totalPresensi * 100).toFixed(1))
+    : 0;
 
   // ==================== LOADING STATE ====================
   if (loading) {
@@ -400,7 +431,7 @@ export default function AdminDashboard() {
               </div>
             </div>
             <div className="mt-3">
-              <Progress value={parseFloat(kehadiranPersen)} className="h-2 [&>div]:bg-[#1591DC]" />
+              <Progress value={kehadiranPersen} className="h-2 [&>div]:bg-[#1591DC]" />
             </div>
           </CardContent>
         </Card>
