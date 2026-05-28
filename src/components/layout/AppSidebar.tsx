@@ -176,11 +176,11 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
           className={`py-5 px-6 flex flex-col items-center justify-center bg-white ${subtleTexture} relative after:absolute after:bottom-0 after:left-4 after:right-4 after:h-px after:bg-gradient-to-r after:from-transparent after:via-[#1591DC]/20 after:to-transparent`}
         >
           <div className="mb-0.5 flex items-center justify-center h-14 w-full text-center">
-            <img src="/smartas-logo.png" alt="SMARTAS Logo" className="h-12 w-auto object-contain drop-shadow-md" />
+            <img src="/New.png" alt="SMARTAS Logo" className="h-12 w-auto object-contain drop-shadow-md" />
           </div>
           <div className="text-center group-data-[collapsible=icon]:hidden">
             <h2 className="text-xl font-black italic tracking-tighter bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] bg-clip-text text-transparent uppercase leading-[0.8]">
-              SMARTAS
+              TITEN
             </h2>
             <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-[#4BB8FA] mt-1.5">
               {userRole || "Access"}

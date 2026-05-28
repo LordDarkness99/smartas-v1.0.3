@@ -1,4 +1,3 @@
-// src/pages/Login.tsx
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { UserCheck, KeyRound, ArrowLeft, Camera, RefreshCw, Loader2, AlertCircle } from "lucide-react";
+import { UserCheck, KeyRound, ArrowLeft, Camera, RefreshCw, Loader2, AlertCircle, Sun, Moon, Cloud, Sparkles } from "lucide-react";
 import { detectTurnHead } from "@/utils/liveness";
 
 export default function Login() {
@@ -36,6 +35,28 @@ export default function Login() {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Waktu saat ini untuk greeting (tambahan estetika)
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [greeting, setGreeting] = useState("");
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) setGreeting("Selamat Pagi");
+    else if (hour < 18) setGreeting("Selamat Siang");
+    else setGreeting("Selamat Malam");
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString("id-ID", {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
 
   // Load model face-api
   useEffect(() => {
@@ -266,36 +287,55 @@ export default function Login() {
     }
   };
 
+  // Fungsi untuk mendapatkan ikon greeting
+  const getGreetingIcon = () => {
+    if (greeting === "Selamat Pagi") return <Sun className="h-4 w-4" />;
+    if (greeting === "Selamat Siang") return <Cloud className="h-4 w-4" />;
+    return <Moon className="h-4 w-4" />;
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
-      <Card className="w-full max-w-md shadow-2xl border-0">
-        <CardHeader className="text-center space-y-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#C4E2F5]/30 via-white to-[#C4E2F5]/20 p-4">
+      <Card className="w-full max-w-md shadow-2xl border-0 bg-white/80 backdrop-blur-sm rounded-2xl overflow-hidden">
+        {/* Dekorasi header dengan gradasi */}
+        <div className="h-2 bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA]" />
+        <CardHeader className="text-center space-y-4 pt-6">
           <div className="mx-auto flex h-24 w-24 items-center justify-center">
-            <img src="/smartas-logo.png" alt="SMARTAS Logo" className="h-full w-full object-contain" />
+            <img src="/New.png" alt="SMARTAS Logo" className="h-full w-full object-contain" />
           </div>
           <div>
-            <CardTitle className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              SMARTAS
+            <CardTitle className="text-3xl font-bold bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] bg-clip-text text-transparent">
+              TITEN
             </CardTitle>
-            <CardDescription className="text-base mt-2">
-              {showFaceLogin ? "Login dengan Wajah" : showChangePassword ? "Ganti Password" : "Sistem Manajemen Akademik Terpadu"}
+            <CardDescription className="text-base mt-2 flex items-center justify-center gap-1">
+              <Sparkles className="h-3.5 w-3.5 text-[#4BB8FA]" />
+              <span>Sistem Manajemen Akademik Terpadu</span>
             </CardDescription>
+          </div>
+          {/* Greeting & clock (estetika tambahan) */}
+          <div className="flex items-center justify-center gap-2 text-xs text-slate-500 bg-slate-50 rounded-full py-1 px-3 w-fit mx-auto">
+            {getGreetingIcon()}
+            <span>{greeting},</span>
+            <span>{formatDate(currentTime)}</span>
+            <span className="font-mono">{currentTime.toLocaleTimeString("id-ID")}</span>
           </div>
         </CardHeader>
         <CardContent>
           {showFaceLogin ? (
-            // Face Login UI
-            <div className="space-y-4">
+            // Face Login UI dengan gaya baru
+            <div className="space-y-5">
               {!modelsLoaded ? (
                 <div className="flex justify-center items-center h-64">
-                  <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
-                  <span className="ml-2">Memuat model wajah...</span>
+                  <Loader2 className="animate-spin h-8 w-8 text-[#2C5EAD]" />
+                  <span className="ml-2 text-slate-600">Memuat model wajah...</span>
                 </div>
               ) : cameraError ? (
-                <div className="text-center text-red-500 p-4">
+                <div className="text-center text-red-500 p-4 bg-red-50 rounded-xl">
                   <AlertCircle className="inline h-8 w-8 mb-2" />
                   <p>{cameraError}</p>
-                  <Button onClick={resetCamera} variant="outline" className="mt-4">Coba Lagi</Button>
+                  <Button onClick={resetCamera} variant="outline" className="mt-4 border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">
+                    Coba Lagi
+                  </Button>
                 </div>
               ) : (
                 <>
@@ -307,17 +347,17 @@ export default function Login() {
                       playsInline
                       width="320"
                       height="240"
-                      className="rounded-lg border shadow bg-black"
+                      className="rounded-xl border shadow-md bg-black"
                     />
                     <canvas
                       ref={canvasRef}
                       width="320"
                       height="240"
-                      className="absolute top-0 left-0"
+                      className="absolute top-0 left-0 rounded-xl"
                     />
                     {/* Overlay saat menunggu kedip */}
                     {verifyingLiveness && (
-                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-lg">
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-xl backdrop-blur-sm">
                         <div className="text-white text-center">
                           <Loader2 className="animate-spin h-8 w-8 mx-auto mb-2" />
                           <p className="font-medium">Tengok ke kanan atau kiri</p>
@@ -326,12 +366,21 @@ export default function Login() {
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-4 justify-center">
-                    <Button onClick={detectAndMatchFace} disabled={detecting || verifyingLiveness}>
+                  <div className="flex flex-wrap gap-3 justify-center">
+                    <Button 
+                      onClick={detectAndMatchFace} 
+                      disabled={detecting || verifyingLiveness}
+                      className="bg-[#2C5EAD] hover:bg-[#2C5EAD]/80 text-white rounded-xl"
+                    >
                       <Camera className="mr-2 h-4 w-4" />
                       {detecting ? "Memverifikasi..." : "Verifikasi Wajah"}
                     </Button>
-                    <Button onClick={resetCamera} variant="outline" disabled={detecting || verifyingLiveness}>
+                    <Button 
+                      onClick={resetCamera} 
+                      variant="outline" 
+                      disabled={detecting || verifyingLiveness}
+                      className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white rounded-xl"
+                    >
                       <RefreshCw className="mr-2 h-4 w-4" /> Reset Kamera
                     </Button>
                     <Button
@@ -345,6 +394,7 @@ export default function Login() {
                       }}
                       variant="ghost"
                       disabled={detecting || verifyingLiveness}
+                      className="text-slate-600 hover:text-[#2C5EAD]"
                     >
                       <ArrowLeft className="mr-2 h-4 w-4" /> Kembali
                     </Button>
@@ -353,28 +403,50 @@ export default function Login() {
               )}
             </div>
           ) : !showChangePassword ? (
-            // Login biasa
+            // Login biasa dengan desain baru
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
-                <Input id="username" type="text" value={username} onChange={(e) => setUsername(e.target.value)} required placeholder="nama_pengguna" disabled={loading} />
+                <Label htmlFor="username" className="text-slate-700">Nama Pengguna</Label>
+                <Input 
+                  id="username" 
+                  type="text" 
+                  value={username} 
+                  onChange={(e) => setUsername(e.target.value)} 
+                  required 
+                  disabled={loading} 
+                  placeholder="Nama Pengguna" 
+                  className="rounded-xl border-slate-200 focus:ring-[#1591DC] focus:border-[#1591DC]"
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="********" disabled={loading} />
+                <Label htmlFor="password" className="text-slate-700">Password</Label>
+                <Input 
+                  id="password" 
+                  type="password" 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                  required 
+                  disabled={loading} 
+                  placeholder="********" 
+                  className="rounded-xl border-slate-200 focus:ring-[#1591DC] focus:border-[#1591DC]"
+                />
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button 
+                type="submit" 
+                className="w-full rounded-xl bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] hover:shadow-lg transition-all duration-200" 
+                disabled={loading}
+              >
                 {loading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <UserCheck className="mr-2 h-4 w-4" />}
                 {loading ? "Memproses..." : "Masuk"}
               </Button>
-              <div className="flex justify-between">
+              <div className="flex justify-between text-sm">
                 <button
                   type="button"
                   onClick={() => {
                     setShowFaceLogin(true);
                     toast.info("Beralih ke login wajah");
                   }}
-                  className="text-sm text-blue-600 hover:underline"
+                  className="text-[#1591DC] hover:underline font-medium"
                 >
                   Login dengan Wajah
                 </button>
@@ -384,42 +456,85 @@ export default function Login() {
                     setShowChangePassword(true);
                     toast.info("Buka form ganti password");
                   }}
-                  className="text-sm text-blue-600 hover:underline"
+                  className="text-[#4BB8FA] hover:underline font-medium"
                 >
                   Lupa / Ganti Password?
                 </button>
               </div>
-              <div className="text-center text-xs text-gray-500 border-t pt-4">
-                <p>© {new Date().getFullYear()} SMARTAS - Sistem Manajemen Akademik</p>
+              <div className="text-center text-xs text-slate-400 border-t pt-4 mt-2">
+                <p>© {new Date().getFullYear()} TITEN - Sistem Informasi Akademik</p>
               </div>
             </form>
           ) : (
-            // Form ganti password
+            // Form ganti password dengan gaya baru
             <form onSubmit={handleChangePassword} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="changeUsername">Username</Label>
-                <Input id="changeUsername" type="text" value={changeUsername} onChange={(e) => setChangeUsername(e.target.value)} required placeholder="Masukkan username" disabled={changingPassword} />
+                <Label htmlFor="changeUsername" className="text-slate-700">Username</Label>
+                <Input 
+                  id="changeUsername" 
+                  type="text" 
+                  value={changeUsername} 
+                  onChange={(e) => setChangeUsername(e.target.value)} 
+                  required 
+                  disabled={changingPassword} 
+                  placeholder="Masukkan username" 
+                  className="rounded-xl border-slate-200"
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="oldPassword">Password Lama</Label>
-                <Input id="oldPassword" type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} required disabled={changingPassword} />
+                <Label htmlFor="oldPassword" className="text-slate-700">Password Lama</Label>
+                <Input 
+                  id="oldPassword" 
+                  type="password" 
+                  value={oldPassword} 
+                  onChange={(e) => setOldPassword(e.target.value)} 
+                  required 
+                  disabled={changingPassword} 
+                  className="rounded-xl border-slate-200"
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="newPassword">Password Baru (min. 6)</Label>
-                <Input id="newPassword" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required disabled={changingPassword} />
+                <Label htmlFor="newPassword" className="text-slate-700">Password Baru (min. 6)</Label>
+                <Input 
+                  id="newPassword" 
+                  type="password" 
+                  value={newPassword} 
+                  onChange={(e) => setNewPassword(e.target.value)} 
+                  required 
+                  disabled={changingPassword} 
+                  className="rounded-xl border-slate-200"
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="confirmNewPassword">Konfirmasi Password Baru</Label>
-                <Input id="confirmNewPassword" type="password" value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} required disabled={changingPassword} />
+                <Label htmlFor="confirmNewPassword" className="text-slate-700">Konfirmasi Password Baru</Label>
+                <Input 
+                  id="confirmNewPassword" 
+                  type="password" 
+                  value={confirmNewPassword} 
+                  onChange={(e) => setConfirmNewPassword(e.target.value)} 
+                  required 
+                  disabled={changingPassword} 
+                  className="rounded-xl border-slate-200"
+                />
               </div>
               <div className="flex gap-3">
-                <Button type="button" variant="outline" className="flex-1" onClick={() => {
-                  setShowChangePassword(false);
-                  toast.info("Batal ganti password");
-                }} disabled={changingPassword}>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  className="flex-1 rounded-xl border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white" 
+                  onClick={() => {
+                    setShowChangePassword(false);
+                    toast.info("Batal ganti password");
+                  }} 
+                  disabled={changingPassword}
+                >
                   <ArrowLeft className="mr-2 h-4 w-4" /> Batal
                 </Button>
-                <Button type="submit" className="flex-1" disabled={changingPassword}>
+                <Button 
+                  type="submit" 
+                  className="flex-1 rounded-xl bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] hover:shadow-lg" 
+                  disabled={changingPassword}
+                >
                   {changingPassword ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <KeyRound className="mr-2 h-4 w-4" />}
                   {changingPassword ? "Memproses..." : "Ganti Password"}
                 </Button>
