@@ -27,9 +27,9 @@ export function AppLayout() {
           {/* HEADER MOBILE - putih bersih */}
           <header className="flex h-16 shrink-0 items-center justify-between border-b border-indigo-100 bg-white px-4 lg:hidden shadow-sm">
             <div className="flex items-center gap-2">
-              <img src="/smartas-logo.png" alt="Logo" className="h-8 w-auto" />
-              <span className="font-black italic bg-gradient-to-r from-indigo-700 to-purple-700 bg-clip-text text-transparent tracking-tighter text-lg uppercase">
-                SMARTAS
+              <img src="/New.png" alt="Logo" className="h-8 w-auto" />
+              <span className="text-xl font-black italic tracking-tighter bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] bg-clip-text text-transparent uppercase leading-[0.8]">
+                TITEN
               </span>
             </div>
 
