@@ -421,8 +421,9 @@ export default function AttendanceManagement() {
   }, []);
 
   // ========== PRESENSI HARIAN ==========
-  const fetchPresensiHarian = async (skipAutoAlfa = false) => {
-    if (!selectedKelasHarian) return;
+  const fetchPresensiHarian = async (skipAutoAlfa = false, kelasIdParam?: string) => {
+    const kelasId = kelasIdParam ?? selectedKelasHarian;
+    if (!kelasId) return;
     setIsFetchingHarian(true);
     setPendingHarianMasuk(new Map());
     setPendingHarianPulang(new Map());
@@ -433,7 +434,7 @@ export default function AttendanceManagement() {
       const { data: siswaData, error: siswaError } = await supabase
         .from("siswa")
         .select("id_siswa, nama, nis, id_kelas, id_pkl, kelas:kelas(nama)")
-        .eq("id_kelas", parseInt(selectedKelasHarian))
+        .eq("id_kelas", parseInt(kelasId))
         .eq("aktif", true);
       if (siswaError) throw siswaError;
 
@@ -488,7 +489,7 @@ export default function AttendanceManagement() {
             });
           }
         }
-        await fetchPresensiHarian(true);
+        await fetchPresensiHarian(true, kelasId);
         toast({ title: "Info", description: "Siswa yang belum absen masuk otomatis diisi Alfa" });
       }
     } catch (error: any) {
@@ -659,12 +660,13 @@ export default function AttendanceManagement() {
     setSelectedKelasHarian(pendingHarianKelas);
     setConfirmHarianOpen(false);
     setAutoAlfaProcessedHarian(false);
-    fetchPresensiHarian();
+    fetchPresensiHarian(false, pendingHarianKelas);
   };
 
   // ========== PRESENSI MAPEL ==========
-  const fetchPresensiMapel = async (skipAutoAlfa = false) => {
-    if (!selectedJadwal) return;
+  const fetchPresensiMapel = async (skipAutoAlfa = false, jadwalParam?: Jadwal) => {
+    const jadwal = jadwalParam ?? selectedJadwal;
+    if (!jadwal) return;
     setIsFetchingMapel(true);
     setPendingMapel(new Map());
     setPendingBulkStatusMapel(null);
@@ -672,7 +674,7 @@ export default function AttendanceManagement() {
       const { data: siswaData, error: siswaError } = await supabase
         .from("siswa")
         .select("id_siswa, nama, nis, id_kelas, kelas:kelas(nama)")
-        .eq("id_kelas", selectedJadwal.id_kelas)
+        .eq("id_kelas", jadwal.id_kelas)
         .eq("aktif", true);
       if (siswaError) throw siswaError;
 
@@ -688,7 +690,7 @@ export default function AttendanceManagement() {
       const { data: presensiData, error: presensiError } = await supabase
         .from("presensi_siswa_mapel")
         .select("*")
-        .eq("id_jadwal", selectedJadwal.id_jadwal);
+        .eq("id_jadwal", jadwal.id_jadwal);
       if (presensiError) throw presensiError;
 
       const combined = siswaList.map((siswa) => {
@@ -696,7 +698,7 @@ export default function AttendanceManagement() {
         return {
           id_pre_siswa: existing?.id_pre_siswa || null,
           id_siswa: siswa.id_siswa,
-          id_jadwal: selectedJadwal.id_jadwal,
+          id_jadwal: jadwal.id_jadwal,
           status: existing?.status || null,
           waktu_presensi: existing?.waktu_presensi || null,
           siswa: siswa,
@@ -716,13 +718,13 @@ export default function AttendanceManagement() {
           } else {
             await supabase.from("presensi_siswa_mapel").insert({
               id_siswa: item.id_siswa,
-              id_jadwal: item.id_jadwal,
+              id_jadwal: jadwal.id_jadwal,
               status: "Alfa",
               waktu_presensi: new Date().toISOString(),
             });
           }
         }
-        await fetchPresensiMapel(true);
+        await fetchPresensiMapel(true, jadwal);
         toast({ title: "Info", description: "Siswa yang tidak scan QR otomatis diisi Alfa" });
       }
     } catch (error: any) {
@@ -800,7 +802,7 @@ export default function AttendanceManagement() {
       setPendingMapel(new Map());
       setPendingBulkStatusMapel(null);
       setAutoAlfaProcessedMapel(false);
-      fetchPresensiMapel();
+      fetchPresensiMapel(false, pendingMapelJadwal);
     }
     setConfirmMapelOpen(false);
   };
@@ -1057,7 +1059,7 @@ export default function AttendanceManagement() {
                               <TableRow className="bg-slate-50">
                                 <TableHead className="font-semibold text-center text-xs sm:text-sm w-24">NIS</TableHead>
                                 <TableHead className="font-semibold text-center text-xs sm:text-sm min-w-[140px]">Nama Siswa</TableHead>
-                                <TableHead className="font-semibold text-center text-xs sm:text-sm w-28">Status PKL</TableHead>
+                                <TableHead className="font-semibold text-center text-xs sm:text-sm w-28">Status</TableHead>
                                 {presensiTypeHarian === "masuk" ? (
                                   STATUS_HARIAN_SEKOLAH.map(status => (
                                     <TableHead key={status} className="text-center font-semibold text-xs sm:text-sm min-w-[80px]">
@@ -1137,7 +1139,7 @@ export default function AttendanceManagement() {
                 )}
               </TabsContent>
 
-              {/* TAB PRESENSI MAPEL (tidak berubah) */}
+              {/* TAB PRESENSI MAPEL */}
               <TabsContent value="mapel" className="space-y-4 sm:space-y-5">
                 <div className="flex flex-col sm:flex-row gap-4 items-start">
                   <div className="w-full sm:w-64 flex-shrink-0">
