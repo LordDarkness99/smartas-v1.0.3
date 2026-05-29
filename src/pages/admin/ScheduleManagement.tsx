@@ -70,11 +70,8 @@ import {
   Eye,
   LayoutGrid,
   List,
-  CheckCircle2,
-  Clock,
-  Trophy,
 } from "lucide-react";
-import { isBK, isAdminJurusan, isAdmin } from "@/lib/utils";
+import { isBK, isAdminJurusan } from "@/lib/utils";
 
 interface Kelas {
   id_kelas: number;
@@ -161,36 +158,6 @@ const getColorForMapel = (mapel: string): string => {
   return colorPalette[index];
 };
 
-const getWaktuStatus = (jamMulai: string) => {
-  const now = new Date();
-  const [hour, minute] = jamMulai.split(":").map(Number);
-  const jamDate = new Date();
-  jamDate.setHours(hour, minute, 0);
-  if (now > jamDate) {
-    return {
-      status: "selesai",
-      bgBadge: "bg-slate-100 text-slate-600",
-      icon: <CheckCircle2 className="h-3 w-3" />,
-      label: "Selesai"
-    };
-  }
-  const selisih = jamDate.getTime() - now.getTime();
-  if (selisih < 3600000) {
-    return {
-      status: "sebentar",
-      bgBadge: "bg-amber-100 text-amber-700",
-      icon: <AlertCircle className="h-3 w-3" />,
-      label: "Segera"
-    };
-  }
-  return {
-    status: "akan datang",
-    bgBadge: "bg-emerald-100 text-emerald-700",
-    icon: <Clock className="h-3 w-3" />,
-    label: "Akan Datang"
-  };
-};
-
 export default function ScheduleManagement() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -201,7 +168,6 @@ export default function ScheduleManagement() {
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<"table" | "card">("table");
 
-  const userRole = user?.peran;
   const isRoleBK = isBK(user);
   const isRoleAdminJurusan = isAdminJurusan(user);
   const canWrite = !isRoleBK;
@@ -309,6 +275,16 @@ export default function ScheduleManagement() {
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
   const [mapelCurrentPage, setMapelCurrentPage] = useState(1);
   const mapelItemsPerPage = 10;
+
+  // Urutkan jadwal: aktif di atas, nonaktif di bawah
+  const sortedJadwal = useMemo(() => {
+    return [...jadwalList].sort((a, b) => {
+      if (a.aktif !== b.aktif) return a.aktif ? -1 : 1;
+      const jamA = a.jam.split(" - ")[0];
+      const jamB = b.jam.split(" - ")[0];
+      return jamA.localeCompare(jamB);
+    });
+  }, [jadwalList]);
 
   const formatJamInput = useCallback((raw: string): string => {
     let cleaned = raw.trim();
@@ -1114,7 +1090,7 @@ export default function ScheduleManagement() {
       </div>
 
       <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8">
-        {/* STATS CARDS - LATAR PUTIH */}
+        {/* STATS CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <Card className="rounded-xl sm:rounded-2xl border-0 shadow-md bg-white">
             <CardContent className="p-3 sm:p-4">
@@ -1292,18 +1268,16 @@ export default function ScheduleManagement() {
                         <TableBody>
                           {isFetchingJadwal ? (
                             <TableRow><TableCell colSpan={canWrite ? 6 : 5} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#2C5EAD]" /></TableCell></TableRow>
-                          ) : jadwalList.length === 0 ? (
+                          ) : sortedJadwal.length === 0 ? (
                             <TableRow><TableCell colSpan={canWrite ? 6 : 5} className="text-center py-8 text-slate-500"><Calendar className="h-8 w-8 mx-auto mb-2" />Tidak ada jadwal untuk hari {selectedHari}</TableCell></TableRow>
                           ) : (
-                            jadwalList.map((j, idx) => {
-                              const jamMulai = j.jam.split(" - ")[0];
-                              const waktuStatus = getWaktuStatus(jamMulai);
+                            sortedJadwal.map((j, idx) => {
                               const borderColor = getColorForMapel(j.mapel?.nama || "-");
-                              const isLast = idx === jadwalList.length - 1;
+                              const isLast = idx === sortedJadwal.length - 1;
                               return (
                                 <TableRow
                                   key={j.id_jadwal}
-                                  className={`relative border-l-[6px] ${borderColor} ${!isLast ? 'border-b border-gray-100' : ''} hover:bg-slate-50/80 transition-colors`}
+                                  className={`relative border-l-[6px] ${borderColor} ${!isLast ? 'border-b border-gray-100' : ''} hover:bg-slate-50/80 transition-colors ${!j.aktif ? 'opacity-70 bg-gray-50' : ''}`}
                                 >
                                   <TableCell className="font-mono text-sm py-3 whitespace-nowrap">{j.jam}</TableCell>
                                   <TableCell className="py-3">
@@ -1322,15 +1296,18 @@ export default function ScheduleManagement() {
                                     <Badge className={`${getHariColor(j.hari)} border-0 rounded-full px-2 sm:px-3 py-0.5 sm:py-1 text-xs`}>{j.hari}</Badge>
                                   </TableCell>
                                   <TableCell className="text-center">
-                                    <Badge className={`${waktuStatus.bgBadge} border-0 rounded-full flex items-center gap-1 w-fit text-xs px-2 py-0.5 sm:px-3 sm:py-1 mx-auto`}>
-                                      {waktuStatus.icon}{waktuStatus.label}
+                                    <Badge className={`${j.aktif ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'} border-0 rounded-full px-2 py-0.5 text-xs`}>
+                                      {j.aktif ? 'Aktif' : 'Nonaktif'}
                                     </Badge>
                                   </TableCell>
                                   {canWrite && (
                                     <TableCell className="text-center">
                                       <div className="flex gap-1 justify-center">
                                         <Button variant="ghost" size="sm" onClick={() => openEditJadwal(j)}><Edit className="h-4 w-4 text-[#2C5EAD]" /></Button>
-                                        {j.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}
+                                        {j.aktif ? 
+                                          <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : 
+                                          <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)}><UserPlus className="h-4 w-4 text-green-500" /></Button>
+                                        }
                                       </div>
                                     </TableCell>
                                   )}
@@ -1346,14 +1323,12 @@ export default function ScheduleManagement() {
 
                 {selectedKelas && viewMode === "card" && (
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {jadwalList.map(j => {
-                      const jamMulai = j.jam.split(" - ")[0];
-                      const waktuStatus = getWaktuStatus(jamMulai);
+                    {sortedJadwal.map(j => {
                       const borderColor = getColorForMapel(j.mapel?.nama || "-");
                       return (
                         <div
                           key={j.id_jadwal}
-                          className={`relative rounded-xl border border-gray-200 bg-white shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden ${borderColor} border-l-[6px]`}
+                          className={`relative rounded-xl border border-gray-200 bg-white shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden ${borderColor} border-l-[6px] ${!j.aktif ? 'opacity-70 bg-gray-50' : ''}`}
                         >
                           <CardContent className="p-4 sm:p-5 relative">
                             <div className="flex justify-between mb-3 flex-wrap gap-1">
@@ -1369,16 +1344,19 @@ export default function ScheduleManagement() {
                                 <div className="bg-purple-100 p-1.5 rounded-xl"><User className="h-4 w-4 text-purple-600" /></div>
                                 <span className="text-sm">{j.guru?.nama || "-"}{j.guru?.aktif === false && <span className="ml-1 text-xs text-red-500">(nonaktif)</span>}</span>
                               </div>
-                              <div>
-                                <Badge className={`${waktuStatus.bgBadge} border-0 rounded-full text-xs px-2 py-1`}>
-                                  {waktuStatus.icon}<span className="ml-1">{waktuStatus.label}</span>
+                              <div className="flex justify-end">
+                                <Badge className={`${j.aktif ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'} border-0 rounded-full px-2 py-1 text-xs`}>
+                                  {j.aktif ? 'Aktif' : 'Nonaktif'}
                                 </Badge>
                               </div>
                             </div>
                             {canWrite && (
                               <div className="flex gap-2 mt-3 pt-3 border-t">
                                 <Button variant="ghost" size="sm" onClick={() => openEditJadwal(j)} className="flex-1 text-xs text-[#2C5EAD]"><Edit className="h-3.5 w-3.5 mr-1" /> Edit</Button>
-                                {j.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)} className="flex-1 text-red-500 text-xs"><UserMinus className="h-3.5 w-3.5 mr-1" /> Nonaktif</Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)} className="flex-1 text-green-500 text-xs"><UserPlus className="h-3.5 w-3.5 mr-1" /> Aktif</Button>}
+                                {j.aktif ? 
+                                  <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)} className="flex-1 text-red-500 text-xs"><UserMinus className="h-3.5 w-3.5 mr-1" /> Nonaktif</Button> : 
+                                  <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)} className="flex-1 text-green-500 text-xs"><UserPlus className="h-3.5 w-3.5 mr-1" /> Aktif</Button>
+                                }
                               </div>
                             )}
                             {!canWrite && (
@@ -1392,7 +1370,7 @@ export default function ScheduleManagement() {
                 )}
               </TabsContent>
 
-              {/* TAB MATA PELAJARAN */}
+              {/* TAB MATA PELAJARAN (tidak berubah) */}
               <TabsContent value="mapel" className="space-y-4 sm:space-y-6">
                 <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
                   <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
