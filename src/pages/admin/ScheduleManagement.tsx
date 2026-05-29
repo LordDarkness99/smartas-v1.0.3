@@ -1190,10 +1190,10 @@ export default function ScheduleManagement() {
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-4 sm:space-y-6">
               <div className="flex justify-center">
                 <TabsList className="bg-[#2C5EAD] p-1 rounded-xl">
-                  <TabsTrigger value="jadwal" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4 gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+                  <TabsTrigger value="jadwal" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4 gap-2 text-white/80">
                     <Calendar className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Jadwal Pelajaran
                   </TabsTrigger>
-                  <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4 gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+                  <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4 gap-2 text-white/80">
                     <BookOpen className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Mata Pelajaran
                   </TabsTrigger>
                 </TabsList>

@@ -23,6 +23,11 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -31,7 +36,7 @@ import {
   Upload, Download, AlertCircle, Loader2, Edit, RefreshCw,
   Plus, Sun, Moon, Cloud, Users, School, User, UserCheck,
   Sparkles, Shield, GraduationCap, Search, X, Filter,
-  UserMinus, UserPlus, Building2,
+  UserMinus, UserPlus, Building2, ChevronDown,
 } from "lucide-react";
 
 // ==================== TYPES ====================
@@ -126,6 +131,10 @@ export default function UserManagement() {
   const [toggleKelasDialogOpen, setToggleKelasDialogOpen] = useState(false);
   const [togglingKelas, setTogglingKelas] = useState<Kelas | null>(null);
   const [isActivatingKelasMode, setIsActivatingKelasMode] = useState(false);
+
+  // Popover wali kelas
+  const [openWaliKelas, setOpenWaliKelas] = useState(false);
+  const [searchWaliKelas, setSearchWaliKelas] = useState("");
 
   // Import Kelas
   const [importKelasDialogOpen, setImportKelasDialogOpen] = useState(false);
@@ -596,7 +605,7 @@ export default function UserManagement() {
     setEditDialogOpen(true);
   };
 
-  // ========== HANDLE UPDATE USER (DENGAN LARANGAN ROLE SISWA & URUTAN YANG BENAR) ==========
+  // ========== HANDLE UPDATE USER ==========
   const handleUpdateUser = async () => {
     if (!editingUser) return;
     if ((editForm.peran === "admin_jurusan" || editForm.peran === "bk") && !isAdminSuper) {
@@ -605,7 +614,7 @@ export default function UserManagement() {
     }
     setIsLoading(true);
     try {
-      // Cek username unik (kecuali untuk user yang sama)
+      // Cek username unik
       let query = supabase.from("akun").select("id_akun").eq("username", editForm.username);
       if (editingUser.peran === "guru") query = query.neq("id_guru", (editingUser as GuruData).id_guru);
       else if (editingUser.peran === "siswa") query = query.neq("id_siswa", (editingUser as SiswaData).id_siswa);
@@ -620,14 +629,12 @@ export default function UserManagement() {
       const newRole = editForm.peran;
       const roleChanged = oldRole !== newRole;
 
-      // ========== LARANGAN MENGUBAH ROLE SISWA ==========
       if (roleChanged) {
         if (oldRole === "siswa" || newRole === "siswa") {
           throw new Error("Role siswa tidak dapat diubah ke role lain, dan role lain tidak dapat diubah menjadi siswa.");
         }
       }
 
-      // 1. Jika role berubah, siapkan update akun untuk melepas foreign key & ganti peran
       if (roleChanged) {
         updateData.peran = newRole;
         if (oldRole === "guru") {
@@ -639,14 +646,12 @@ export default function UserManagement() {
         }
       }
 
-      // 2. Update akun TERLEBIH DAHULU (sehingga foreign key ke guru/siswa terputus)
       const { error: updateAkunError } = await supabase
         .from("akun")
         .update(updateData)
         .eq("id_akun", editingUser.id_akun);
       if (updateAkunError) throw updateAkunError;
 
-      // 3. Setelah akun tidak mereferensi, hapus data terkait & hapus guru/siswa (jika role berubah)
       if (roleChanged) {
         if (oldRole === "guru") {
           const guru = editingUser as GuruData;
@@ -663,7 +668,6 @@ export default function UserManagement() {
         }
       }
 
-      // 4. Jika role berubah dan role baru memerlukan entri di tabel guru/siswa, buat entri baru
       if (roleChanged) {
         if (newRole === "guru" && oldRole !== "guru") {
           const nextId = await getNextId("guru");
@@ -678,7 +682,6 @@ export default function UserManagement() {
           await supabase.from("akun").update({ id_guru: nextId }).eq("id_akun", editingUser.id_akun);
         } 
         else if (newRole === "siswa" && oldRole !== "siswa") {
-          // Sebenarnya tidak akan masuk sini karena sudah dicegah, tapi untuk jaga-jaga
           throw new Error("Tidak dapat mengubah role menjadi siswa.");
         } 
         else if (newRole === "admin_jurusan" && oldRole !== "admin_jurusan") {
@@ -687,11 +690,9 @@ export default function UserManagement() {
           }
         }
       } else {
-        // Jika role tidak berubah tetapi admin_jurusan, update id_jurusan
         if (newRole === "admin_jurusan" && editForm.id_jurusan && editForm.id_jurusan !== "none") {
           await supabase.from("akun").update({ id_jurusan: parseInt(editForm.id_jurusan) }).eq("id_akun", editingUser.id_akun);
         }
-        // Jika role tidak berubah tetapi guru/siswa, update data tambahan (NIK/NIS, kelas, jurusan)
         if (newRole === "guru") {
           const guru = editingUser as GuruData;
           if (editForm.nik && editForm.nik !== guru.nik) {
@@ -1351,9 +1352,9 @@ export default function UserManagement() {
           <CardContent className="p-4 sm:p-6">
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "list" | "kelas")} className="space-y-4 sm:space-y-6">
               <div className="flex justify-center">
-                <TabsList className="bg-[#C4E2F5]/50 p-1 rounded-xl">
-                  <TabsTrigger value="list" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4"><Users className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Daftar Pengguna</TabsTrigger>
-                  <TabsTrigger value="kelas" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4"><School className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Kelola Kelas</TabsTrigger>
+                <TabsList className="bg-[#2C5EAD] p-1 rounded-xl">
+                  <TabsTrigger value="list" className="rounded-lg text-white/80 data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4"><Users className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Daftar Pengguna</TabsTrigger>
+                  <TabsTrigger value="kelas" className="rounded-lg text-white/80 data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4"><School className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Kelola Kelas</TabsTrigger>
                 </TabsList>
               </div>
 
@@ -1523,9 +1524,112 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* KELAS DIALOGS */}
+      {/* DIALOG KELAS - DENGAN POPOVER PENCARIAN */}
       <Dialog open={kelasDialogOpen} onOpenChange={setKelasDialogOpen}>
-        <DialogContent className="rounded-2xl"><DialogHeader><DialogTitle>{editingKelas ? "Ubah Kelas" : "Tambah Kelas Baru"}</DialogTitle></DialogHeader><div><Label>Nama Kelas</Label><Input value={kelasForm.nama} onChange={e => setKelasForm({ ...kelasForm, nama: e.target.value })} className="rounded-xl mt-1" /></div><div><Label>Wali Kelas</Label><Select value={kelasForm.id_guru} onValueChange={v => setKelasForm({ ...kelasForm, id_guru: v })}><SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="Pilih wali kelas (opsional)" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada wali kelas</SelectItem>{guruOptions.map(g => <SelectItem key={g.id_guru} value={g.id_guru.toString()}>{g.nama} (NIK: {g.nik})</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setKelasDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button><Button onClick={handleSaveKelas} disabled={isSavingKelas} className="rounded-xl bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button></DialogFooter></DialogContent>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader><DialogTitle>{editingKelas ? "Ubah Kelas" : "Tambah Kelas Baru"}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-slate-700 font-medium text-xs sm:text-sm">Nama Kelas</Label>
+              <Input
+                value={kelasForm.nama}
+                onChange={(e) => setKelasForm({ ...kelasForm, nama: e.target.value })}
+                className="rounded-lg border-slate-200 h-9 text-sm mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-slate-700 font-medium text-xs sm:text-sm">Wali Kelas</Label>
+              <Popover open={openWaliKelas} onOpenChange={setOpenWaliKelas}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between rounded-lg border-slate-200 h-9 text-sm font-normal mt-1"
+                  >
+                    {kelasForm.id_guru && kelasForm.id_guru !== "none"
+                      ? guruOptions.find((g) => g.id_guru.toString() === kelasForm.id_guru)?.nama ||
+                        "Pilih Wali Kelas"
+                      : "Tidak ada wali kelas"}
+                    <ChevronDown className="h-4 w-4 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0" align="start" sideOffset={5}>
+                  <div className="p-2 border-b bg-slate-50">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                      <Input
+                        placeholder="Cari guru (nama atau NIK)..."
+                        value={searchWaliKelas}
+                        onChange={(e) => setSearchWaliKelas(e.target.value)}
+                        className="pl-7 h-8 text-sm rounded-lg"
+                      />
+                    </div>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    <button
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors"
+                      onClick={() => {
+                        setKelasForm({ ...kelasForm, id_guru: "" });
+                        setOpenWaliKelas(false);
+                        setSearchWaliKelas("");
+                      }}
+                    >
+                      Tidak ada wali kelas
+                    </button>
+                    {guruOptions
+                      .filter(
+                        (g) =>
+                          g.nama.toLowerCase().includes(searchWaliKelas.toLowerCase()) ||
+                          g.nik.toLowerCase().includes(searchWaliKelas.toLowerCase())
+                      )
+                      .map((guru) => (
+                        <button
+                          key={guru.id_guru}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${
+                            kelasForm.id_guru === guru.id_guru.toString()
+                              ? "bg-[#C4E2F5] text-[#2C5EAD] font-medium"
+                              : ""
+                          }`}
+                          onClick={() => {
+                            setKelasForm({ ...kelasForm, id_guru: guru.id_guru.toString() });
+                            setOpenWaliKelas(false);
+                            setSearchWaliKelas("");
+                          }}
+                        >
+                          {guru.nama} {guru.nik ? `(${guru.nik})` : ""}
+                        </button>
+                      ))}
+                    {guruOptions.filter(
+                      (g) =>
+                        g.nama.toLowerCase().includes(searchWaliKelas.toLowerCase()) ||
+                        g.nik.toLowerCase().includes(searchWaliKelas.toLowerCase())
+                    ).length === 0 && searchWaliKelas && (
+                      <div className="px-3 py-4 text-center text-sm text-slate-500">
+                        Tidak ada guru yang cocok
+                      </div>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setKelasDialogOpen(false)}
+              className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"
+            >
+              Batal
+            </Button>
+            <Button
+              onClick={handleSaveKelas}
+              disabled={isSavingKelas}
+              className="rounded-xl bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]"
+            >
+              {isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Simpan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
 
       <Dialog open={toggleKelasDialogOpen} onOpenChange={setToggleKelasDialogOpen}>

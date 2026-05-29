@@ -748,10 +748,10 @@ export default function PklManagement() {
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "lokasi" | "siswa")} className="space-y-4 sm:space-y-6">
               <div className="flex justify-center">
                 <TabsList className="bg-[#2C5EAD] p-1 rounded-xl">
-                  <TabsTrigger value="lokasi" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4 gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+                  <TabsTrigger value="lokasi" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4 gap-2 text-white/80">
                     <Building2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Lokasi PKL
                   </TabsTrigger>
-                  <TabsTrigger value="siswa" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4 gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+                  <TabsTrigger value="siswa" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4 gap-2 text-white/80">
                     <Users className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Atur Siswa PKL
                   </TabsTrigger>
                 </TabsList>

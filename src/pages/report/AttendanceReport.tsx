@@ -130,6 +130,10 @@ export default function AttendanceReport() {
   const [mapelOptions, setMapelOptions] = useState<{ nama: string }[]>([]);
   const [selectedMapelNama, setSelectedMapelNama] = useState<string>("");
   
+  // State untuk popover mata pelajaran
+  const [popoverMapelOpen, setPopoverMapelOpen] = useState(false);
+  const [mapelSearchQuery, setMapelSearchQuery] = useState("");
+  
   const [rekapHarian, setRekapHarian] = useState<RekapHarian[]>([]);
   const [rekapMapel, setRekapMapel] = useState<RekapMapel[]>([]);
   const [evaluasiPembelajaran, setEvaluasiPembelajaran] = useState<EvaluasiPembelajaran | null>(null);
@@ -168,6 +172,7 @@ export default function AttendanceReport() {
     if (!selectedKelasMapel) {
       setMapelOptions([]);
       setSelectedMapelNama("");
+      setMapelSearchQuery("");
       return;
     }
 
@@ -670,6 +675,11 @@ export default function AttendanceReport() {
     return "Pengguna";
   };
 
+  // Filter mapel berdasarkan pencarian
+  const filteredMapelOptions = mapelOptions.filter(m =>
+    m.nama.toLowerCase().includes(mapelSearchQuery.toLowerCase())
+  );
+
   return (
     <div className="min-h-screen bg-[#F0F7FC] overflow-x-hidden">
       {/* Header */}
@@ -825,17 +835,73 @@ export default function AttendanceReport() {
                     </div>
                     <div className="w-full sm:w-64">
                       <Label className="text-slate-700 text-xs sm:text-sm font-medium">Mata Pelajaran (Opsional)</Label>
-                      <Select value={selectedMapelNama} onValueChange={setSelectedMapelNama}>
-                        <SelectTrigger className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm">
-                          <SelectValue placeholder="Pilih Mata Pelajaran" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-lg">
-                          {showAllMapelOption() && <SelectItem value="all">Semua Mata Pelajaran</SelectItem>}
-                          {mapelOptions.map(m => (
-                            <SelectItem key={m.nama} value={m.nama}>{m.nama}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Popover open={popoverMapelOpen} onOpenChange={setPopoverMapelOpen}>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className="w-full justify-between rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm font-normal">
+                            {selectedMapelNama ? (selectedMapelNama === "all" ? "Semua Mata Pelajaran" : selectedMapelNama) : "Pilih Mata Pelajaran"}
+                            <ChevronDown className="h-4 w-4 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80 p-0" align="start" sideOffset={5}>
+                          <div className="p-2 border-b bg-slate-50">
+                            <div className="relative">
+                              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                              <Input
+                                placeholder="Cari mata pelajaran..."
+                                value={mapelSearchQuery}
+                                onChange={(e) => setMapelSearchQuery(e.target.value)}
+                                className="pl-7 h-8 text-sm rounded-lg"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              {mapelSearchQuery && (
+                                <button
+                                  onClick={() => setMapelSearchQuery("")}
+                                  className="absolute right-2 top-1/2 transform -translate-y-1/2"
+                                >
+                                  <X className="h-3.5 w-3.5 text-slate-400" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="max-h-60 overflow-y-auto">
+                            {showAllMapelOption() && (
+                              <button
+                                className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${
+                                  selectedMapelNama === "all" ? "bg-[#C4E2F5] text-[#2C5EAD] font-medium" : ""
+                                }`}
+                                onClick={() => {
+                                  setSelectedMapelNama("all");
+                                  setPopoverMapelOpen(false);
+                                  setMapelSearchQuery("");
+                                }}
+                              >
+                                Semua Mata Pelajaran
+                              </button>
+                            )}
+                            {filteredMapelOptions.length === 0 ? (
+                              <div className="px-3 py-4 text-center text-sm text-slate-500">
+                                Tidak ada mata pelajaran yang cocok
+                              </div>
+                            ) : (
+                              filteredMapelOptions.map((m) => (
+                                <button
+                                  key={m.nama}
+                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${
+                                    selectedMapelNama === m.nama ? "bg-[#C4E2F5] text-[#2C5EAD] font-medium" : ""
+                                  }`}
+                                  onClick={() => {
+                                    setSelectedMapelNama(m.nama);
+                                    setPopoverMapelOpen(false);
+                                    setMapelSearchQuery("");
+                                  }}
+                                >
+                                  {m.nama}
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                     <div className="w-full sm:w-40"><Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Awal</Label><Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm" /></div>
                     <div className="w-full sm:w-40"><Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Akhir</Label><Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm" /></div>
@@ -903,6 +969,7 @@ export default function AttendanceReport() {
 
                       {evaluasiPembelajaran && (
                         <div className="mt-6 space-y-4">
+                          {/* Rekomendasi Card */}
                           <Card className={`rounded-xl border-0 shadow-lg overflow-hidden ${
                             evaluasiPembelajaran.rekomendasi === "PERTAHANKAN" 
                               ? "bg-gradient-to-r from-emerald-50 to-teal-50 border-l-8 border-l-emerald-500" 

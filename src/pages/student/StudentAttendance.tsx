@@ -758,10 +758,10 @@ export default function StudentAttendance() {
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-4 sm:space-y-6">
               <div className="flex justify-center">
                 <TabsList className="bg-[#2C5EAD] p-1 rounded-xl">
-                  <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-4 py-1.5 text-sm gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+                  <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-4 py-1.5 text-sm gap-2 text-white/80">
                     <Calendar className="h-4 w-4" /> Presensi Harian
                   </TabsTrigger>
-                  <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-4 py-1.5 text-sm gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+                  <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-4 py-1.5 text-sm gap-2 text-white/80">
                     <QrCode className="h-4 w-4" /> Presensi Mapel
                   </TabsTrigger>
                 </TabsList>

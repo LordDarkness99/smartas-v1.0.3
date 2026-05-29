@@ -549,10 +549,10 @@ export default function StudentDashboard() {
         <Tabs defaultValue="harian" className="space-y-4">
           <div className="flex justify-center">
             <TabsList className="bg-[#2C5EAD] p-1 rounded-xl">
-              <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-4 py-1.5 text-sm gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+              <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-4 py-1.5 text-sm gap-2 text-white/80">
                 <Calendar className="h-4 w-4" /> Riwayat Harian
               </TabsTrigger>
-              <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-4 py-1.5 text-sm gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+              <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-4 py-1.5 text-sm gap-2 text-white/80">
                 <BookOpen className="h-4 w-4" /> Riwayat Mapel
               </TabsTrigger>
             </TabsList>
