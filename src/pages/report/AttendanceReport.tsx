@@ -1,4 +1,4 @@
-// src/pages/report/AttendanceReport.tsx (dengan 4 kotak dihapus, summary card bg putih teks hitam)
+// src/pages/report/AttendanceReport.tsx
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -42,10 +42,8 @@ import {
   Moon,
   Cloud,
   Sparkles,
-  School,
   BookOpen,
   Calendar,
-  Activity,
   TrendingUp,
   FileText,
   Search,
@@ -105,9 +103,7 @@ const SCHOOL_PHONE = "(021) 1234567";
 const SCHOOL_EMAIL = "info@smkn1contoh.sch.id";
 const SCHOOL_NPSN = "12345678";
 
-// Ekspresi positif: netral, happy, surprised
 const EKSPRESI_POSITIF = ["neutral", "happy", "surprised"];
-// Ekspresi negatif: sad, angry, fearful, disgusted
 const EKSPRESI_NEGATIF = ["sad", "angry", "fearful", "disgusted"];
 
 export default function AttendanceReport() {
@@ -117,11 +113,8 @@ export default function AttendanceReport() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
   
-  // Daftar kelas untuk presensi mapel (guru bisa lihat kelas yang diampu/wali, admin_jurusan lihat kelas jurusannya, admin & bk lihat semua)
   const [kelasListMapel, setKelasListMapel] = useState<{ id_kelas: number; nama: string }[]>([]);
-  // Daftar kelas untuk presensi harian (hanya admin, wali kelas, admin_jurusan, dan bk)
   const [kelasListHarian, setKelasListHarian] = useState<{ id_kelas: number; nama: string }[]>([]);
-  // Daftar kelas untuk evaluasi pembelajaran (sama dengan presensi harian)
   const [kelasListEvaluasi, setKelasListEvaluasi] = useState<{ id_kelas: number; nama: string }[]>([]);
   
   const [selectedKelasHarian, setSelectedKelasHarian] = useState<string>("");
@@ -133,24 +126,21 @@ export default function AttendanceReport() {
   );
   const [endDate, setEndDate] = useState<string>(new Date().toISOString().split("T")[0]);
   
-  const [jadwalList, setJadwalList] = useState<{ id_jadwal: number; nama: string; kelas_nama: string; id_guru: number }[]>([]);
-  const [jadwalListFiltered, setJadwalListFiltered] = useState<{ id_jadwal: number; nama: string; kelas_nama: string }[]>([]);
-  const [selectedJadwal, setSelectedJadwal] = useState<string>("");
+  // Untuk tab mapel: daftar mata pelajaran unik berdasarkan kelas yang dipilih
+  const [mapelOptions, setMapelOptions] = useState<{ nama: string }[]>([]);
+  const [selectedMapelNama, setSelectedMapelNama] = useState<string>("");
   
   const [rekapHarian, setRekapHarian] = useState<RekapHarian[]>([]);
   const [rekapMapel, setRekapMapel] = useState<RekapMapel[]>([]);
   const [evaluasiPembelajaran, setEvaluasiPembelajaran] = useState<EvaluasiPembelajaran | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // State untuk popover filter kelas (digunakan untuk ketiga tab)
   const [popoverKelasOpen, setPopoverKelasOpen] = useState(false);
   const [kelasSearchQuery, setKelasSearchQuery] = useState("");
   const [kelasJenjangFilter, setKelasJenjangFilter] = useState<string>("all");
 
-  // State untuk menyimpan ID kelas tempat guru menjadi wali
   const [waliKelasIds, setWaliKelasIds] = useState<number[]>([]);
 
-  // Helper: filter kelas berdasarkan jenjang dan pencarian
   const filterKelasOptions = (kelasList: { id_kelas: number; nama: string }[]) => {
     return kelasList.filter((kelas) => {
       if (kelasJenjangFilter !== "all") {
@@ -173,48 +163,65 @@ export default function AttendanceReport() {
     return kelas?.nama || "";
   };
 
-  // Filter jadwal untuk presensi mapel berdasarkan kelas yang dipilih
+  // Fetch daftar mata pelajaran unik untuk kelas yang dipilih (tab mapel)
   useEffect(() => {
     if (!selectedKelasMapel) {
-      setJadwalListFiltered([]);
+      setMapelOptions([]);
+      setSelectedMapelNama("");
       return;
     }
 
-    const kelasNama = getKelasNameById(parseInt(selectedKelasMapel), kelasListMapel);
-    const isAdminRole = isAdmin(user);
-    const isGuru = user?.peran === 'guru';
-    const isWali = waliKelasIds.includes(parseInt(selectedKelasMapel));
-    const isAdminJurusanRole = isAdminJurusan(user);
-    const isBkRole = isBK(user);
+    const fetchMapelOptions = async () => {
+      const idKelas = parseInt(selectedKelasMapel);
+      // Query jadwal untuk kelas tersebut
+      let query = supabase
+        .from("jadwal")
+        .select(`
+          id_jadwal,
+          mapel:mata_pelajaran (nama)
+        `)
+        .eq("id_kelas", idKelas)
+        .eq("aktif", true);
 
-    let filtered: typeof jadwalList = [];
+      // Filter berdasarkan role
+      const isAdminRole = isAdmin(user);
+      const isBkRole = isBK(user);
+      const isAdminJurusanRole = isAdminJurusan(user);
+      const isWali = waliKelasIds.includes(idKelas);
+      const isGuru = user?.peran === 'guru';
 
-    if (isAdminRole || isBkRole || isAdminJurusanRole) {
-      // Admin, BK, atau admin jurusan: semua mapel di kelas tersebut
-      filtered = jadwalList.filter(j => j.kelas_nama === kelasNama);
-    } else if (isGuru && isWali) {
-      // Guru wali: semua mapel di kelas tersebut
-      filtered = jadwalList.filter(j => j.kelas_nama === kelasNama);
-    } else if (isGuru && user?.id_guru) {
-      // Guru biasa: hanya mapel yang diampu
-      filtered = jadwalList.filter(j => j.kelas_nama === kelasNama && j.id_guru === user.id_guru);
-    }
-
-    setJadwalListFiltered(filtered.map(({ id_jadwal, nama, kelas_nama }) => ({ id_jadwal, nama, kelas_nama })));
-
-    // Untuk guru biasa (bukan wali), auto pilih mapel pertama
-    if (isGuru && !isWali && filtered.length > 0) {
-      const isValid = selectedJadwal && selectedJadwal !== "all" && filtered.some(j => j.id_jadwal.toString() === selectedJadwal);
-      if (!isValid) {
-        setSelectedJadwal(filtered[0].id_jadwal.toString());
+      if (isGuru && !isWali && user?.id_guru) {
+        query = query.eq("id_guru", user.id_guru);
       }
-    } else {
-      if (selectedJadwal && selectedJadwal !== "all") {
-        const exists = filtered.some(j => j.id_jadwal.toString() === selectedJadwal);
-        if (!exists) setSelectedJadwal("");
+
+      const { data, error } = await query;
+      if (error) {
+        console.error(error);
+        return;
       }
-    }
-  }, [selectedKelasMapel, jadwalList, user, waliKelasIds, kelasListMapel]);
+
+      // Ambil nama mapel unik (case-insensitive, ambil yang pertama sebagai display)
+      const mapelSet = new Map<string, string>();
+      for (const item of data || []) {
+        const rawNama = item.mapel?.nama;
+        if (rawNama) {
+          const key = rawNama.trim().toLowerCase();
+          if (!mapelSet.has(key)) {
+            mapelSet.set(key, rawNama.trim());
+          }
+        }
+      }
+      const uniqueMapel = Array.from(mapelSet.values()).sort().map(nama => ({ nama }));
+      setMapelOptions(uniqueMapel);
+      
+      // Reset pilihan mapel jika tidak valid
+      if (selectedMapelNama && !uniqueMapel.some(m => m.nama === selectedMapelNama)) {
+        setSelectedMapelNama("");
+      }
+    };
+
+    fetchMapelOptions();
+  }, [selectedKelasMapel, user, waliKelasIds]);
 
   // Greeting effect
   useEffect(() => {
@@ -235,7 +242,6 @@ export default function AttendanceReport() {
     });
   };
 
-  // Fetch data kelas dan wali berdasarkan role
   const fetchKelas = async () => {
     if (!user) return;
     if (!user.id_akun) {
@@ -260,7 +266,6 @@ export default function AttendanceReport() {
 
       const id_guru = user.id_guru;
 
-      // 1. Kelas sebagai wali kelas
       const { data: waliKelas, error: waliError } = await supabase
         .from("kelas")
         .select("id_kelas, nama")
@@ -271,7 +276,6 @@ export default function AttendanceReport() {
       const waliIds = waliKelas?.map(k => k.id_kelas) || [];
       setWaliKelasIds(waliIds);
 
-      // 2. Kelas yang diampu melalui jadwal
       const { data: jadwalKelas, error: jadwalError } = await supabase
         .from("jadwal")
         .select("kelas:id_kelas(id_kelas, nama)")
@@ -298,14 +302,10 @@ export default function AttendanceReport() {
       const kelasListUnik = Array.from(kelasMap.values()).sort((a, b) =>
         a.nama.localeCompare(b.nama)
       );
-      // Kelas untuk presensi mapel: semua kelas yang diampu (termasuk wali)
       setKelasListMapel(kelasListUnik);
-      // Kelas untuk presensi harian: hanya kelas wali
       setKelasListHarian(waliKelas || []);
-      // Kelas untuk evaluasi: hanya kelas wali (karena ekspresi hanya untuk wali)
       setKelasListEvaluasi(waliKelas || []);
     } else if (isAdminJurusanRole) {
-      // Admin jurusan: hanya kelas dengan id_jurusan miliknya
       const { data, error } = await supabase
         .from("kelas")
         .select("id_kelas, nama")
@@ -320,7 +320,6 @@ export default function AttendanceReport() {
       }
       setWaliKelasIds([]);
     } else if (isAdminSuper || isBkRole) {
-      // Admin super atau BK: semua kelas aktif
       const { data, error } = await supabase
         .from("kelas")
         .select("id_kelas, nama")
@@ -334,14 +333,12 @@ export default function AttendanceReport() {
       }
       setWaliKelasIds([]);
     } else {
-      // Role lain (misal siswa) tidak memiliki akses laporan
       setKelasListMapel([]);
       setKelasListHarian([]);
       setKelasListEvaluasi([]);
     }
   };
 
-  // Reset selected kelas jika tidak valid setelah fetch
   useEffect(() => {
     if (selectedKelasHarian && kelasListHarian.length > 0) {
       const isValid = kelasListHarian.some(k => k.id_kelas.toString() === selectedKelasHarian);
@@ -363,39 +360,9 @@ export default function AttendanceReport() {
     }
   }, [kelasListEvaluasi, selectedKelasEvaluasi]);
 
-  const fetchJadwal = async () => {
-    let query = supabase
-      .from("jadwal")
-      .select(`
-        id_jadwal,
-        id_guru,
-        mapel:mata_pelajaran (nama),
-        kelas:kelas (nama, id_jurusan)
-      `)
-      .eq("aktif", true);
-
-    // Untuk admin jurusan, filter jadwal hanya untuk kelas dalam jurusannya
-    if (isAdminJurusan(user) && user?.id_jurusan) {
-      query = query.eq("kelas.id_jurusan", user.id_jurusan);
-    }
-
-    const { data, error } = await query;
-    if (error) console.error(error);
-    else {
-      const formatted = data.map((item: any) => ({
-        id_jadwal: item.id_jadwal,
-        id_guru: item.id_guru,
-        nama: item.mapel?.nama || "-",
-        kelas_nama: item.kelas?.nama || "-",
-      }));
-      setJadwalList(formatted);
-    }
-  };
-
   useEffect(() => {
     if (user) {
       fetchKelas();
-      fetchJadwal();
     }
   }, [user]);
 
@@ -448,47 +415,60 @@ export default function AttendanceReport() {
       toast({ title: "Error", description: "Pilih kelas terlebih dahulu", variant: "destructive" });
       return;
     }
-    const isGuruBiasa = user?.peran === 'guru' && !waliKelasIds.includes(parseInt(selectedKelasMapel));
-    if (isGuruBiasa && !selectedJadwal) {
-      toast({ title: "Error", description: "Pilih mata pelajaran terlebih dahulu", variant: "destructive" });
-      return;
-    }
     setIsLoading(true);
     try {
+      const idKelas = parseInt(selectedKelasMapel);
       const { data: siswaData, error: siswaError } = await supabase
         .from("siswa")
         .select("id_siswa, nama, nis")
-        .eq("id_kelas", parseInt(selectedKelasMapel))
+        .eq("id_kelas", idKelas)
         .eq("aktif", true);
       if (siswaError) throw siswaError;
 
+      // Query presensi mapel dengan join ke jadwal dan mapel
       let query = supabase
         .from("presensi_siswa_mapel")
         .select(`
           id_siswa,
           status,
-          jadwal:jadwal (
+          jadwal:jadwal!inner (
             id_jadwal,
+            id_kelas,
             mapel:mata_pelajaran (nama)
           )
         `)
         .gte("waktu_presensi", `${startDate}T00:00:00`)
-        .lte("waktu_presensi", `${endDate}T23:59:59`);
+        .lte("waktu_presensi", `${endDate}T23:59:59`)
+        .eq("jadwal.id_kelas", idKelas);
 
-      if (selectedJadwal && selectedJadwal !== "all") {
-        query = query.eq("jadwal.id_jadwal", parseInt(selectedJadwal));
+      // Filter berdasarkan mata pelajaran yang dipilih (jika bukan "all")
+      if (selectedMapelNama && selectedMapelNama !== "all") {
+        query = query.eq("jadwal.mapel.nama", selectedMapelNama);
       }
 
       const { data: presensiData, error: presensiError } = await query;
       if (presensiError) throw presensiError;
 
-      const mapelMap = new Map<string, { hadir: number; izin: number; sakit: number; alfa: number }>();
+      // Akumulasi per siswa dan nama mapel (normalisasi)
+      const mapelMap = new Map<string, { hadir: number; izin: number; sakit: number; alfa: number; displayName: string }>();
+      
       for (const pres of presensiData || []) {
-        const mapelNama = pres.jadwal?.mapel?.nama || "Unknown";
-        const key = `${pres.id_siswa}_${mapelNama}`;
+        const rawMapelName = pres.jadwal?.mapel?.nama;
+        if (!rawMapelName) continue; // abaikan presensi tanpa mapel
+        
+        const normalized = rawMapelName.trim().toLowerCase();
+        const key = `${pres.id_siswa}_${normalized}`;
+        
         if (!mapelMap.has(key)) {
-          mapelMap.set(key, { hadir: 0, izin: 0, sakit: 0, alfa: 0 });
+          mapelMap.set(key, {
+            hadir: 0,
+            izin: 0,
+            sakit: 0,
+            alfa: 0,
+            displayName: rawMapelName.trim(),
+          });
         }
+        
         const stat = mapelMap.get(key)!;
         switch (pres.status) {
           case "Hadir": stat.hadir++; break;
@@ -502,6 +482,7 @@ export default function AttendanceReport() {
       const rekap: RekapMapel[] = [];
       for (const siswa of siswaData) {
         const studentKeys = Array.from(mapelMap.keys()).filter(k => k.startsWith(`${siswa.id_siswa}_`));
+        
         if (studentKeys.length === 0) {
           rekap.push({
             id_siswa: siswa.id_siswa,
@@ -515,13 +496,12 @@ export default function AttendanceReport() {
           });
         } else {
           for (const key of studentKeys) {
-            const mapelNama = key.split("_")[1];
             const stats = mapelMap.get(key)!;
             rekap.push({
               id_siswa: siswa.id_siswa,
               nama: siswa.nama,
               nis: siswa.nis?.toString() || "",
-              mapel_nama: mapelNama,
+              mapel_nama: stats.displayName,
               hadir: stats.hadir,
               izin: stats.izin,
               sakit: stats.sakit,
@@ -530,6 +510,7 @@ export default function AttendanceReport() {
           }
         }
       }
+      
       setRekapMapel(rekap);
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -548,7 +529,6 @@ export default function AttendanceReport() {
       const start = `${startDate}T00:00:00`;
       const end = `${endDate}T23:59:59`;
       
-      // Ambil data presensi harian dengan ekspresi
       const { data: presensiData, error: presensiError } = await supabase
         .from("presensi_harian")
         .select("id_siswa, ekspresi, status_presensi, waktu_presensi")
@@ -557,7 +537,6 @@ export default function AttendanceReport() {
 
       if (presensiError) throw presensiError;
 
-      // Filter berdasarkan kelas yang dipilih
       const { data: siswaKelas, error: siswaError } = await supabase
         .from("siswa")
         .select("id_siswa, nama, nis")
@@ -569,7 +548,6 @@ export default function AttendanceReport() {
       const siswaIds = siswaKelas.map(s => s.id_siswa);
       const presensiKelas = presensiData?.filter(p => siswaIds.includes(p.id_siswa)) || [];
 
-      // Inisialisasi counter ekspresi
       const ekspresiDetail = {
         neutral: 0,
         happy: 0,
@@ -580,7 +558,6 @@ export default function AttendanceReport() {
         surprised: 0,
       };
 
-      // Hitung setiap ekspresi
       for (const pres of presensiKelas) {
         if (pres.ekspresi && ekspresiDetail.hasOwnProperty(pres.ekspresi)) {
           ekspresiDetail[pres.ekspresi as keyof typeof ekspresiDetail]++;
@@ -589,7 +566,6 @@ export default function AttendanceReport() {
 
       const totalEkspresi = Object.values(ekspresiDetail).reduce((a, b) => a + b, 0);
       
-      // Hitung ekspresi positif dan negatif
       let ekspresiPositif = 0;
       let ekspresiNegatif = 0;
 
@@ -601,7 +577,6 @@ export default function AttendanceReport() {
         }
       }
 
-      // Tentukan rekomendasi
       let rekomendasi: "PERTAHANKAN" | "EVALUASI";
       let pesan: string;
 
@@ -672,13 +647,20 @@ export default function AttendanceReport() {
     return isAdminRole || isBkRole || isAdminJurusanRole || isWali;
   };
 
-  const totalHadir = rekapHarian.reduce((sum, s) => sum + s.hadir, 0);
+  const totalHadirHarian = rekapHarian.reduce((sum, s) => sum + s.hadir, 0);
   const totalTerlambat = rekapHarian.reduce((sum, s) => sum + s.terlambat, 0);
-  const totalIzin = rekapHarian.reduce((sum, s) => sum + s.izin, 0);
-  const totalSakit = rekapHarian.reduce((sum, s) => sum + s.sakit, 0);
-  const totalAlfa = rekapHarian.reduce((sum, s) => sum + s.alfa, 0);
-  const totalPresensi = totalHadir + totalTerlambat + totalIzin + totalSakit + totalAlfa;
-  const persenHadir = totalPresensi > 0 ? ((totalHadir + totalTerlambat) / totalPresensi * 100).toFixed(1) : 0;
+  const totalIzinHarian = rekapHarian.reduce((sum, s) => sum + s.izin, 0);
+  const totalSakitHarian = rekapHarian.reduce((sum, s) => sum + s.sakit, 0);
+  const totalAlfaHarian = rekapHarian.reduce((sum, s) => sum + s.alfa, 0);
+  const totalPresensiHarian = totalHadirHarian + totalTerlambat + totalIzinHarian + totalSakitHarian + totalAlfaHarian;
+  const persenHadirHarian = totalPresensiHarian > 0 ? ((totalHadirHarian + totalTerlambat) / totalPresensiHarian * 100).toFixed(1) : 0;
+
+  const totalHadirMapel = rekapMapel.reduce((sum, item) => sum + item.hadir, 0);
+  const totalIzinMapel = rekapMapel.reduce((sum, item) => sum + item.izin, 0);
+  const totalSakitMapel = rekapMapel.reduce((sum, item) => sum + item.sakit, 0);
+  const totalAlfaMapel = rekapMapel.reduce((sum, item) => sum + item.alfa, 0);
+  const totalPresensiMapel = totalHadirMapel + totalIzinMapel + totalSakitMapel + totalAlfaMapel;
+  const persenHadirMapel = totalPresensiMapel > 0 ? ((totalHadirMapel) / totalPresensiMapel * 100).toFixed(1) : 0;
 
   const userRoleDisplay = () => {
     if (isAdmin(user)) return "Admin";
@@ -690,7 +672,7 @@ export default function AttendanceReport() {
 
   return (
     <div className="min-h-screen bg-[#F0F7FC] overflow-x-hidden">
-      {/* Header dengan gradasi palette */}
+      {/* Header */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] shadow-xl mx-4 mt-4 print:hidden">
         <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
         <div className="relative container mx-auto px-4 sm:px-6 py-4 sm:py-6">
@@ -724,8 +706,6 @@ export default function AttendanceReport() {
 
       <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8 print:px-0 print:py-0">
         
-        {/* 4 KARTU STATISTIK TELAH DIHAPUS */}
-
         {/* Filter Card */}
         <div className="print:hidden">
           <Card className="rounded-xl border-0 shadow-xl overflow-hidden">
@@ -739,13 +719,13 @@ export default function AttendanceReport() {
               <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "harian" | "mapel" | "evaluasi")} className="space-y-4 sm:space-y-6">
                 <div className="flex justify-center">
                   <TabsList className="bg-[#2C5EAD] p-1 rounded-xl">
-                    <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-3 sm:px-4 py-1.5 text-xs sm:text-sm gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+                    <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-3 sm:px-4 py-1.5 text-xs sm:text-sm gap-2 text-white/80">
                       <Calendar className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Presensi Harian
                     </TabsTrigger>
-                    <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-3 sm:px-4 py-1.5 text-xs sm:text-sm gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+                    <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-3 sm:px-4 py-1.5 text-xs sm:text-sm gap-2 text-white/80">
                       <BookOpen className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Presensi Mapel
                     </TabsTrigger>
-                    <TabsTrigger value="evaluasi" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-3 sm:px-4 py-1.5 text-xs sm:text-sm gap-2 text-white/80 data-[state=active]:text-[#2C5EAD]">
+                    <TabsTrigger value="evaluasi" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-3 sm:px-4 py-1.5 text-xs sm:text-sm gap-2 text-white/80">
                       <Brain className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Evaluasi Pembelajaran
                     </TabsTrigger>
                   </TabsList>
@@ -845,14 +825,14 @@ export default function AttendanceReport() {
                     </div>
                     <div className="w-full sm:w-64">
                       <Label className="text-slate-700 text-xs sm:text-sm font-medium">Mata Pelajaran (Opsional)</Label>
-                      <Select value={selectedJadwal} onValueChange={setSelectedJadwal}>
+                      <Select value={selectedMapelNama} onValueChange={setSelectedMapelNama}>
                         <SelectTrigger className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm">
                           <SelectValue placeholder="Pilih Mata Pelajaran" />
                         </SelectTrigger>
                         <SelectContent className="rounded-lg">
                           {showAllMapelOption() && <SelectItem value="all">Semua Mata Pelajaran</SelectItem>}
-                          {jadwalListFiltered.map(j => (
-                            <SelectItem key={j.id_jadwal} value={j.id_jadwal.toString()}>{j.nama} - {j.kelas_nama}</SelectItem>
+                          {mapelOptions.map(m => (
+                            <SelectItem key={m.nama} value={m.nama}>{m.nama}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -921,10 +901,8 @@ export default function AttendanceReport() {
                         </div>
                       </div>
 
-                      {/* Hasil Evaluasi Pembelajaran */}
                       {evaluasiPembelajaran && (
                         <div className="mt-6 space-y-4">
-                          {/* Rekomendasi Card */}
                           <Card className={`rounded-xl border-0 shadow-lg overflow-hidden ${
                             evaluasiPembelajaran.rekomendasi === "PERTAHANKAN" 
                               ? "bg-gradient-to-r from-emerald-50 to-teal-50 border-l-8 border-l-emerald-500" 
@@ -947,9 +925,7 @@ export default function AttendanceReport() {
                             </CardContent>
                           </Card>
 
-                          {/* Statistik Ekspresi */}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* Ringkasan */}
                             <Card className="rounded-xl border-0 shadow-lg">
                               <CardHeader className="pb-2">
                                 <CardTitle className="text-base flex items-center gap-2">
@@ -983,7 +959,6 @@ export default function AttendanceReport() {
                               </CardContent>
                             </Card>
 
-                            {/* Detail Ekspresi */}
                             <Card className="rounded-xl border-0 shadow-lg">
                               <CardHeader className="pb-2">
                                 <CardTitle className="text-base flex items-center gap-2">
@@ -1026,7 +1001,6 @@ export default function AttendanceReport() {
                             </Card>
                           </div>
 
-                          {/* Progress Bar Visual */}
                           {evaluasiPembelajaran.total_ekspresi > 0 && (
                             <Card className="rounded-xl border-0 shadow-lg">
                               <CardHeader className="pb-2">
@@ -1063,7 +1037,6 @@ export default function AttendanceReport() {
                             </Card>
                           )}
 
-                          {/* Tombol Cetak Evaluasi */}
                           <div className="flex justify-end">
                             <Button onClick={handlePrint} variant="outline" className="rounded-lg border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">
                               <Printer className="mr-2 h-4 w-4" /> Cetak Evaluasi
@@ -1079,50 +1052,86 @@ export default function AttendanceReport() {
           </Card>
         </div>
 
-        {/* Summary Card (hanya untuk tab harian dan mapel) - dengan background putih, teks hitam */}
-        {(rekapHarian.length > 0 || rekapMapel.length > 0) && activeTab !== "evaluasi" && (
+        {/* Summary Card */}
+        {((activeTab === "harian" && rekapHarian.length > 0) || (activeTab === "mapel" && rekapMapel.length > 0)) && (
           <div className="print:hidden">
             <Card className="rounded-xl border-0 shadow-lg bg-white">
               <CardContent className="p-4 sm:p-5">
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
-                  <div className="text-center">
-                    <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Hadir</p>
-                    <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalHadir}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Terlambat</p>
-                    <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalTerlambat}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Izin</p>
-                    <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalIzin}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Sakit</p>
-                    <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalSakit}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Alfa</p>
-                    <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalAlfa}</p>
-                  </div>
-                </div>
-                <hr className="my-3 sm:my-4 border-slate-200" />
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-slate-500" />
-                    <span className="text-xs sm:text-sm text-slate-600">Total Kehadiran</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg sm:text-2xl font-bold text-slate-800">{persenHadir}%</span>
-                    <span className="text-[10px] sm:text-xs text-slate-400">dari {totalPresensi} presensi</span>
-                  </div>
-                </div>
+                {activeTab === "harian" ? (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
+                      <div className="text-center">
+                        <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Hadir</p>
+                        <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalHadirHarian}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Terlambat</p>
+                        <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalTerlambat}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Izin</p>
+                        <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalIzinHarian}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Sakit</p>
+                        <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalSakitHarian}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Alfa</p>
+                        <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalAlfaHarian}</p>
+                      </div>
+                    </div>
+                    <hr className="my-3 sm:my-4 border-slate-200" />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-slate-500" />
+                        <span className="text-xs sm:text-sm text-slate-600">Total Kehadiran</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg sm:text-2xl font-bold text-slate-800">{persenHadirHarian}%</span>
+                        <span className="text-[10px] sm:text-xs text-slate-400">dari {totalPresensiHarian} presensi</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+                      <div className="text-center">
+                        <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Hadir</p>
+                        <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalHadirMapel}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Izin</p>
+                        <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalIzinMapel}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Sakit</p>
+                        <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalSakitMapel}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Alfa</p>
+                        <p className="text-lg sm:text-2xl font-bold text-slate-800">{totalAlfaMapel}</p>
+                      </div>
+                    </div>
+                    <hr className="my-3 sm:my-4 border-slate-200" />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-slate-500" />
+                        <span className="text-xs sm:text-sm text-slate-600">Tingkat Kehadiran</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg sm:text-2xl font-bold text-slate-800">{persenHadirMapel}%</span>
+                        <span className="text-[10px] sm:text-xs text-slate-400">dari {totalPresensiMapel} presensi</span>
+                      </div>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* Tabel Laporan (harian dan mapel) - sama seperti sebelumnya */}
+        {/* Tabel Laporan */}
         {(rekapHarian.length > 0 || rekapMapel.length > 0) && activeTab !== "evaluasi" && (
           <div className="print:mt-0 print:p-0">
             <div className="hidden print:block text-center mb-6" style={{ pageBreakInside: 'avoid' }}>
@@ -1138,7 +1147,7 @@ export default function AttendanceReport() {
               ) : (
                 <>
                   <p className="text-xs sm:text-sm mt-1">Kelas: {getKelasNameMapel()} | Periode: {formatDate(startDate)} s.d. {formatDate(endDate)}</p>
-                  {selectedJadwal && selectedJadwal !== "all" && <p className="text-xs sm:text-sm">Mata Pelajaran: {jadwalListFiltered.find(j => j.id_jadwal.toString() === selectedJadwal)?.nama || "-"}</p>}
+                  {selectedMapelNama && selectedMapelNama !== "all" && <p className="text-xs sm:text-sm">Mata Pelajaran: {selectedMapelNama}</p>}
                 </>
               )}
             </div>
@@ -1216,7 +1225,6 @@ export default function AttendanceReport() {
           </div>
         )}
 
-        {/* Evaluasi Pembelajaran Print Version (tidak diubah) */}
         {evaluasiPembelajaran && activeTab === "evaluasi" && (
           <div className="print:block hidden">
             <div className="text-center mb-6">
@@ -1264,7 +1272,6 @@ export default function AttendanceReport() {
           </div>
         )}
 
-        {/* Tips */}
         <div className="print:hidden">
           <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-[#C4E2F5]/50 to-[#4BB8FA]/20 max-w-3xl mx-auto">
             <CardContent className="p-4 sm:p-5">
