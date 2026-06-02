@@ -160,6 +160,13 @@ export default function UserManagement() {
   const [missingJurusanDialogOpen, setMissingJurusanDialogOpen] = useState(false);
   const [isAddingMissingJurusan, setIsAddingMissingJurusan] = useState(false);
 
+  // === BARU: Kelas missing saat import siswa ===
+  const [importSiswaMissingKelas, setImportSiswaMissingKelas] = useState<string[]>([]);
+  const [missingKelasDialogOpen, setMissingKelasDialogOpen] = useState(false);
+  const [isAddingMissingKelas, setIsAddingMissingKelas] = useState(false);
+  // Untuk admin super, pilih jurusan saat menambah kelas
+  const [selectedJurusanForNewKelas, setSelectedJurusanForNewKelas] = useState<string>("");
+
   // ========== GREETING ==========
   useEffect(() => {
     const hour = new Date().getHours();
@@ -437,6 +444,19 @@ export default function UserManagement() {
     setCurrentPage(1);
   };
 
+  // ========== UTILITY ==========
+  const getNextId = async (table: "guru" | "siswa"): Promise<number> => {
+    const idField = table === "guru" ? "id_guru" : "id_siswa";
+    const { data, error } = await supabase
+      .from(table)
+      .select(idField)
+      .order(idField, { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    if (!data || data.length === 0) return 1;
+    return (data[0][idField] as number) + 1;
+  };
+
   // ========== CRUD ==========
   const openAddDialog = useCallback((e?: React.MouseEvent) => {
     if (e) {
@@ -449,19 +469,6 @@ export default function UserManagement() {
     });
     setAddDialogOpen(true);
   }, [userType]);
-
-  const getNextId = async (table: "guru" | "siswa"): Promise<number> => {
-    const idField = table === "guru" ? "id_guru" : "id_siswa";
-    const { data, error } = await supabase
-      .from(table)
-      .select(idField)
-      .order(idField, { ascending: false })
-      .limit(1);
-    if (error) throw error;
-    let currentMax = 0;
-    if (data && data.length) currentMax = data[0][idField];
-    return currentMax + 1;
-  };
 
   const handleAddUser = async () => {
     if (!addForm.nama.trim() || !addForm.username.trim()) {
@@ -502,24 +509,40 @@ export default function UserManagement() {
         const { data: existingNik } = await supabase
           .from("guru").select("nik").eq("nik", parseInt(addForm.nik)).maybeSingle();
         if (existingNik) throw new Error("NIK sudah digunakan");
+
         const nextId = await getNextId("guru");
         let jurusanId = null;
         if (isAdminJurusan && user?.id_jurusan) jurusanId = user.id_jurusan;
         else if (addForm.id_jurusan) jurusanId = parseInt(addForm.id_jurusan);
-        await supabase.from("akun").insert({
-          nama: addForm.nama, username: addForm.username, peran: "guru",
-          aktif: true, dibuat_pada: now, id_guru: nextId, id_siswa: null,
-          kata_sandi: hashedPassword,
-        });
-        await supabase.from("guru").insert({
-          id_guru: nextId, nama: addForm.nama, nik: parseInt(addForm.nik),
-          gender: addForm.gender.toUpperCase(), aktif: true, dibuat_pada: now,
+
+        const { error: guruError } = await supabase.from("guru").insert({
+          id_guru: nextId,
+          nama: addForm.nama,
+          nik: parseInt(addForm.nik),
+          gender: addForm.gender.toUpperCase(),
+          aktif: true,
+          dibuat_pada: now,
           id_jurusan: jurusanId,
         });
+        if (guruError) throw guruError;
+
+        const { error: akunError } = await supabase.from("akun").insert({
+          nama: addForm.nama,
+          username: addForm.username,
+          peran: "guru",
+          aktif: true,
+          dibuat_pada: now,
+          id_guru: nextId,
+          id_siswa: null,
+          kata_sandi: hashedPassword,
+        });
+        if (akunError) throw akunError;
+
       } else if (addForm.peran === "siswa") {
         const { data: existingNis } = await supabase
           .from("siswa").select("nis").eq("nis", parseInt(addForm.nis)).maybeSingle();
         if (existingNis) throw new Error("NIS sudah digunakan");
+
         let kelasId = null;
         if (addForm.kelas_id && addForm.kelas_id !== "none") {
           kelasId = parseInt(addForm.kelas_id);
@@ -532,27 +555,53 @@ export default function UserManagement() {
           }
         }
         const nextId = await getNextId("siswa");
-        await supabase.from("akun").insert({
-          nama: addForm.nama, username: addForm.username, peran: "siswa",
-          aktif: true, dibuat_pada: now, id_guru: null, id_siswa: nextId,
-          kata_sandi: hashedPassword,
-        });
-        await supabase.from("siswa").insert({
-          id_siswa: nextId, nama: addForm.nama, nis: parseInt(addForm.nis),
-          gender: addForm.gender.toUpperCase(), aktif: true, dibuat_pada: now,
+
+        const { error: siswaError } = await supabase.from("siswa").insert({
+          id_siswa: nextId,
+          nama: addForm.nama,
+          nis: parseInt(addForm.nis),
+          gender: addForm.gender.toUpperCase(),
+          aktif: true,
+          dibuat_pada: now,
           id_kelas: kelasId,
         });
+        if (siswaError) throw siswaError;
+
+        const { error: akunError } = await supabase.from("akun").insert({
+          nama: addForm.nama,
+          username: addForm.username,
+          peran: "siswa",
+          aktif: true,
+          dibuat_pada: now,
+          id_guru: null,
+          id_siswa: nextId,
+          kata_sandi: hashedPassword,
+        });
+        if (akunError) throw akunError;
+
       } else if (addForm.peran === "admin_jurusan") {
         await supabase.from("akun").insert({
-          nama: addForm.nama, username: addForm.username, peran: "admin_jurusan",
-          aktif: true, dibuat_pada: now, id_guru: null, id_siswa: null,
-          id_jurusan: parseInt(addForm.id_jurusan), kata_sandi: hashedPassword,
+          nama: addForm.nama,
+          username: addForm.username,
+          peran: "admin_jurusan",
+          aktif: true,
+          dibuat_pada: now,
+          id_guru: null,
+          id_siswa: null,
+          id_jurusan: parseInt(addForm.id_jurusan),
+          kata_sandi: hashedPassword,
         });
       } else if (addForm.peran === "bk") {
         await supabase.from("akun").insert({
-          nama: addForm.nama, username: addForm.username, peran: "bk",
-          aktif: true, dibuat_pada: now, id_guru: null, id_siswa: null,
-          id_jurusan: null, kata_sandi: hashedPassword,
+          nama: addForm.nama,
+          username: addForm.username,
+          peran: "bk",
+          aktif: true,
+          dibuat_pada: now,
+          id_guru: null,
+          id_siswa: null,
+          id_jurusan: null,
+          kata_sandi: hashedPassword,
         });
       }
       toast({ title: "Berhasil", description: "Pengguna berhasil ditambahkan" });
@@ -605,7 +654,6 @@ export default function UserManagement() {
     setEditDialogOpen(true);
   };
 
-  // ========== HANDLE UPDATE USER ==========
   const handleUpdateUser = async () => {
     if (!editingUser) return;
     if ((editForm.peran === "admin_jurusan" || editForm.peran === "bk") && !isAdminSuper) {
@@ -614,7 +662,6 @@ export default function UserManagement() {
     }
     setIsLoading(true);
     try {
-      // Cek username unik
       let query = supabase.from("akun").select("id_akun").eq("username", editForm.username);
       if (editingUser.peran === "guru") query = query.neq("id_guru", (editingUser as GuruData).id_guru);
       else if (editingUser.peran === "siswa") query = query.neq("id_siswa", (editingUser as SiswaData).id_siswa);
@@ -1040,7 +1087,7 @@ export default function UserManagement() {
     setImportKelasDialogOpen(true);
   };
 
-  // ========== IMPORT EXCEL UNTUK PENGGUNA ==========
+  // ========== IMPORT EXCEL UNTUK PENGGUNA (DIPERBAIKI DENGAN HANDLE KELAS HILANG) ==========
   const downloadTemplate = (type: "guru" | "siswa" | "admin_jurusan" | "bk") => {
     let headers: string[];
     let data: (string | number)[][];
@@ -1074,6 +1121,7 @@ export default function UserManagement() {
     XLSX.utils.book_append_sheet(wb, ws, `Template_${type}`);
     XLSX.writeFile(wb, `template_import_${type}.xlsx`);
   };
+
   const handleUserFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1111,121 +1159,344 @@ export default function UserManagement() {
       event.target.value = "";
     }
   };
+
+  // Fungsi import yang sudah diperbaiki dengan penanganan kelas tidak ditemukan
   const handleImport = async () => {
     if (!previewData.length) {
       toast({ title: "Kesalahan", description: "Tidak ada data untuk diimpor", variant: "destructive" });
       return;
     }
     setIsLoading(true);
+    let successCount = 0;
+    let skipCount = 0;
+    const errors: string[] = [];
+
     try {
-      let successCount = 0, skipCount = 0;
       if (userType === "guru") {
         for (const row of previewData) {
-          const nama = row.nama?.toString().trim();
-          const nik = row.nik?.toString().trim();
-          const username = row.username?.toString().trim();
-          const gender = row.gender?.toString().toUpperCase();
-          const password = row.password?.toString() || "password123";
-          const namaJurusan = row.nama_jurusan?.toString().trim();
-          if (!nama || !nik || !username || !gender) { skipCount++; continue; }
-          const { data: existingUsername } = await supabase.from("akun").select("username").eq("username", username).maybeSingle();
-          if (existingUsername) { skipCount++; continue; }
-          const { data: existingNik } = await supabase.from("guru").select("nik").eq("nik", parseInt(nik)).maybeSingle();
-          if (existingNik) { skipCount++; continue; }
-          let jurusanId = null;
-          if (namaJurusan) {
-            const { data: jurusan } = await supabase.from("jurusan").select("id_jurusan").eq("nama_jurusan", namaJurusan).maybeSingle();
-            if (!jurusan) { skipCount++; continue; }
-            jurusanId = jurusan.id_jurusan;
-          } else if (isAdminJurusan && user?.id_jurusan) {
-            jurusanId = user.id_jurusan;
+          try {
+            const nama = row.nama?.toString().trim();
+            const nik = row.nik?.toString().trim();
+            const username = row.username?.toString().trim();
+            const gender = row.gender?.toString().toUpperCase();
+            const password = row.password?.toString() || "password123";
+            const namaJurusan = row.nama_jurusan?.toString().trim();
+
+            if (!nama || !nik || !username || !gender) {
+              skipCount++;
+              continue;
+            }
+
+            const { data: existingUsername } = await supabase
+              .from("akun")
+              .select("username")
+              .eq("username", username)
+              .maybeSingle();
+            if (existingUsername) {
+              skipCount++;
+              continue;
+            }
+
+            const { data: existingNik } = await supabase
+              .from("guru")
+              .select("nik")
+              .eq("nik", parseInt(nik))
+              .maybeSingle();
+            if (existingNik) {
+              skipCount++;
+              continue;
+            }
+
+            let jurusanId = null;
+            if (namaJurusan) {
+              const { data: jurusan } = await supabase
+                .from("jurusan")
+                .select("id_jurusan")
+                .eq("nama_jurusan", namaJurusan)
+                .maybeSingle();
+              if (!jurusan) {
+                skipCount++;
+                continue;
+              }
+              jurusanId = jurusan.id_jurusan;
+            } else if (isAdminJurusan && user?.id_jurusan) {
+              jurusanId = user.id_jurusan;
+            }
+
+            const nextId = await getNextId("guru");
+            const hashedPassword = await bcrypt.hash(password, 10);
+
+            const { error: guruError } = await supabase.from("guru").insert({
+              id_guru: nextId,
+              nama,
+              nik: parseInt(nik),
+              gender,
+              aktif: true,
+              dibuat_pada: new Date().toISOString(),
+              id_jurusan: jurusanId,
+            });
+            if (guruError) throw guruError;
+
+            const { error: akunError } = await supabase.from("akun").insert({
+              nama,
+              username,
+              peran: "guru",
+              aktif: true,
+              dibuat_pada: new Date().toISOString(),
+              id_guru: nextId,
+              id_siswa: null,
+              kata_sandi: hashedPassword,
+            });
+            if (akunError) throw akunError;
+
+            successCount++;
+          } catch (err) {
+            console.error("Gagal import guru:", row, err);
+            skipCount++;
+            errors.push(`Gagal import baris: ${JSON.stringify(row)} - ${err instanceof Error ? err.message : "Unknown error"}`);
           }
-          const nextId = await getNextId("guru");
-          const hashedPassword = await bcrypt.hash(password, 10);
-          await supabase.from("akun").insert({
-            nama, username, peran: "guru", aktif: true, dibuat_pada: new Date().toISOString(),
-            id_guru: nextId, id_siswa: null, kata_sandi: hashedPassword,
-          });
-          await supabase.from("guru").insert({
-            id_guru: nextId, nama, nik: parseInt(nik), gender, aktif: true,
-            dibuat_pada: new Date().toISOString(), id_jurusan: jurusanId,
-          });
-          successCount++;
         }
       } else if (userType === "siswa") {
-        for (const row of previewData) {
-          const nama = row.nama?.toString().trim();
-          const nis = row.nis?.toString().trim();
-          const username = row.username?.toString().trim();
-          const gender = row.gender?.toString().toUpperCase();
+        // Kumpulkan nama kelas yang tidak ditemukan
+        const missingKelasSet = new Set<string>();
+        const validRowsTemp: { row: ExcelRow; index: number }[] = [];
+
+        // Pertama, identifikasi kelas yang tidak ditemukan
+        for (let idx = 0; idx < previewData.length; idx++) {
+          const row = previewData[idx];
           const kelasNama = row.kelas?.toString().trim();
-          const password = row.password?.toString() || "password123";
-          if (!nama || !nis || !username || !gender || !kelasNama) { skipCount++; continue; }
-          const { data: existingUsername } = await supabase.from("akun").select("username").eq("username", username).maybeSingle();
-          if (existingUsername) { skipCount++; continue; }
-          const { data: existingNis } = await supabase.from("siswa").select("nis").eq("nis", parseInt(nis)).maybeSingle();
-          if (existingNis) { skipCount++; continue; }
-          const { data: kelas } = await supabase.from("kelas").select("id_kelas").eq("nama", kelasNama).maybeSingle();
-          if (!kelas) { skipCount++; continue; }
-          const nextId = await getNextId("siswa");
-          const hashedPassword = await bcrypt.hash(password, 10);
-          await supabase.from("akun").insert({
-            nama, username, peran: "siswa", aktif: true, dibuat_pada: new Date().toISOString(),
-            id_guru: null, id_siswa: nextId, kata_sandi: hashedPassword,
-          });
-          await supabase.from("siswa").insert({
-            id_siswa: nextId, nama, nis: parseInt(nis), gender, aktif: true,
-            dibuat_pada: new Date().toISOString(), id_kelas: kelas.id_kelas,
-          });
-          successCount++;
+          if (kelasNama) {
+            const { data: kelas } = await supabase
+              .from("kelas")
+              .select("id_kelas")
+              .ilike("nama", kelasNama)
+              .maybeSingle();
+            if (!kelas) {
+              missingKelasSet.add(kelasNama);
+            }
+          }
         }
-      } else if (userType === "admin_jurusan") {
-        const jurusanNames = [...new Set(previewData.map(row => row.nama_jurusan?.toString().trim()).filter(Boolean))];
-        const { data: existingJurusan } = await supabase.from("jurusan").select("nama_jurusan").in("nama_jurusan", jurusanNames);
-        const existingNames = existingJurusan?.map(j => j.nama_jurusan) || [];
-        const missingJurusan = jurusanNames.filter(n => !existingNames.includes(n));
-        if (missingJurusan.length > 0) {
-          setImportJurusanMissing(missingJurusan);
-          setMissingJurusanDialogOpen(true);
+
+        // Jika ada kelas yang tidak ditemukan, tampilkan dialog konfirmasi
+        if (missingKelasSet.size > 0) {
+          const missingKelasArray = Array.from(missingKelasSet);
+          setImportSiswaMissingKelas(missingKelasArray);
+          setSelectedJurusanForNewKelas(isAdminJurusan && user?.id_jurusan ? user.id_jurusan.toString() : "");
+          setMissingKelasDialogOpen(true);
           setIsLoading(false);
           return;
         }
+
+        // Jika semua kelas ditemukan, lanjutkan import
+        for (let idx = 0; idx < previewData.length; idx++) {
+          const row = previewData[idx];
+          try {
+            const nama = row.nama?.toString().trim();
+            const nisRaw = row.nis?.toString().trim();
+            const username = row.username?.toString().trim();
+            const gender = row.gender?.toString().toUpperCase();
+            const kelasNama = row.kelas?.toString().trim();
+            const password = row.password?.toString() || "password123";
+
+            if (!nama || !nisRaw || !username || !gender || !kelasNama) {
+              skipCount++;
+              continue;
+            }
+
+            const { data: existingUsername } = await supabase
+              .from("akun")
+              .select("username")
+              .eq("username", username)
+              .maybeSingle();
+            if (existingUsername) {
+              skipCount++;
+              continue;
+            }
+
+            const nisNumber = Number(nisRaw);
+            if (isNaN(nisNumber)) {
+              skipCount++;
+              continue;
+            }
+
+            const { data: existingNis } = await supabase
+              .from("siswa")
+              .select("nis")
+              .eq("nis", nisNumber)
+              .maybeSingle();
+            if (existingNis) {
+              skipCount++;
+              continue;
+            }
+
+            const { data: kelas } = await supabase
+              .from("kelas")
+              .select("id_kelas, id_jurusan")
+              .ilike("nama", kelasNama)
+              .maybeSingle();
+
+            if (!kelas) {
+              skipCount++;
+              continue;
+            }
+
+            if (isAdminJurusan && user?.id_jurusan && kelas.id_jurusan !== user.id_jurusan) {
+              skipCount++;
+              continue;
+            }
+
+            const nextId = await getNextId("siswa");
+            const hashedPassword = await bcrypt.hash(password, 10);
+
+            const { error: siswaError } = await supabase.from("siswa").insert({
+              id_siswa: nextId,
+              nama,
+              nis: nisNumber,
+              gender,
+              aktif: true,
+              dibuat_pada: new Date().toISOString(),
+              id_kelas: kelas.id_kelas,
+            });
+            if (siswaError) throw siswaError;
+
+            const { error: akunError } = await supabase.from("akun").insert({
+              nama,
+              username,
+              peran: "siswa",
+              aktif: true,
+              dibuat_pada: new Date().toISOString(),
+              id_guru: null,
+              id_siswa: nextId,
+              kata_sandi: hashedPassword,
+            });
+            if (akunError) throw akunError;
+
+            successCount++;
+          } catch (err) {
+            console.error("Gagal import siswa:", row, err);
+            skipCount++;
+            errors.push(`Gagal import baris: ${JSON.stringify(row)} - ${err instanceof Error ? err.message : "Unknown error"}`);
+          }
+        }
+      } else if (userType === "admin_jurusan") {
+        const jurusanNames = [...new Set(previewData.map(row => row.nama_jurusan?.toString().trim()).filter(Boolean))];
+        if (jurusanNames.length) {
+          const { data: existingJurusan } = await supabase
+            .from("jurusan")
+            .select("nama_jurusan")
+            .in("nama_jurusan", jurusanNames);
+          const existingNames = existingJurusan?.map(j => j.nama_jurusan) || [];
+          const missingJurusan = jurusanNames.filter(n => !existingNames.includes(n));
+          if (missingJurusan.length > 0) {
+            setImportJurusanMissing(missingJurusan);
+            setMissingJurusanDialogOpen(true);
+            setIsLoading(false);
+            return;
+          }
+        }
+
         for (const row of previewData) {
-          const nama = row.nama?.toString().trim();
-          const username = row.username?.toString().trim();
-          const namaJurusan = row.nama_jurusan?.toString().trim();
-          const password = row.password?.toString() || "password123";
-          if (!nama || !username || !namaJurusan) { skipCount++; continue; }
-          const { data: existingUsername } = await supabase.from("akun").select("username").eq("username", username).maybeSingle();
-          if (existingUsername) { skipCount++; continue; }
-          const { data: jurusan } = await supabase.from("jurusan").select("id_jurusan").eq("nama_jurusan", namaJurusan).single();
-          if (!jurusan) { skipCount++; continue; }
-          const hashedPassword = await bcrypt.hash(password, 10);
-          await supabase.from("akun").insert({
-            nama, username, peran: "admin_jurusan", aktif: true,
-            dibuat_pada: new Date().toISOString(), id_guru: null, id_siswa: null,
-            id_jurusan: jurusan.id_jurusan, kata_sandi: hashedPassword,
-          });
-          successCount++;
+          try {
+            const nama = row.nama?.toString().trim();
+            const username = row.username?.toString().trim();
+            const namaJurusan = row.nama_jurusan?.toString().trim();
+            const password = row.password?.toString() || "password123";
+
+            if (!nama || !username || !namaJurusan) {
+              skipCount++;
+              continue;
+            }
+
+            const { data: existingUsername } = await supabase
+              .from("akun")
+              .select("username")
+              .eq("username", username)
+              .maybeSingle();
+            if (existingUsername) {
+              skipCount++;
+              continue;
+            }
+
+            const { data: jurusan } = await supabase
+              .from("jurusan")
+              .select("id_jurusan")
+              .eq("nama_jurusan", namaJurusan)
+              .single();
+            if (!jurusan) {
+              skipCount++;
+              continue;
+            }
+
+            const hashedPassword = await bcrypt.hash(password, 10);
+            await supabase.from("akun").insert({
+              nama,
+              username,
+              peran: "admin_jurusan",
+              aktif: true,
+              dibuat_pada: new Date().toISOString(),
+              id_guru: null,
+              id_siswa: null,
+              id_jurusan: jurusan.id_jurusan,
+              kata_sandi: hashedPassword,
+            });
+            successCount++;
+          } catch (err) {
+            console.error("Gagal import admin_jurusan:", row, err);
+            skipCount++;
+            errors.push(`Gagal import baris: ${JSON.stringify(row)} - ${err instanceof Error ? err.message : "Unknown error"}`);
+          }
         }
       } else if (userType === "bk") {
         for (const row of previewData) {
-          const nama = row.nama?.toString().trim();
-          const username = row.username?.toString().trim();
-          const password = row.password?.toString() || "password123";
-          if (!nama || !username) { skipCount++; continue; }
-          const { data: existingUsername } = await supabase.from("akun").select("username").eq("username", username).maybeSingle();
-          if (existingUsername) { skipCount++; continue; }
-          const hashedPassword = await bcrypt.hash(password, 10);
-          await supabase.from("akun").insert({
-            nama, username, peran: "bk", aktif: true,
-            dibuat_pada: new Date().toISOString(), id_guru: null, id_siswa: null,
-            id_jurusan: null, kata_sandi: hashedPassword,
-          });
-          successCount++;
+          try {
+            const nama = row.nama?.toString().trim();
+            const username = row.username?.toString().trim();
+            const password = row.password?.toString() || "password123";
+
+            if (!nama || !username) {
+              skipCount++;
+              continue;
+            }
+
+            const { data: existingUsername } = await supabase
+              .from("akun")
+              .select("username")
+              .eq("username", username)
+              .maybeSingle();
+            if (existingUsername) {
+              skipCount++;
+              continue;
+            }
+
+            const hashedPassword = await bcrypt.hash(password, 10);
+            await supabase.from("akun").insert({
+              nama,
+              username,
+              peran: "bk",
+              aktif: true,
+              dibuat_pada: new Date().toISOString(),
+              id_guru: null,
+              id_siswa: null,
+              id_jurusan: null,
+              kata_sandi: hashedPassword,
+            });
+            successCount++;
+          } catch (err) {
+            console.error("Gagal import bk:", row, err);
+            skipCount++;
+            errors.push(`Gagal import baris: ${JSON.stringify(row)} - ${err instanceof Error ? err.message : "Unknown error"}`);
+          }
         }
       }
-      toast({ title: "Impor Selesai", description: `${successCount} data berhasil diimpor, ${skipCount} duplikat/gagal dilewati.` });
+
+      if (errors.length > 0 && process.env.NODE_ENV === "development") {
+        console.error("Import errors:", errors);
+      }
+
+      toast({
+        title: "Impor Selesai",
+        description: `${successCount} data berhasil diimpor, ${skipCount} data gagal/duplikat.`,
+      });
       setImportDialogOpen(false);
       setPreviewData([]);
       setImportRawData([]);
@@ -1237,6 +1508,51 @@ export default function UserManagement() {
       setIsLoading(false);
     }
   };
+
+  // Fungsi untuk menambahkan kelas yang hilang (dipanggil dari dialog)
+  const addMissingKelasAndContinue = async () => {
+    if (importSiswaMissingKelas.length === 0) return;
+    setIsAddingMissingKelas(true);
+    let addedCount = 0;
+    try {
+      // Tentukan jurusan untuk kelas baru
+      let jurusanId: number | null = null;
+      if (isAdminJurusan && user?.id_jurusan) {
+        jurusanId = user.id_jurusan;
+      } else if (isAdminSuper && selectedJurusanForNewKelas && selectedJurusanForNewKelas !== "none") {
+        jurusanId = parseInt(selectedJurusanForNewKelas);
+      }
+
+      for (const namaKelas of importSiswaMissingKelas) {
+        // Cek lagi apakah sudah ada (bisa saja sudah ditambahkan oleh proses lain)
+        const { data: existing } = await supabase
+          .from("kelas")
+          .select("id_kelas")
+          .ilike("nama", namaKelas)
+          .maybeSingle();
+        if (!existing) {
+          await supabase.from("kelas").insert({
+            nama: namaKelas,
+            aktif: true,
+            dibuat_pada: new Date().toISOString(),
+            id_jurusan: jurusanId,
+            id_guru: null,
+          });
+          addedCount++;
+        }
+      }
+      toast({ title: "Berhasil", description: `${addedCount} kelas berhasil ditambahkan.` });
+      setMissingKelasDialogOpen(false);
+      setImportSiswaMissingKelas([]);
+      // Ulangi proses import (setelah kelas ditambahkan)
+      await handleImport();
+    } catch (error: any) {
+      toast({ title: "Gagal", description: error.message, variant: "destructive" });
+    } finally {
+      setIsAddingMissingKelas(false);
+    }
+  };
+
   const continueImportAfterMissingJurusan = async () => {
     if (importJurusanMissing.length === 0) return;
     setIsAddingMissingJurusan(true);
@@ -1661,6 +1977,42 @@ export default function UserManagement() {
       {/* DIALOG KONFIRMASI JURUSAN BARU */}
       <Dialog open={missingJurusanDialogOpen} onOpenChange={setMissingJurusanDialogOpen}>
         <DialogContent className="rounded-xl max-w-md"><DialogHeader><DialogTitle>Jurusan Tidak Ditemukan</DialogTitle><DialogDescription>Beberapa nama jurusan dalam file Excel tidak ditemukan di database.</DialogDescription></DialogHeader><div className="space-y-4"><div className="bg-yellow-50 p-3 rounded-lg"><p className="text-sm font-medium text-yellow-800">Jurusan yang belum terdaftar:</p><ul className="list-disc list-inside mt-2 space-y-1">{importJurusanMissing.map((jurusan, idx) => <li key={idx} className="text-sm text-yellow-700">{jurusan}</li>)}</ul></div><p className="text-sm text-slate-600">Apakah Anda ingin menambahkan jurusan di atas ke database dan melanjutkan import?</p></div><DialogFooter className="gap-2"><Button variant="outline" onClick={() => { setMissingJurusanDialogOpen(false); setImportJurusanMissing([]); setImportDialogOpen(false); }} className="rounded-lg">Batalkan Impor</Button><Button onClick={continueImportAfterMissingJurusan} disabled={isAddingMissingJurusan} className="rounded-lg bg-green-600 hover:bg-green-700">{isAddingMissingJurusan ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Menambahkan...</> : "Tambahkan Jurusan & Lanjutkan"}</Button></DialogFooter></DialogContent>
+      </Dialog>
+
+      {/* DIALOG KONFIRMASI KELAS BARU UNTUK IMPORT SISWA */}
+      <Dialog open={missingKelasDialogOpen} onOpenChange={setMissingKelasDialogOpen}>
+        <DialogContent className="rounded-xl max-w-md">
+          <DialogHeader><DialogTitle>Kelas Tidak Ditemukan</DialogTitle><DialogDescription>Beberapa nama kelas dalam file Excel tidak ditemukan di database.</DialogDescription></DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-yellow-50 p-3 rounded-lg">
+              <p className="text-sm font-medium text-yellow-800">Kelas yang belum terdaftar:</p>
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                {importSiswaMissingKelas.map((kelas, idx) => <li key={idx} className="text-sm text-yellow-700">{kelas}</li>)}
+              </ul>
+            </div>
+            {isAdminSuper && (
+              <div>
+                <Label className="text-sm">Pilih Jurusan untuk Kelas Baru</Label>
+                <Select value={selectedJurusanForNewKelas} onValueChange={setSelectedJurusanForNewKelas}>
+                  <SelectTrigger className="rounded-lg mt-1">
+                    <SelectValue placeholder="Pilih jurusan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Tanpa Jurusan</SelectItem>
+                    {jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <p className="text-sm text-slate-600">Apakah Anda ingin menambahkan kelas di atas ke database dan melanjutkan import?</p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setMissingKelasDialogOpen(false); setImportSiswaMissingKelas([]); setImportDialogOpen(false); }} className="rounded-lg">Batalkan Impor</Button>
+            <Button onClick={addMissingKelasAndContinue} disabled={isAddingMissingKelas} className="rounded-lg bg-green-600 hover:bg-green-700">
+              {isAddingMissingKelas ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Menambahkan...</> : "Tambahkan Kelas & Lanjutkan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
     </div>
   );
