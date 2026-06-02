@@ -135,10 +135,10 @@ export default function AttendanceManagement() {
   const [isFetchingHarian, setIsFetchingHarian] = useState(false);
   const [isSavingHarian, setIsSavingHarian] = useState(false);
   const [pendingHarianMasuk, setPendingHarianMasuk] = useState<Map<number, string>>(new Map());
-  const [pendingHarianPulang, setPendingHarianPulang] = useState<Map<number, boolean>>(new Map());
+  // Untuk presensi pulang: map menyimpan boolean (true = Pulang, false = Tidak Pulang)
+  const [pendingHarianPulangMap, setPendingHarianPulangMap] = useState<Map<number, boolean>>(new Map());
   const [autoAlfaProcessedHarian, setAutoAlfaProcessedHarian] = useState(false);
   const [presensiTypeHarian, setPresensiTypeHarian] = useState<"masuk" | "pulang">("masuk");
-  const [pendingBulkPulang, setPendingBulkPulang] = useState<boolean | null>(null);
   const [pendingBulkStatus, setPendingBulkStatus] = useState<string | null>(null);
 
   // Dialog konfirmasi Presensi Harian
@@ -416,15 +416,14 @@ export default function AttendanceManagement() {
     init();
   }, []);
 
-  // ========== PRESENSI HARIAN (DIPERBAIKI) ==========
+  // ========== PRESENSI HARIAN ==========
   const fetchPresensiHarian = async (kelasIdParam?: string, tanggalParam?: string, skipAutoAlfa = false) => {
     const kelasId = kelasIdParam ?? selectedKelasHarian;
     const tanggal = tanggalParam ?? selectedTanggal;
     if (!kelasId) return;
     setIsFetchingHarian(true);
     setPendingHarianMasuk(new Map());
-    setPendingHarianPulang(new Map());
-    setPendingBulkPulang(null);
+    setPendingHarianPulangMap(new Map());
     setPendingBulkStatus(null);
     try {
       const { data: siswaData, error: siswaError } = await supabase
@@ -526,64 +525,40 @@ export default function AttendanceManagement() {
         setIsSavingHarian(false);
       }
     } else {
-      const hasChanges = pendingHarianPulang.size > 0 || pendingBulkPulang !== null;
+      // Presensi Pulang - menggunakan map pendingHarianPulangMap
+      const hasChanges = pendingHarianPulangMap.size > 0;
       if (!hasChanges) {
         toast({ title: "Info", description: "Tidak ada perubahan yang perlu disimpan" });
         return;
       }
       setIsSavingHarian(true);
       try {
-        if (pendingBulkPulang !== null) {
-          const semuaPulang = pendingBulkPulang;
-          for (const item of presensiHarian) {
-            if (semuaPulang) {
-              if (item.id_pres_harian) {
-                await supabase
-                  .from("presensi_harian")
-                  .update({ status_presensi: "Pulang", waktu_presensi: new Date().toISOString() })
-                  .eq("id_pres_harian", item.id_pres_harian);
-              } else {
-                await supabase.from("presensi_harian").insert({
-                  id_siswa: item.id_siswa,
-                  status_presensi: "Pulang",
-                  waktu_presensi: new Date().toISOString(),
-                });
-              }
+        for (const item of presensiHarian) {
+          const desiredPulang = pendingHarianPulangMap.get(item.id_siswa) ?? (item.status_presensi === "Pulang");
+          const originalPulang = item.status_presensi === "Pulang";
+          if (desiredPulang === originalPulang) continue;
+          
+          if (desiredPulang) {
+            // Harus pulang
+            if (item.id_pres_harian) {
+              await supabase
+                .from("presensi_harian")
+                .update({ status_presensi: "Pulang", waktu_presensi: new Date().toISOString() })
+                .eq("id_pres_harian", item.id_pres_harian);
             } else {
-              const startDate = `${selectedTanggal}T00:00:00`;
-              const endDate = `${selectedTanggal}T23:59:59`;
+              await supabase.from("presensi_harian").insert({
+                id_siswa: item.id_siswa,
+                status_presensi: "Pulang",
+                waktu_presensi: new Date().toISOString(),
+              });
+            }
+          } else {
+            // Harus tidak pulang -> hapus record pulang
+            if (item.id_pres_harian) {
               await supabase
                 .from("presensi_harian")
                 .delete()
-                .eq("status_presensi", "Pulang")
-                .gte("waktu_presensi", startDate)
-                .lte("waktu_presensi", endDate)
-                .in("id_siswa", presensiHarian.map(p => p.id_siswa));
-            }
-          }
-        } else {
-          for (const [siswaId, isPulang] of pendingHarianPulang.entries()) {
-            const existing = presensiHarian.find(p => p.id_siswa === siswaId);
-            if (isPulang) {
-              if (existing?.id_pres_harian) {
-                await supabase
-                  .from("presensi_harian")
-                  .update({ status_presensi: "Pulang", waktu_presensi: new Date().toISOString() })
-                  .eq("id_pres_harian", existing.id_pres_harian);
-              } else {
-                await supabase.from("presensi_harian").insert({
-                  id_siswa: siswaId,
-                  status_presensi: "Pulang",
-                  waktu_presensi: new Date().toISOString(),
-                });
-              }
-            } else {
-              if (existing?.id_pres_harian) {
-                await supabase
-                  .from("presensi_harian")
-                  .delete()
-                  .eq("id_pres_harian", existing.id_pres_harian);
-              }
+                .eq("id_pres_harian", item.id_pres_harian);
             }
           }
         }
@@ -599,8 +574,7 @@ export default function AttendanceManagement() {
 
   const resetPendingHarian = () => {
     setPendingHarianMasuk(new Map());
-    setPendingHarianPulang(new Map());
-    setPendingBulkPulang(null);
+    setPendingHarianPulangMap(new Map());
     setPendingBulkStatus(null);
     toast({ title: "Info", description: "Perubahan yang belum disimpan dibatalkan" });
   };
@@ -627,22 +601,31 @@ export default function AttendanceManagement() {
     setPendingBulkStatus(status);
   };
 
-  const handlePulangChange = (siswaId: number, isChecked: boolean) => {
-    setPendingHarianPulang(prev => {
+  // Untuk presensi pulang: ubah status pulang siswa (true = Pulang, false = Tidak Pulang)
+  const handlePulangChange = (siswaId: number, isPulang: boolean) => {
+    setPendingHarianPulangMap(prev => {
       const newMap = new Map(prev);
-      if (isChecked) {
-        newMap.set(siswaId, true);
-      } else {
+      // Jika nilai sama dengan original, hapus dari pending (tidak perlu simpan)
+      const original = presensiHarian.find(p => p.id_siswa === siswaId)?.status_presensi === "Pulang";
+      if (isPulang === original) {
         newMap.delete(siswaId);
+      } else {
+        newMap.set(siswaId, isPulang);
       }
       return newMap;
     });
-    setPendingBulkPulang(null);
   };
 
-  const handleBulkPulangPending = (checked: boolean) => {
-    setPendingBulkPulang(checked);
-    setPendingHarianPulang(new Map());
+  // Bulk set semua siswa menjadi Pulang
+  const handleBulkPulangTrue = () => {
+    const newMap = new Map<number, boolean>();
+    for (const item of presensiHarian) {
+      const original = item.status_presensi === "Pulang";
+      if (!original) {
+        newMap.set(item.id_siswa, true);
+      }
+    }
+    setPendingHarianPulangMap(newMap);
   };
 
   // Handler untuk konfirmasi pilih kelas/tanggal harian
@@ -671,7 +654,7 @@ export default function AttendanceManagement() {
     fetchPresensiHarian(pendingHarianKelas, pendingHarianTanggal);
   };
 
-  // ========== PRESENSI MAPEL (DIPERBAIKI) ==========
+  // ========== PRESENSI MAPEL ==========
   const fetchPresensiMapel = async (jadwalParam?: Jadwal | null, skipAutoAlfa = false) => {
     const jadwal = jadwalParam ?? selectedJadwal;
     if (!jadwal) return;
@@ -1059,10 +1042,31 @@ export default function AttendanceManagement() {
                                     </TableHead>
                                   ))
                                 ) : (
+                                  // Header untuk presensi pulang: hanya kolom "Pulang" dengan checkbox bulk
                                   <TableHead className="text-center font-semibold text-xs sm:text-sm min-w-[100px]">
                                     <div className="flex flex-col items-center gap-1">
                                       <span>Pulang</span>
-                                      <Checkbox checked={pendingBulkPulang !== null ? pendingBulkPulang : (presensiHarian.length > 0 && presensiHarian.every(p => p.status_presensi === "Pulang"))} onCheckedChange={handleBulkPulangPending} disabled={isSavingHarian} className="data-[state=checked]:bg-[#2C5EAD] data-[state=checked]:border-[#2C5EAD] h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                      <Checkbox 
+                                        checked={presensiHarian.length > 0 && presensiHarian.every(item => 
+                                          (pendingHarianPulangMap.get(item.id_siswa) ?? (item.status_presensi === "Pulang")) === true
+                                        )} 
+                                        onCheckedChange={(checked) => {
+                                          if (checked) handleBulkPulangTrue();
+                                          else {
+                                            // Jika ingin membatalkan semua centang, kita harus set semua menjadi tidak pulang
+                                            const newMap = new Map<number, boolean>();
+                                            for (const item of presensiHarian) {
+                                              const original = item.status_presensi === "Pulang";
+                                              if (original) {
+                                                newMap.set(item.id_siswa, false);
+                                              }
+                                            }
+                                            setPendingHarianPulangMap(newMap);
+                                          }
+                                        }} 
+                                        disabled={isSavingHarian} 
+                                        className="data-[state=checked]:bg-[#2C5EAD] data-[state=checked]:border-[#2C5EAD] h-3.5 w-3.5 sm:h-4 sm:w-4" 
+                                      />
                                     </div>
                                   </TableHead>
                                 )}
@@ -1099,7 +1103,8 @@ export default function AttendanceManagement() {
                                       </TableRow>
                                     );
                                   } else {
-                                    const isPulang = pendingHarianPulang.has(item.id_siswa) ? pendingHarianPulang.get(item.id_siswa)! : (item.status_presensi === "Pulang");
+                                    // Presensi Pulang: checkbox centang = pulang
+                                    const isPulang = pendingHarianPulangMap.get(item.id_siswa) ?? (item.status_presensi === "Pulang");
                                     return (
                                       <TableRow key={item.id_siswa} className="hover:bg-slate-50 transition-colors">
                                         <TableCell className="text-center font-mono text-xs sm:text-sm">{item.siswa?.nis}</TableCell>
@@ -1107,7 +1112,12 @@ export default function AttendanceManagement() {
                                         <TableCell className="text-center">{isPKL ? <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs bg-blue-100 text-blue-700">PKL</span> : <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs bg-green-100 text-green-700">Sekolah</span>}</TableCell>
                                         <TableCell className="text-center align-middle">
                                           <div className="flex justify-center items-center">
-                                            <Checkbox checked={isPulang} onCheckedChange={(checked) => handlePulangChange(item.id_siswa, checked === true)} disabled={isSavingHarian} className="data-[state=checked]:bg-[#2C5EAD] data-[state=checked]:border-[#2C5EAD] h-4 w-4 rounded-full" />
+                                            <Checkbox 
+                                              checked={isPulang} 
+                                              onCheckedChange={(checked) => handlePulangChange(item.id_siswa, checked === true)} 
+                                              disabled={isSavingHarian} 
+                                              className="data-[state=checked]:bg-[#2C5EAD] data-[state=checked]:border-[#2C5EAD] h-4 w-4 rounded-full" 
+                                            />
                                           </div>
                                         </TableCell>
                                       </TableRow>
@@ -1119,8 +1129,8 @@ export default function AttendanceManagement() {
                           </Table>
                         </div>
                         <div className="flex justify-end gap-2 p-3 bg-slate-50 border-t">
-                          <Button variant="outline" onClick={resetPendingHarian} disabled={isSavingHarian || (presensiTypeHarian === "masuk" ? pendingHarianMasuk.size === 0 : (pendingHarianPulang.size === 0 && pendingBulkPulang === null))} className="rounded-lg h-8 px-3 text-xs border-slate-300"><RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reset</Button>
-                          <Button onClick={savePresensiHarian} disabled={isSavingHarian || (presensiTypeHarian === "masuk" ? pendingHarianMasuk.size === 0 : (pendingHarianPulang.size === 0 && pendingBulkPulang === null))} className="rounded-lg h-8 px-3 text-xs bg-[#2C5EAD] hover:bg-[#1e4a8a] text-white">{isSavingHarian ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />} Simpan Perubahan</Button>
+                          <Button variant="outline" onClick={resetPendingHarian} disabled={isSavingHarian || (presensiTypeHarian === "masuk" ? pendingHarianMasuk.size === 0 : pendingHarianPulangMap.size === 0)} className="rounded-lg h-8 px-3 text-xs border-slate-300"><RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reset</Button>
+                          <Button onClick={savePresensiHarian} disabled={isSavingHarian || (presensiTypeHarian === "masuk" ? pendingHarianMasuk.size === 0 : pendingHarianPulangMap.size === 0)} className="rounded-lg h-8 px-3 text-xs bg-[#2C5EAD] hover:bg-[#1e4a8a] text-white">{isSavingHarian ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />} Simpan Perubahan</Button>
                         </div>
                       </div>
                     )}
