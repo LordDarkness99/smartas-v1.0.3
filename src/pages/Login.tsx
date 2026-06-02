@@ -305,7 +305,7 @@ export default function Login() {
           </div>
           <div>
             <CardTitle className="text-3xl font-bold bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] bg-clip-text text-transparent">
-              TITEN
+              SMARTAS
             </CardTitle>
             <CardDescription className="text-base mt-2 flex items-center justify-center gap-1">
               <Sparkles className="h-3.5 w-3.5 text-[#4BB8FA]" />
@@ -462,7 +462,7 @@ export default function Login() {
                 </button>
               </div>
               <div className="text-center text-xs text-slate-400 border-t pt-4 mt-2">
-                <p>© {new Date().getFullYear()} TITEN - Sistem Informasi Akademik</p>
+                <p>© {new Date().getFullYear()} SMARTAS - Sistem Informasi Akademik</p>
               </div>
             </form>
           ) : (
