@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { UserCheck, KeyRound, ArrowLeft, Camera, RefreshCw, Loader2, AlertCircle, Sun, Moon, Cloud, Sparkles } from "lucide-react";
-import { detectTurnHead } from "@/utils/liveness";
+import { detectSmile } from "@/utils/liveness";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -68,6 +68,7 @@ export default function Login() {
           await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
           await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
           await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+          await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
           setModelsLoaded(true);
           toast.success("Model wajah siap digunakan");
         } catch (error) {
@@ -183,12 +184,12 @@ export default function Login() {
       setVerifyingLiveness(true);
       // Pilih arah secara acak
       const randomDir = Math.random() < 0.5 ? 'kiri' : 'kanan';
-      toast.info(`Silakan tengok ke ${randomDir.toUpperCase()} secara perlahan...`);
-      const isAlive = await detectTurnHead(videoRef.current, randomDir, 7000);
+      toast.info(`Silakan Tersenyum ke ${randomDir.toUpperCase()} secara perlahan...`);
+      const isAlive = await detectSmile(videoRef.current, 7000);
       setVerifyingLiveness(false);
 
       if (!isAlive) {
-        toast.error(`Verifikasi gagal: wajah tidak menoleh ke ${randomDir}. Coba lagi.`);
+        toast.error(`Verifikasi gagal: wajah tidak tersenyum ke ${randomDir}. Coba lagi.`);
         setDetecting(false);
         return;
       }
@@ -360,7 +361,7 @@ export default function Login() {
                       <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-xl backdrop-blur-sm">
                         <div className="text-white text-center">
                           <Loader2 className="animate-spin h-8 w-8 mx-auto mb-2" />
-                          <p className="font-medium">Tengok ke kanan atau kiri</p>
+                          <p className="font-medium">Tersenyum ke kamera</p>
                           <p className="text-xs mt-1">Deteksi liveness...</p>
                         </div>
                       </div>
