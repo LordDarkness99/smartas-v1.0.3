@@ -180,7 +180,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
           </div>
           <div className="text-center group-data-[collapsible=icon]:hidden">
             <h2 className="text-xl font-black italic tracking-tighter bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] bg-clip-text text-transparent uppercase leading-[0.8]">
-              TITEN
+              SMARTAS
             </h2>
             <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-[#4BB8FA] mt-1.5">
               {userRole || "Access"}
