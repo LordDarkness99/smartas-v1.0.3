@@ -1,5 +1,5 @@
 // src/pages/admin/PKLManagement.tsx
-// Versi dengan recoloring agar konsisten dengan palette aplikasi lain (#2C5EAD, #1591DC, #4BB8FA)
+// Versi dengan Google Maps Embed dan tutorial penggunaan
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -72,11 +72,12 @@ import {
   ChevronDown,
   Power,
   PowerOff,
-  ChevronLeft,
-  ChevronRight,
   Eye,
+  MonitorSmartphone,
+  MousePointer,
+  ExternalLink,
 } from "lucide-react";
-import { isBK, isAdminJurusan, isAdmin } from "@/lib/utils";
+import { isBK, isAdminJurusan } from "@/lib/utils";
 
 // Tipe data
 interface Guru {
@@ -110,6 +111,67 @@ interface Kelas {
   id_jurusan: number | null;
 }
 
+// Komponen peta dengan Google Maps Embed (tanpa API key)
+interface MapPickerProps {
+  coordinate: string;
+  onCoordinateChange: (coord: string) => void;
+  disabled?: boolean;
+}
+
+function MapPicker({ coordinate, onCoordinateChange, disabled = false }: MapPickerProps) {
+  // Parsing koordinat awal (default: Jakarta)
+  let lat = -6.200000;
+  let lng = 106.816666;
+  if (coordinate && coordinate.includes(",")) {
+    const [latStr, lngStr] = coordinate.split(",");
+    const parsedLat = parseFloat(latStr.trim());
+    const parsedLng = parseFloat(lngStr.trim());
+    if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+      lat = parsedLat;
+      lng = parsedLng;
+    }
+  }
+
+  // URL embed Google Maps (static map dengan marker)
+  const embedUrl = `https://maps.google.com/maps?q=${lat},${lng}&z=13&output=embed`;
+  const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+
+  return (
+    <div className="space-y-2">
+      <iframe
+        title="Peta Lokasi PKL (Google Maps)"
+        src={embedUrl}
+        className="w-full h-64 rounded-xl border border-slate-200"
+        style={{ border: 0 }}
+        allowFullScreen
+        loading="lazy"
+      />
+      <div className="text-center">
+        <a
+          href={googleMapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-[#2C5EAD] underline hover:text-[#1591DC] inline-flex items-center gap-1"
+        >
+          <ExternalLink className="h-3 w-3" />
+          Buka Google Maps & pilih titik
+        </a>
+      </div>
+      {/* Tutorial singkat */}
+      <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-600 space-y-1">
+        <p className="font-medium text-slate-700 flex items-center gap-1">
+          <MousePointer className="h-3 w-3" /> Cara mendapatkan koordinat:
+        </p>
+        <ul className="list-disc list-inside space-y-1 ml-1">
+          <li><span className="font-medium">Laptop/PC:</span> Klik kanan pada lokasi di Google Maps → pilih <strong>"Apa ini?"</strong> → koordinat muncul di kotak pencarian.</li>
+          <li><span className="font-medium">HP (Android/iOS):</span> Tekan lama pada lokasi → akan muncul pin → koordinat terlihat di bilah pencarian bawah.</li>
+          <li>Salin koordinat (contoh: <code className="bg-slate-200 px-1 rounded">-6.200000,106.816666</code>) lalu tempel ke input di atas.</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 export default function PklManagement() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -119,7 +181,6 @@ export default function PklManagement() {
   const [loading, setLoading] = useState(true);
 
   // Role checks
-  const userRole = user?.peran;
   const isRoleBK = isBK(user);
   const isRoleAdminJurusan = isAdminJurusan(user);
   const canWrite = !isRoleBK; // BK read-only
@@ -875,7 +936,7 @@ export default function PklManagement() {
           </CardContent>
         </Card>
 
-        {/* TIPS SECTION */}
+        {/* TIPS SECTION - dengan tutorial tambahan */}
         <Card className="rounded-xl sm:rounded-2xl border-0 shadow-lg bg-gradient-to-br from-[#C4E2F5]/50 to-[#4BB8FA]/20 max-w-3xl mx-auto">
           <CardContent className="p-4 sm:p-5">
             <div className="flex items-start gap-3 sm:gap-4">
@@ -885,6 +946,14 @@ export default function PklManagement() {
               <div>
                 <h3 className="font-semibold text-slate-800 text-sm sm:text-base mb-1">Tips Mengelola PKL</h3>
                 <p className="text-xs sm:text-sm text-slate-600">Gunakan fitur import Excel untuk menambahkan banyak lokasi PKL atau assignment siswa sekaligus. Pastikan data guru pendamping sudah terdaftar sebelum melakukan import lokasi PKL.</p>
+                <div className="mt-3 pt-2 border-t border-blue-200">
+                  <p className="text-xs font-medium text-[#2C5EAD] flex items-center gap-1 mb-1"><MonitorSmartphone className="h-3 w-3" /> Tutorial Mendapatkan Koordinat dari Google Maps:</p>
+                  <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside ml-1">
+                    <li><strong>Laptop/PC:</strong> Buka Google Maps, cari lokasi, klik kanan pada titik → pilih <strong>"Apa ini?"</strong> → koordinat muncul di kotak pencarian.</li>
+                    <li><strong>HP (Android/iOS):</strong> Buka Google Maps, tekan lama pada lokasi → akan muncul pin merah → koordinat terlihat di bilah pencarian bawah.</li>
+                    <li>Salin koordinat (contoh: <code className="bg-slate-200 px-1 rounded">-6.200000,106.816666</code>) dan tempel ke input koordinat di form tambah/edit lokasi.</li>
+                  </ul>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -901,12 +970,72 @@ export default function PklManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Lokasi PKL */}
+      {/* Dialog Lokasi PKL - dengan Google Maps Embed */}
       <Dialog open={pklDialogOpen} onOpenChange={setPklDialogOpen}>
-        <DialogContent className="rounded-2xl max-w-[95vw] sm:max-w-lg p-4 sm:p-6">
-          <DialogHeader><DialogTitle className="text-base sm:text-xl flex items-center gap-2"><Building2 className="h-5 w-5 text-[#2C5EAD]"/> {editingPKL?"Edit Lokasi PKL":"Tambah Lokasi PKL"}</DialogTitle></DialogHeader>
-          <div className="space-y-4"><div><Label className="text-xs sm:text-sm">Tempat / Nama Perusahaan</Label><Input value={pklForm.tempat_pkl} onChange={(e)=>setPklForm({...pklForm,tempat_pkl:e.target.value})} className="rounded-xl mt-1 h-8 sm:h-9 text-xs sm:text-sm" placeholder="Contoh: PT. Maju Jaya"/></div><div><Label className="text-xs sm:text-sm">Koordinat (Opsional)</Label><Input value={pklForm.koordinat_pkl} onChange={(e)=>setPklForm({...pklForm,koordinat_pkl:e.target.value})} placeholder="-6.200000,106.816666" className="rounded-xl mt-1 h-8 sm:h-9 text-xs sm:text-sm"/><p className="text-[10px] sm:text-xs text-slate-400 mt-1">Format: latitude,longitude</p></div><div><Label className="text-xs sm:text-sm">Guru Pendamping (NIK)</Label><Select value={pklForm.id_guru||"0"} onValueChange={(v)=>setPklForm({...pklForm,id_guru:v})}><SelectTrigger className="rounded-xl mt-1 h-8 sm:h-9 text-xs sm:text-sm"><SelectValue placeholder="Pilih guru pendamping"/></SelectTrigger><SelectContent className="rounded-xl"><SelectItem value="0">- Tidak ada -</SelectItem>{guruList.map(guru=><SelectItem key={guru.id_guru} value={guru.id_guru.toString()}>{guru.nik} - {guru.nama}</SelectItem>)}</SelectContent></Select></div></div>
-          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4"><Button variant="outline" onClick={()=>setPklDialogOpen(false)} className="rounded-xl w-full sm:w-auto text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button><Button onClick={handleSavePKL} disabled={isSavingPKL} className="rounded-xl bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] w-full sm:w-auto text-xs sm:text-sm">{isSavingPKL&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Simpan</Button></DialogFooter>
+        <DialogContent className="rounded-2xl max-w-[95vw] sm:max-w-2xl p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-xl flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-[#2C5EAD]"/> 
+              {editingPKL ? "Edit Lokasi PKL" : "Tambah Lokasi PKL"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-xs sm:text-sm">Tempat / Nama Perusahaan</Label>
+              <Input 
+                value={pklForm.tempat_pkl} 
+                onChange={(e)=>setPklForm({...pklForm, tempat_pkl: e.target.value})} 
+                className="rounded-xl mt-1 h-8 sm:h-9 text-xs sm:text-sm" 
+                placeholder="Contoh: PT. Maju Jaya"
+              />
+            </div>
+            <div>
+              <Label className="text-xs sm:text-sm">Koordinat (Latitude,Longitude)</Label>
+              <Input 
+                value={pklForm.koordinat_pkl} 
+                onChange={(e)=>setPklForm({...pklForm, koordinat_pkl: e.target.value})} 
+                placeholder="-6.200000,106.816666" 
+                className="rounded-xl mt-1 h-8 sm:h-9 text-xs sm:text-sm font-mono"
+              />
+              <p className="text-[10px] sm:text-xs text-slate-400 mt-1">
+                Format: latitude,longitude (contoh: -6.200000,106.816666)
+              </p>
+            </div>
+            {/* Peta Google Maps Embed */}
+            <div>
+              <Label className="text-xs sm:text-sm">Pilih Lokasi pada Peta</Label>
+              <MapPicker 
+                coordinate={pklForm.koordinat_pkl} 
+                onCoordinateChange={(coord) => setPklForm({...pklForm, koordinat_pkl: coord})}
+                disabled={false}
+              />
+            </div>
+            <div>
+              <Label className="text-xs sm:text-sm">Guru Pendamping</Label>
+              <Select value={pklForm.id_guru || "0"} onValueChange={(v)=>setPklForm({...pklForm, id_guru: v})}>
+                <SelectTrigger className="rounded-xl mt-1 h-8 sm:h-9 text-xs sm:text-sm">
+                  <SelectValue placeholder="Pilih guru pendamping"/>
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="0">- Tidak ada -</SelectItem>
+                  {guruList.map(guru => (
+                    <SelectItem key={guru.id_guru} value={guru.id_guru.toString()}>
+                      {guru.nik} - {guru.nama}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
+            <Button variant="outline" onClick={()=>setPklDialogOpen(false)} className="rounded-xl w-full sm:w-auto text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">
+              Batal
+            </Button>
+            <Button onClick={handleSavePKL} disabled={isSavingPKL} className="rounded-xl bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] w-full sm:w-auto text-xs sm:text-sm">
+              {isSavingPKL && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+              Simpan
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
