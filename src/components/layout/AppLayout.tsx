@@ -29,7 +29,7 @@ export function AppLayout() {
             <div className="flex items-center gap-2">
               <img src="/New.png" alt="Logo" className="h-8 w-auto" />
               <span className="text-xl font-black italic tracking-tighter bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] bg-clip-text text-transparent uppercase leading-[0.8]">
-                TITEN
+                SMARTAS
               </span>
             </div>
 
