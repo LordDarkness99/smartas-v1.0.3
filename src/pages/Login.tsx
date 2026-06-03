@@ -2,14 +2,13 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import bcrypt from "bcryptjs";
 import * as faceapi from "face-api.js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { UserCheck, KeyRound, ArrowLeft, Camera, RefreshCw, Loader2, AlertCircle, Sun, Moon, Cloud, Sparkles } from "lucide-react";
+import { UserCheck, ArrowLeft, Camera, RefreshCw, Loader2, AlertCircle, Sun, Moon, Cloud, Sparkles } from "lucide-react";
 import { detectSmile } from "@/utils/liveness";
 
 export default function Login() {
@@ -18,14 +17,6 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const { signIn, faceSignIn } = useAuth();
   const navigate = useNavigate();
-
-  // State untuk form ganti password
-  const [showChangePassword, setShowChangePassword] = useState(false);
-  const [changeUsername, setChangeUsername] = useState("");
-  const [oldPassword, setOldPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmNewPassword, setConfirmNewPassword] = useState("");
-  const [changingPassword, setChangingPassword] = useState(false);
 
   // State untuk face login
   const [showFaceLogin, setShowFaceLogin] = useState(false);
@@ -120,7 +111,7 @@ export default function Login() {
     };
   }, [showFaceLogin, modelsLoaded, startWebcam]);
 
-  // Fungsi deteksi dan cocokkan wajah + liveness kedip
+  // Fungsi deteksi dan cocokkan wajah + liveness senyum
   const detectAndMatchFace = async () => {
     if (!videoRef.current || !canvasRef.current) return;
     if (videoRef.current.readyState !== 4) {
@@ -180,16 +171,14 @@ export default function Login() {
         return;
       }
 
-      // ========== LIVENESS CHECK (KEDIP) ==========
+      // ========== LIVENESS CHECK (SENYUM) ==========
       setVerifyingLiveness(true);
-      // Pilih arah secara acak
-      const randomDir = Math.random() < 0.5 ? 'kiri' : 'kanan';
-      toast.info(`Silakan Tersenyum ke ${randomDir.toUpperCase()} secara perlahan...`);
+      toast.info(`Silakan tersenyum ke kamera...`);
       const isAlive = await detectSmile(videoRef.current, 7000);
       setVerifyingLiveness(false);
 
       if (!isAlive) {
-        toast.error(`Verifikasi gagal: wajah tidak tersenyum ke ${randomDir}. Coba lagi.`);
+        toast.error(`Verifikasi gagal: senyum tidak terdeteksi. Coba lagi.`);
         setDetecting(false);
         return;
       }
@@ -238,56 +227,6 @@ export default function Login() {
     setLoading(false);
   };
 
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!changeUsername || !oldPassword || !newPassword || !confirmNewPassword) {
-      toast.error("Semua field harus diisi");
-      return;
-    }
-    if (newPassword !== confirmNewPassword) {
-      toast.error("Password baru tidak cocok");
-      return;
-    }
-    if (newPassword.length < 6) {
-      toast.error("Password minimal 6 karakter");
-      return;
-    }
-    setChangingPassword(true);
-    toast.info("Mengganti password...");
-    try {
-      const { data: akun, error: fetchError } = await supabase
-        .from("akun")
-        .select("kata_sandi")
-        .eq("username", changeUsername)
-        .single();
-      if (fetchError || !akun) {
-        toast.error("Username tidak ditemukan");
-        return;
-      }
-      const isPasswordValid = await bcrypt.compare(oldPassword, akun.kata_sandi);
-      if (!isPasswordValid) {
-        toast.error("Password lama salah");
-        return;
-      }
-      const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-      const { error: updateError } = await supabase
-        .from("akun")
-        .update({ kata_sandi: hashedNewPassword })
-        .eq("username", changeUsername);
-      if (updateError) throw updateError;
-      toast.success("Password berhasil diubah! Silakan login dengan password baru.");
-      setShowChangePassword(false);
-      setChangeUsername("");
-      setOldPassword("");
-      setNewPassword("");
-      setConfirmNewPassword("");
-    } catch (error: unknown) {
-      toast.error((error as Error).message || "Terjadi kesalahan saat mengganti password");
-    } finally {
-      setChangingPassword(false);
-    }
-  };
-
   // Fungsi untuk mendapatkan ikon greeting
   const getGreetingIcon = () => {
     if (greeting === "Selamat Pagi") return <Sun className="h-4 w-4" />;
@@ -323,7 +262,7 @@ export default function Login() {
         </CardHeader>
         <CardContent>
           {showFaceLogin ? (
-            // Face Login UI dengan gaya baru
+            // Face Login UI
             <div className="space-y-5">
               {!modelsLoaded ? (
                 <div className="flex justify-center items-center h-64">
@@ -356,7 +295,7 @@ export default function Login() {
                       height="240"
                       className="absolute top-0 left-0 rounded-xl"
                     />
-                    {/* Overlay saat menunggu kedip */}
+                    {/* Overlay saat menunggu senyum */}
                     {verifyingLiveness && (
                       <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-xl backdrop-blur-sm">
                         <div className="text-white text-center">
@@ -403,8 +342,8 @@ export default function Login() {
                 </>
               )}
             </div>
-          ) : !showChangePassword ? (
-            // Login biasa dengan desain baru
+          ) : (
+            // Login biasa
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="username" className="text-slate-700">Nama Pengguna</Label>
@@ -440,7 +379,7 @@ export default function Login() {
                 {loading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <UserCheck className="mr-2 h-4 w-4" />}
                 {loading ? "Memproses..." : "Masuk"}
               </Button>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-center text-sm">
                 <button
                   type="button"
                   onClick={() => {
@@ -451,94 +390,9 @@ export default function Login() {
                 >
                   Login dengan Wajah
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowChangePassword(true);
-                    toast.info("Buka form ganti password");
-                  }}
-                  className="text-[#4BB8FA] hover:underline font-medium"
-                >
-                  Lupa / Ganti Password?
-                </button>
               </div>
               <div className="text-center text-xs text-slate-400 border-t pt-4 mt-2">
                 <p>© {new Date().getFullYear()} SMARTAS - Sistem Informasi Akademik</p>
-              </div>
-            </form>
-          ) : (
-            // Form ganti password dengan gaya baru
-            <form onSubmit={handleChangePassword} className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="changeUsername" className="text-slate-700">Username</Label>
-                <Input 
-                  id="changeUsername" 
-                  type="text" 
-                  value={changeUsername} 
-                  onChange={(e) => setChangeUsername(e.target.value)} 
-                  required 
-                  disabled={changingPassword} 
-                  placeholder="Masukkan username" 
-                  className="rounded-xl border-slate-200"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="oldPassword" className="text-slate-700">Password Lama</Label>
-                <Input 
-                  id="oldPassword" 
-                  type="password" 
-                  value={oldPassword} 
-                  onChange={(e) => setOldPassword(e.target.value)} 
-                  required 
-                  disabled={changingPassword} 
-                  className="rounded-xl border-slate-200"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="newPassword" className="text-slate-700">Password Baru (min. 6)</Label>
-                <Input 
-                  id="newPassword" 
-                  type="password" 
-                  value={newPassword} 
-                  onChange={(e) => setNewPassword(e.target.value)} 
-                  required 
-                  disabled={changingPassword} 
-                  className="rounded-xl border-slate-200"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmNewPassword" className="text-slate-700">Konfirmasi Password Baru</Label>
-                <Input 
-                  id="confirmNewPassword" 
-                  type="password" 
-                  value={confirmNewPassword} 
-                  onChange={(e) => setConfirmNewPassword(e.target.value)} 
-                  required 
-                  disabled={changingPassword} 
-                  className="rounded-xl border-slate-200"
-                />
-              </div>
-              <div className="flex gap-3">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  className="flex-1 rounded-xl border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white" 
-                  onClick={() => {
-                    setShowChangePassword(false);
-                    toast.info("Batal ganti password");
-                  }} 
-                  disabled={changingPassword}
-                >
-                  <ArrowLeft className="mr-2 h-4 w-4" /> Batal
-                </Button>
-                <Button 
-                  type="submit" 
-                  className="flex-1 rounded-xl bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] hover:shadow-lg" 
-                  disabled={changingPassword}
-                >
-                  {changingPassword ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <KeyRound className="mr-2 h-4 w-4" />}
-                  {changingPassword ? "Memproses..." : "Ganti Password"}
-                </Button>
               </div>
             </form>
           )}
