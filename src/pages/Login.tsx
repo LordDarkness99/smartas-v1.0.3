@@ -7,8 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { UserCheck, ArrowLeft, Camera, RefreshCw, Loader2, AlertCircle, Sun, Moon, Cloud, Sparkles } from "lucide-react";
+import { UserCheck, ArrowLeft, Camera, RefreshCw, Loader2, AlertCircle, Sun, Moon, Cloud, Sparkles, CheckCircle, XCircle } from "lucide-react";
 import { detectSmile } from "@/utils/liveness";
 
 export default function Login() {
@@ -27,7 +35,13 @@ export default function Login() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Waktu saat ini untuk greeting (tambahan estetika)
+  // Dialog states
+  const [successDialogOpen, setSuccessDialogOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorDialogOpen, setErrorDialogOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  // Waktu saat ini untuk greeting
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
 
@@ -141,13 +155,15 @@ export default function Login() {
         .not("muka", "is", null);
 
       if (error) {
-        toast.error("Gagal mengambil data pengguna");
+        setErrorMessage("Gagal mengambil data pengguna");
+        setErrorDialogOpen(true);
         setDetecting(false);
         return;
       }
 
       if (!users || users.length === 0) {
-        toast.error("Belum ada pengguna yang mendaftarkan wajah. Silakan registrasi wajah terlebih dahulu.");
+        setErrorMessage("Belum ada pengguna yang mendaftarkan wajah. Silakan registrasi wajah terlebih dahulu.");
+        setErrorDialogOpen(true);
         setDetecting(false);
         return;
       }
@@ -166,35 +182,39 @@ export default function Login() {
       }
 
       if (!bestMatch) {
-        toast.error("Wajah tidak dikenali. Pastikan Anda sudah registrasi wajah atau coba lagi.");
+        setErrorMessage("Wajah tidak dikenali. Pastikan Anda sudah registrasi wajah atau coba lagi.");
+        setErrorDialogOpen(true);
         setDetecting(false);
         return;
       }
 
-      // ========== LIVENESS CHECK (SENYUM) ==========
+      // LIVENESS CHECK (SENYUM)
       setVerifyingLiveness(true);
       toast.info(`Silakan tersenyum ke kamera...`);
       const isAlive = await detectSmile(videoRef.current, 7000);
       setVerifyingLiveness(false);
 
       if (!isAlive) {
-        toast.error(`Verifikasi gagal: senyum tidak terdeteksi. Coba lagi.`);
+        setErrorMessage("Verifikasi gagal: senyum tidak terdeteksi. Coba lagi.");
+        setErrorDialogOpen(true);
         setDetecting(false);
         return;
       }
-      // ==========================================
 
       toast.success(`Halo ${bestMatch.username}, wajah dikenali dan liveness terverifikasi! Login...`);
       const { error: loginError } = await faceSignIn(bestMatch.username);
       if (loginError) {
-        toast.error(loginError);
+        setErrorMessage(loginError);
+        setErrorDialogOpen(true);
       } else {
-        toast.success("Login berhasil! Mengalihkan...");
-        setTimeout(() => navigate("/dashboard"), 1000);
+        setSuccessMessage("Login berhasil! Mengalihkan ke dashboard...");
+        setSuccessDialogOpen(true);
+        setTimeout(() => navigate("/dashboard"), 1500);
       }
     } catch (err) {
       console.error(err);
-      toast.error("Terjadi kesalahan saat verifikasi wajah");
+      setErrorMessage("Terjadi kesalahan saat verifikasi wajah");
+      setErrorDialogOpen(true);
     } finally {
       setDetecting(false);
       setVerifyingLiveness(false);
@@ -212,17 +232,20 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username || !password) {
-      toast.error("Username dan password harus diisi");
+      setErrorMessage("Username dan password harus diisi");
+      setErrorDialogOpen(true);
       return;
     }
     setLoading(true);
     toast.info("Memproses login...");
     const { error } = await signIn(username, password);
     if (error) {
-      toast.error(error);
+      setErrorMessage(error);
+      setErrorDialogOpen(true);
     } else {
-      toast.success("Login berhasil! Mengalihkan...");
-      setTimeout(() => navigate("/dashboard"), 1000);
+      setSuccessMessage("Login berhasil! Mengalihkan ke dashboard...");
+      setSuccessDialogOpen(true);
+      setTimeout(() => navigate("/dashboard"), 1500);
     }
     setLoading(false);
   };
@@ -398,6 +421,53 @@ export default function Login() {
           )}
         </CardContent>
       </Card>
+
+      {/* Pop-up Dialog Sukses */}
+      <Dialog open={successDialogOpen} onOpenChange={setSuccessDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-xl flex items-center gap-2 text-emerald-600">
+              <CheckCircle className="h-5 w-5" />
+              Login Berhasil
+            </DialogTitle>
+          </DialogHeader>
+          <DialogDescription className="text-sm text-slate-700">
+            {successMessage}
+          </DialogDescription>
+          <DialogFooter>
+            <Button 
+              onClick={() => setSuccessDialogOpen(false)} 
+              className="rounded-xl bg-emerald-600 hover:bg-emerald-700"
+            >
+              OK
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pop-up Dialog Gagal */}
+      <Dialog open={errorDialogOpen} onOpenChange={setErrorDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-xl flex items-center gap-2 text-red-600">
+              <XCircle className="h-5 w-5" />
+              Login Gagal
+            </DialogTitle>
+          </DialogHeader>
+          <DialogDescription className="text-sm text-slate-700">
+            {errorMessage}
+          </DialogDescription>
+          <DialogFooter>
+            <Button 
+              onClick={() => setErrorDialogOpen(false)} 
+              variant="outline"
+              className="rounded-xl border-red-300 text-red-600 hover:bg-red-50"
+            >
+              Tutup
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -7,7 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Camera, RefreshCw, Save, AlertCircle, Sun, Moon, Cloud, User, Calendar } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Camera, RefreshCw, Save, AlertCircle, Sun, Moon, Cloud, Timer, CheckCircle, XCircle } from "lucide-react";
 
 interface UserWithUsername {
   username?: string;
@@ -26,6 +34,16 @@ export default function FaceRegistration() {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
+  const [detectCooldown, setDetectCooldown] = useState(false);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+
+  // State untuk dialog pop-up
+  const [accuracyDialogOpen, setAccuracyDialogOpen] = useState(false);
+  const [accuracyMessage, setAccuracyMessage] = useState("");
+  const [successDialogOpen, setSuccessDialogOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorDialogOpen, setErrorDialogOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const username = (user as UserWithUsername)?.username || "";
   const nama = (user as UserWithUsername)?.nama || "";
@@ -39,6 +57,23 @@ export default function FaceRegistration() {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Cooldown timer effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (detectCooldown && cooldownSeconds > 0) {
+      interval = setInterval(() => {
+        setCooldownSeconds(prev => {
+          if (prev <= 1) {
+            setDetectCooldown(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [detectCooldown, cooldownSeconds]);
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString("id-ID", {
@@ -107,16 +142,31 @@ export default function FaceRegistration() {
   const resetCamera = () => {
     startWebcam();
     setFaceDescriptor(null);
+    setDetectCooldown(false);
+    setCooldownSeconds(0);
     canvasRef.current?.getContext("2d")?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
   };
 
   const detectFace = async () => {
+    if (detectCooldown) {
+      toast.info(`Tunggu ${cooldownSeconds} detik lagi sebelum deteksi ulang`);
+      return;
+    }
+
     if (!videoRef.current || !canvasRef.current) return;
     if (videoRef.current.readyState !== 4) {
       toast.error("Kamera belum siap, tunggu sebentar");
       return;
     }
+
+    if (videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
+      toast.error("Stream video belum siap, coba lagi");
+      return;
+    }
+
     setDetecting(true);
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     try {
       const detection = await faceapi
         .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions())
@@ -124,6 +174,26 @@ export default function FaceRegistration() {
         .withFaceDescriptor();
 
       if (detection) {
+        const confidence = detection.detection.score;
+        if (confidence < 0.8) {
+          // Tentukan penyebab berdasarkan tingkat akurasi
+          let penyebab = "";
+          if (confidence < 0.5) penyebab = "Wajah terlalu jauh atau pencahayaan sangat buruk.";
+          else if (confidence < 0.7) penyebab = "Pencahayaan kurang atau wajah tidak menghadap kamera dengan jelas.";
+          else penyebab = "Pastikan wajah bersih dari penghalang (kacamata hitam, topi) dan pencahayaan cukup.";
+          
+          const msg = `Akurasi wajah terlalu rendah (${(confidence * 100).toFixed(1)}%). ${penyebab} Silakan deteksi ulang.`;
+          setAccuracyMessage(msg);
+          setAccuracyDialogOpen(true); // Tampilkan pop-up dialog
+          
+          setFaceDescriptor(null);
+          canvasRef.current?.getContext("2d")?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+          
+          setDetectCooldown(true);
+          setCooldownSeconds(5);
+          return;
+        }
+
         setFaceDescriptor(detection.descriptor);
         const dims = faceapi.matchDimensions(canvasRef.current, videoRef.current, true);
         const resized = faceapi.resizeResults(detection, dims);
@@ -131,33 +201,55 @@ export default function FaceRegistration() {
         ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
         faceapi.draw.drawDetections(canvasRef.current, resized);
         faceapi.draw.drawFaceLandmarks(canvasRef.current, resized);
-        toast.success("Wajah terdeteksi");
+        toast.success(`Wajah terdeteksi dengan akurasi ${(confidence * 100).toFixed(1)}%`);
+        
+        setDetectCooldown(true);
+        setCooldownSeconds(5);
       } else {
-        toast.error("Tidak ada wajah terdeteksi");
+        toast.error("Tidak ada wajah terdeteksi. Pastikan wajah berada dalam frame kamera.");
         setFaceDescriptor(null);
+        setDetectCooldown(true);
+        setCooldownSeconds(2);
       }
     } catch (error) {
-      toast.error("Error deteksi wajah");
+      console.error(error);
+      toast.error("Error deteksi wajah. Coba refresh halaman.");
     } finally {
       setDetecting(false);
     }
   };
 
   const saveToDatabase = async () => {
-    if (!faceDescriptor) return toast.error("Deteksi wajah dulu");
-    if (!username) return toast.error("Username tidak ditemukan");
+    if (!faceDescriptor) {
+      toast.error("Belum ada wajah terdeteksi. Silakan deteksi wajah terlebih dahulu.");
+      return;
+    }
+    if (!username) {
+      toast.error("Username tidak ditemukan. Silakan login ulang.");
+      return;
+    }
+    
     setSaving(true);
     try {
       const { error } = await supabase
         .from("akun")
         .update({ muka: Array.from(faceDescriptor) })
         .eq("username", username);
+        
       if (error) throw error;
-      toast.success("Data wajah tersimpan");
+      
+      setSuccessMessage("✅ Data wajah berhasil disimpan!");
+      setSuccessDialogOpen(true); // Pop-up sukses
+      
       setFaceDescriptor(null);
       canvasRef.current?.getContext("2d")?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      setDetectCooldown(false);
+      setCooldownSeconds(0);
     } catch (err) {
-      toast.error((err as Error).message || "Gagal menyimpan");
+      const errorMsg = (err as Error).message || "Gagal menyimpan data wajah";
+      setErrorMessage(`❌ ${errorMsg}`);
+      setErrorDialogOpen(true); // Pop-up error
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -229,14 +321,23 @@ export default function FaceRegistration() {
                     <canvas ref={canvasRef} width="640" height="480" className="absolute top-0 left-0 w-full h-full" />
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-3 justify-center">
+                <div className="flex flex-wrap gap-3 justify-center items-center">
                   <Button 
                     onClick={detectFace} 
-                    disabled={detecting}
+                    disabled={detecting || detectCooldown}
                     className="bg-[#2C5EAD] hover:bg-[#2C5EAD]/80 text-white rounded-xl"
                   >
-                    <Camera className="mr-2 h-4 w-4" />
-                    {detecting ? "Mendeteksi..." : "Deteksi Wajah"}
+                    {detectCooldown ? (
+                      <>
+                        <Timer className="mr-2 h-4 w-4 animate-pulse" />
+                        Tunggu {cooldownSeconds}s
+                      </>
+                    ) : (
+                      <>
+                        <Camera className="mr-2 h-4 w-4" />
+                        {detecting ? "Mendeteksi..." : "Deteksi Wajah"}
+                      </>
+                    )}
                   </Button>
                   <Button 
                     onClick={saveToDatabase} 
@@ -261,6 +362,12 @@ export default function FaceRegistration() {
                     <span>✓ Wajah terdeteksi, klik Simpan untuk menyimpan data wajah Anda.</span>
                   </div>
                 )}
+                {detectCooldown && !faceDescriptor && (
+                  <div className="bg-amber-50 rounded-xl p-3 text-center text-amber-700 text-sm flex items-center justify-center gap-2">
+                    <Timer className="h-4 w-4" />
+                    <span>Mohon tunggu {cooldownSeconds} detik sebelum mencoba deteksi ulang.</span>
+                  </div>
+                )}
               </>
             )}
           </CardContent>
@@ -272,6 +379,76 @@ export default function FaceRegistration() {
           <p className="text-xs text-slate-400">© {new Date().getFullYear()} Sistem Registrasi Wajah - SmartAS</p>
         </div>
       </div>
+
+      {/* Pop-up Dialog untuk Akurasi Rendah */}
+      <Dialog open={accuracyDialogOpen} onOpenChange={setAccuracyDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-xl flex items-center gap-2 text-amber-600">
+              <AlertCircle className="h-5 w-5" />
+              Akurasi Wajah Rendah
+            </DialogTitle>
+          </DialogHeader>
+          <DialogDescription className="text-sm text-slate-700">
+            {accuracyMessage}
+          </DialogDescription>
+          <DialogFooter>
+            <Button 
+              onClick={() => setAccuracyDialogOpen(false)} 
+              className="rounded-xl bg-[#2C5EAD] hover:bg-[#2C5EAD]/80"
+            >
+              Mengerti, Coba Lagi
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pop-up Dialog untuk Sukses Simpan */}
+      <Dialog open={successDialogOpen} onOpenChange={setSuccessDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-xl flex items-center gap-2 text-emerald-600">
+              <CheckCircle className="h-5 w-5" />
+              Berhasil
+            </DialogTitle>
+          </DialogHeader>
+          <DialogDescription className="text-sm text-slate-700">
+            {successMessage}
+          </DialogDescription>
+          <DialogFooter>
+            <Button 
+              onClick={() => setSuccessDialogOpen(false)} 
+              className="rounded-xl bg-emerald-600 hover:bg-emerald-700"
+            >
+              OK
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pop-up Dialog untuk Error Simpan */}
+      <Dialog open={errorDialogOpen} onOpenChange={setErrorDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-[95vw] sm:max-w-md p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-xl flex items-center gap-2 text-red-600">
+              <XCircle className="h-5 w-5" />
+              Gagal Menyimpan
+            </DialogTitle>
+          </DialogHeader>
+          <DialogDescription className="text-sm text-slate-700">
+            {errorMessage}
+          </DialogDescription>
+          <DialogFooter>
+            <Button 
+              onClick={() => setErrorDialogOpen(false)} 
+              variant="outline"
+              className="rounded-xl border-red-300 text-red-600 hover:bg-red-50"
+            >
+              Tutup
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
