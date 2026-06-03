@@ -126,7 +126,8 @@ export default function UserManagement() {
   // Kelas CRUD
   const [kelasDialogOpen, setKelasDialogOpen] = useState(false);
   const [editingKelas, setEditingKelas] = useState<Kelas | null>(null);
-  const [kelasForm, setKelasForm] = useState({ nama: "", id_guru: "" });
+  // MODIFIKASI: tambah id_jurusan ke kelasForm
+  const [kelasForm, setKelasForm] = useState({ nama: "", id_guru: "", id_jurusan: "" });
   const [isSavingKelas, setIsSavingKelas] = useState(false);
   const [toggleKelasDialogOpen, setToggleKelasDialogOpen] = useState(false);
   const [togglingKelas, setTogglingKelas] = useState<Kelas | null>(null);
@@ -160,11 +161,10 @@ export default function UserManagement() {
   const [missingJurusanDialogOpen, setMissingJurusanDialogOpen] = useState(false);
   const [isAddingMissingJurusan, setIsAddingMissingJurusan] = useState(false);
 
-  // === BARU: Kelas missing saat import siswa ===
+  // Kelas missing saat import siswa
   const [importSiswaMissingKelas, setImportSiswaMissingKelas] = useState<string[]>([]);
   const [missingKelasDialogOpen, setMissingKelasDialogOpen] = useState(false);
   const [isAddingMissingKelas, setIsAddingMissingKelas] = useState(false);
-  // Untuk admin super, pilih jurusan saat menambah kelas
   const [selectedJurusanForNewKelas, setSelectedJurusanForNewKelas] = useState<string>("");
 
   // ========== GREETING ==========
@@ -923,21 +923,34 @@ export default function UserManagement() {
     setBulkActionDialogOpen(false);
   };
 
-  // ========== KELAS MANAGEMENT ==========
+  // ========== KELAS MANAGEMENT (DENGAN JURUSAN) ==========
+  // MODIFIKASI: handleAddKelas dengan jurusan default untuk admin jurusan
   const handleAddKelas = () => {
     if (isAdminJurusan && !user?.id_jurusan) {
       toast({ title: "Error", description: "Admin jurusan tidak memiliki jurusan", variant: "destructive" });
       return;
     }
     setEditingKelas(null);
-    setKelasForm({ nama: "", id_guru: "" });
+    setKelasForm({
+      nama: "",
+      id_guru: "",
+      id_jurusan: isAdminJurusan && user?.id_jurusan ? user.id_jurusan.toString() : ""
+    });
     setKelasDialogOpen(true);
   };
+
+  // MODIFIKASI: handleEditKelas mengambil id_jurusan dari kelas yang diedit
   const handleEditKelas = (kelas: Kelas) => {
     setEditingKelas(kelas);
-    setKelasForm({ nama: kelas.nama, id_guru: kelas.id_guru?.toString() || "" });
+    setKelasForm({
+      nama: kelas.nama,
+      id_guru: kelas.id_guru?.toString() || "",
+      id_jurusan: kelas.id_jurusan?.toString() || ""
+    });
     setKelasDialogOpen(true);
   };
+
+  // MODIFIKASI: handleSaveKelas menyertakan id_jurusan
   const handleSaveKelas = async () => {
     if (!kelasForm.nama.trim()) {
       toast({ title: "Kesalahan", description: "Nama kelas tidak boleh kosong", variant: "destructive" });
@@ -949,12 +962,25 @@ export default function UserManagement() {
         nama: kelasForm.nama.trim(),
         id_guru: kelasForm.id_guru ? parseInt(kelasForm.id_guru) : null,
       };
-      if (isAdminJurusan && user?.id_jurusan) data.id_jurusan = user.id_jurusan;
+
+      // Tentukan id_jurusan berdasarkan role
+      if (isAdminSuper) {
+        // Admin super: pilih dari form (bisa null jika pilih "none")
+        data.id_jurusan = kelasForm.id_jurusan ? parseInt(kelasForm.id_jurusan) : null;
+      } else if (isAdminJurusan && user?.id_jurusan) {
+        // Admin jurusan: otomatis menggunakan jurusannya
+        data.id_jurusan = user.id_jurusan;
+      }
+
       if (editingKelas) {
         await supabase.from("kelas").update(data).eq("id_kelas", editingKelas.id_kelas);
         toast({ title: "Berhasil", description: "Kelas berhasil diperbarui" });
       } else {
-        await supabase.from("kelas").insert({ ...data, aktif: true, dibuat_pada: new Date().toISOString() });
+        await supabase.from("kelas").insert({
+          ...data,
+          aktif: true,
+          dibuat_pada: new Date().toISOString()
+        });
         toast({ title: "Berhasil", description: "Kelas baru berhasil ditambahkan" });
       }
       setKelasDialogOpen(false);
@@ -965,6 +991,7 @@ export default function UserManagement() {
       setIsSavingKelas(false);
     }
   };
+
   const confirmToggleActiveKelas = (kelas: Kelas, isActivating: boolean) => {
     setTogglingKelas(kelas);
     setIsActivatingKelasMode(isActivating);
@@ -1087,7 +1114,7 @@ export default function UserManagement() {
     setImportKelasDialogOpen(true);
   };
 
-  // ========== IMPORT EXCEL UNTUK PENGGUNA (DIPERBAIKI DENGAN HANDLE KELAS HILANG) ==========
+  // ========== IMPORT EXCEL UNTUK PENGGUNA ==========
   const downloadTemplate = (type: "guru" | "siswa" | "admin_jurusan" | "bk") => {
     let headers: string[];
     let data: (string | number)[][];
@@ -1160,7 +1187,6 @@ export default function UserManagement() {
     }
   };
 
-  // Fungsi import yang sudah diperbaiki dengan penanganan kelas tidak ditemukan
   const handleImport = async () => {
     if (!previewData.length) {
       toast({ title: "Kesalahan", description: "Tidak ada data untuk diimpor", variant: "destructive" });
@@ -1257,11 +1283,9 @@ export default function UserManagement() {
           }
         }
       } else if (userType === "siswa") {
-        // Kumpulkan nama kelas yang tidak ditemukan
         const missingKelasSet = new Set<string>();
         const validRowsTemp: { row: ExcelRow; index: number }[] = [];
 
-        // Pertama, identifikasi kelas yang tidak ditemukan
         for (let idx = 0; idx < previewData.length; idx++) {
           const row = previewData[idx];
           const kelasNama = row.kelas?.toString().trim();
@@ -1277,7 +1301,6 @@ export default function UserManagement() {
           }
         }
 
-        // Jika ada kelas yang tidak ditemukan, tampilkan dialog konfirmasi
         if (missingKelasSet.size > 0) {
           const missingKelasArray = Array.from(missingKelasSet);
           setImportSiswaMissingKelas(missingKelasArray);
@@ -1287,7 +1310,6 @@ export default function UserManagement() {
           return;
         }
 
-        // Jika semua kelas ditemukan, lanjutkan import
         for (let idx = 0; idx < previewData.length; idx++) {
           const row = previewData[idx];
           try {
@@ -1509,13 +1531,11 @@ export default function UserManagement() {
     }
   };
 
-  // Fungsi untuk menambahkan kelas yang hilang (dipanggil dari dialog)
   const addMissingKelasAndContinue = async () => {
     if (importSiswaMissingKelas.length === 0) return;
     setIsAddingMissingKelas(true);
     let addedCount = 0;
     try {
-      // Tentukan jurusan untuk kelas baru
       let jurusanId: number | null = null;
       if (isAdminJurusan && user?.id_jurusan) {
         jurusanId = user.id_jurusan;
@@ -1524,7 +1544,6 @@ export default function UserManagement() {
       }
 
       for (const namaKelas of importSiswaMissingKelas) {
-        // Cek lagi apakah sudah ada (bisa saja sudah ditambahkan oleh proses lain)
         const { data: existing } = await supabase
           .from("kelas")
           .select("id_kelas")
@@ -1544,7 +1563,6 @@ export default function UserManagement() {
       toast({ title: "Berhasil", description: `${addedCount} kelas berhasil ditambahkan.` });
       setMissingKelasDialogOpen(false);
       setImportSiswaMissingKelas([]);
-      // Ulangi proses import (setelah kelas ditambahkan)
       await handleImport();
     } catch (error: any) {
       toast({ title: "Gagal", description: error.message, variant: "destructive" });
@@ -1749,7 +1767,7 @@ export default function UserManagement() {
                 )}
               </TabsContent>
 
-              {/* TAB KELAS */}
+              {/* TAB KELAS - DENGAN KOLOM JURUSAN */}
               <TabsContent value="kelas" className="space-y-4 sm:space-y-6">
                 <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
                   <div className="flex flex-wrap gap-2 justify-center sm:justify-start"><Button onClick={handleAddKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]"><Plus className="mr-1 h-3 w-3" /> Tambah Kelas</Button><Button variant="outline" onClick={() => setImportKelasDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"><Upload className="mr-1 h-3 w-3" /> Impor Excel</Button></div>
@@ -1760,12 +1778,45 @@ export default function UserManagement() {
                   <div className="border rounded-xl overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
                       <Table>
-                        <TableHeader><TableRow className="bg-slate-50"><TableHead>Nama Kelas</TableHead><TableHead>Wali Kelas</TableHead><TableHead className="text-center">Status</TableHead><TableHead className="text-center">Aksi</TableHead></TableRow></TableHeader>
+                        <TableHeader>
+                          <TableRow className="bg-slate-50">
+                            <TableHead>Nama Kelas</TableHead>
+                            <TableHead>Wali Kelas</TableHead>
+                            <TableHead>Jurusan</TableHead>  {/* KOLOM BARU */}
+                            <TableHead className="text-center">Status</TableHead>
+                            <TableHead className="text-center">Aksi</TableHead>
+                          </TableRow>
+                        </TableHeader>
                         <TableBody>
                           {kelasList.filter(k => !searchKelasQuery || k.nama.toLowerCase().includes(searchKelasQuery.toLowerCase())).map(kelas => (
-                            <TableRow key={kelas.id_kelas}><TableCell className="font-medium">{kelas.nama}</TableCell><TableCell><div className="flex items-center gap-2"><div className="bg-purple-100 p-1.5 rounded-lg"><User className="h-3 w-3 text-purple-600" /></div>{kelas.guru_nama || "-"}</div></TableCell><TableCell className="text-center"><Badge className={kelas.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>{kelas.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell><TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => handleEditKelas(kelas)}><Edit className="h-4 w-4 text-[#2C5EAD]" /></Button>{kelas.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, false)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, true)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell></TableRow>
+                            <TableRow key={kelas.id_kelas}>
+                              <TableCell className="font-medium">{kelas.nama}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <div className="bg-purple-100 p-1.5 rounded-lg"><User className="h-3 w-3 text-purple-600" /></div>
+                                  {kelas.guru_nama || "-"}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                {jurusanList.find(j => j.id_jurusan === kelas.id_jurusan)?.nama_jurusan || "-"}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Badge className={kelas.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>
+                                  {kelas.aktif ? "Aktif" : "Nonaktif"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <div className="flex gap-1 justify-center">
+                                  <Button variant="ghost" size="sm" onClick={() => handleEditKelas(kelas)}><Edit className="h-4 w-4 text-[#2C5EAD]" /></Button>
+                                  {kelas.aktif ? 
+                                    <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, false)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : 
+                                    <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, true)}><UserPlus className="h-4 w-4 text-green-500" /></Button>
+                                  }
+                                </div>
+                              </TableCell>
+                            </TableRow>
                           ))}
-                          {kelasList.filter(k => !searchKelasQuery || k.nama.toLowerCase().includes(searchKelasQuery.toLowerCase())).length === 0 && <TableRow><TableCell colSpan={4} className="text-center py-8 text-slate-500">Belum ada data kelas</TableCell></TableRow>}
+                          {kelasList.filter(k => !searchKelasQuery || k.nama.toLowerCase().includes(searchKelasQuery.toLowerCase())).length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-8 text-slate-500">Belum ada data kelas</TableCell></TableRow>}
                         </TableBody>
                       </Table>
                     </div>
@@ -1783,7 +1834,7 @@ export default function UserManagement() {
         <div className="text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Manajemen Pengguna &amp; Kelas - SmartAS</p></div>
       </div>
 
-      {/* DIALOG TAMBAH USER */}
+      {/* DIALOG TAMBAH USER (tidak berubah) */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent className="rounded-2xl max-w-md">
           <DialogHeader><DialogTitle><Plus className="h-5 w-5 inline mr-2 text-emerald-600" /> Tambah {addForm.peran === "guru" ? "Guru" : addForm.peran === "siswa" ? "Siswa" : addForm.peran === "admin_jurusan" ? "Admin Jurusan" : "BK"}</DialogTitle><DialogDescription>Isi data pengguna baru. Kata sandi default "password123".</DialogDescription></DialogHeader>
@@ -1802,7 +1853,7 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG EDIT USER */}
+      {/* DIALOG EDIT USER (tidak berubah) */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="rounded-2xl max-w-sm p-4 max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle><Edit className="h-5 w-5 inline mr-2 text-blue-600" /> Edit Pengguna</DialogTitle><DialogDescription>Ubah informasi pengguna. Kosongkan kata sandi jika tidak ingin mengubah.</DialogDescription></DialogHeader>
@@ -1822,7 +1873,7 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG DEACTIVATE / ACTIVATE */}
+      {/* DIALOG DEACTIVATE / ACTIVATE (tidak berubah) */}
       <Dialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
         <DialogContent className="rounded-2xl max-w-lg">
           <DialogHeader><DialogTitle>{isActivatingMode ? "Aktifkan Pengguna" : "Nonaktifkan Pengguna"}</DialogTitle><DialogDescription>{isActivatingMode ? `Aktifkan kembali ${deactivatingUser?.nama}?` : `Yakin ingin menonaktifkan ${deactivatingUser?.nama}?`}</DialogDescription></DialogHeader>
@@ -1831,7 +1882,7 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG BULK ACTION */}
+      {/* DIALOG BULK ACTION (tidak berubah) */}
       <Dialog open={bulkActionDialogOpen} onOpenChange={setBulkActionDialogOpen}>
         <DialogContent className="rounded-2xl max-w-lg">
           <DialogHeader><DialogTitle>{bulkActionType === "activate" ? "Aktifkan Massal" : "Nonaktifkan Massal"}</DialogTitle><DialogDescription>Anda akan {bulkActionType === "activate" ? "mengaktifkan" : "menonaktifkan"} {bulkActionData?.users.length} pengguna.</DialogDescription></DialogHeader>
@@ -1840,7 +1891,7 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG KELAS - DENGAN POPOVER PENCARIAN */}
+      {/* DIALOG KELAS (DENGAN JURUSAN) */}
       <Dialog open={kelasDialogOpen} onOpenChange={setKelasDialogOpen}>
         <DialogContent className="rounded-2xl">
           <DialogHeader><DialogTitle>{editingKelas ? "Ubah Kelas" : "Tambah Kelas Baru"}</DialogTitle></DialogHeader>
@@ -1927,6 +1978,38 @@ export default function UserManagement() {
                 </PopoverContent>
               </Popover>
             </div>
+            {/* DROPDOWN JURUSAN - HANYA UNTUK ADMIN SUPER */}
+            {isAdminSuper && (
+              <div>
+                <Label className="text-slate-700 font-medium text-xs sm:text-sm">Jurusan</Label>
+                <Select
+                  value={kelasForm.id_jurusan || "none"}
+                  onValueChange={(value) => setKelasForm({ ...kelasForm, id_jurusan: value === "none" ? "" : value })}
+                >
+                  <SelectTrigger className="rounded-lg border-slate-200 h-9 text-sm mt-1">
+                    <SelectValue placeholder="Pilih jurusan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Tanpa Jurusan</SelectItem>
+                    {jurusanList.map((jurusan) => (
+                      <SelectItem key={jurusan.id_jurusan} value={jurusan.id_jurusan.toString()}>
+                        {jurusan.nama_jurusan}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {isAdminJurusan && user?.id_jurusan && (
+              <div>
+                <Label className="text-slate-700 font-medium text-xs sm:text-sm">Jurusan</Label>
+                <Input
+                  value={jurusanList.find(j => j.id_jurusan === user.id_jurusan)?.nama_jurusan || "-"}
+                  disabled
+                  className="bg-slate-50 rounded-lg h-9 text-sm mt-1"
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -1952,7 +2035,7 @@ export default function UserManagement() {
         <DialogContent className="rounded-2xl max-w-lg"><DialogHeader><DialogTitle>{isActivatingKelasMode ? "Aktifkan Kelas" : "Nonaktifkan Kelas"}</DialogTitle><DialogDescription>{isActivatingKelasMode ? `Aktifkan kembali kelas ${togglingKelas?.nama}?` : `Yakin ingin menonaktifkan kelas ${togglingKelas?.nama}?`}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setToggleKelasDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button><Button onClick={executeToggleActiveKelas} disabled={isSavingKelas}>{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isActivatingKelasMode ? "Aktifkan" : "Nonaktifkan"}</Button></DialogFooter></DialogContent>
       </Dialog>
 
-      {/* IMPORT KELAS DIALOGS */}
+      {/* IMPORT KELAS DIALOGS (tidak berubah) */}
       <Dialog open={importKelasDialogOpen} onOpenChange={setImportKelasDialogOpen}>
         <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader><DialogTitle>Impor Kelas dari Excel</DialogTitle><DialogDescription>Unggah file Excel untuk menambah kelas secara massal</DialogDescription></DialogHeader>
@@ -1965,7 +2048,7 @@ export default function UserManagement() {
         <DialogContent className="rounded-xl max-w-md"><DialogHeader><DialogTitle>Wali Kelas Tidak Ditemukan</DialogTitle><DialogDescription>Beberapa NIK wali kelas tidak ditemukan.</DialogDescription></DialogHeader><div className="bg-yellow-50 p-3 rounded-lg"><p className="font-medium">NIK tidak ditemukan:</p><ul className="list-disc list-inside mt-1">{Array.from(importKelasMissingGurus).map(nik => <li key={nik} className="font-mono">{nik}</li>)}</ul><p className="text-sm mt-2">Baris dengan NIK tidak ditemukan akan dilewati. Lanjutkan?</p></div><DialogFooter><Button variant="outline" onClick={() => { setMissingGuruDialogOpen(false); setImportKelasDialogOpen(false); setImportKelasRawData([]); }}>Batalkan Impor</Button><Button onClick={handleSkipMissingGurus} className="bg-green-600">Lanjutkan (Lewati Baris Bermasalah)</Button></DialogFooter></DialogContent>
       </Dialog>
 
-      {/* IMPORT USER DIALOG */}
+      {/* IMPORT USER DIALOG (tidak berubah) */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader><DialogTitle>Impor {userType === "guru" ? "Guru" : userType === "siswa" ? "Siswa" : userType === "admin_jurusan" ? "Admin Jurusan" : "BK"} dari Excel</DialogTitle><DialogDescription>Unggah file Excel untuk menambah data secara massal</DialogDescription></DialogHeader>
