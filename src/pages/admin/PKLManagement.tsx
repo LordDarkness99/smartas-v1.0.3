@@ -1,5 +1,6 @@
 // src/pages/admin/PKLManagement.tsx
 // Versi dengan Google Maps Embed dan tutorial penggunaan
+// Ditambahkan scroll pada dialog edit/tambah PKL
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -970,9 +971,9 @@ export default function PklManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Lokasi PKL - dengan Google Maps Embed */}
+      {/* Dialog Lokasi PKL - dengan Google Maps Embed DAN SCROLL */}
       <Dialog open={pklDialogOpen} onOpenChange={setPklDialogOpen}>
-        <DialogContent className="rounded-2xl max-w-[95vw] sm:max-w-2xl p-4 sm:p-6">
+        <DialogContent className="rounded-2xl max-w-[95vw] sm:max-w-2xl p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base sm:text-xl flex items-center gap-2">
               <Building2 className="h-5 w-5 text-[#2C5EAD]"/> 
