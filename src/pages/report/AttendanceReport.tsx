@@ -394,6 +394,17 @@ export default function AttendanceReport() {
         .lte("waktu_presensi", end);
       if (presensiError) throw presensiError;
 
+      if (!presensiData || presensiData.length === 0) {
+        toast({
+          title: "Tidak Ada Data",
+          description: "Tidak ada data presensi harian pada rentang tanggal yang dipilih.",
+          variant: "default",
+        });
+        setRekapHarian([]);
+        setIsLoading(false);
+        return;
+      }
+
       const rekap: RekapHarian[] = siswaData.map((siswa: any) => {
         const siswaPresensi = presensiData?.filter(p => p.id_siswa === siswa.id_siswa) || [];
         return {
@@ -453,6 +464,17 @@ export default function AttendanceReport() {
 
       const { data: presensiData, error: presensiError } = await query;
       if (presensiError) throw presensiError;
+
+      if (!presensiData || presensiData.length === 0) {
+        toast({
+          title: "Tidak Ada Data",
+          description: `Tidak ada data presensi mata pelajaran untuk kelas ${getKelasNameMapel()} pada rentang tanggal yang dipilih.`,
+          variant: "default",
+        });
+        setRekapMapel([]);
+        setIsLoading(false);
+        return;
+      }
 
       // Akumulasi per siswa dan nama mapel (normalisasi)
       const mapelMap = new Map<string, { hadir: number; izin: number; sakit: number; alfa: number; displayName: string }>();
@@ -553,6 +575,17 @@ export default function AttendanceReport() {
       const siswaIds = siswaKelas.map(s => s.id_siswa);
       const presensiKelas = presensiData?.filter(p => siswaIds.includes(p.id_siswa)) || [];
 
+      if (presensiKelas.length === 0) {
+        toast({
+          title: "Tidak Ada Data",
+          description: `Tidak ada data presensi untuk kelas ${getKelasNameEvaluasi()} pada rentang tanggal yang dipilih. Tidak dapat melakukan evaluasi.`,
+          variant: "default",
+        });
+        setEvaluasiPembelajaran(null);
+        setIsLoading(false);
+        return;
+      }
+
       const ekspresiDetail = {
         neutral: 0,
         happy: 0,
@@ -586,6 +619,7 @@ export default function AttendanceReport() {
       let pesan: string;
 
       if (totalEkspresi === 0) {
+        // Jika ada presensi tapi tidak ada data ekspresi
         rekomendasi = "PERTAHANKAN";
         pesan = "Belum terdapat data ekspresi untuk periode ini. Lanjutkan metode pembelajaran yang ada.";
       } else if (ekspresiPositif > ekspresiNegatif) {
@@ -1353,28 +1387,44 @@ export default function AttendanceReport() {
         <div className="print:hidden text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Laporan Presensi - SmartAS</p><p className="text-[10px] text-slate-300 mt-1">Sistem Informasi Akademik</p></div>
       </div>
 
-      <style>{`
-        @media print {
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          html, body { margin: 0 !important; padding: 0 !important; background: white; font-size: 11pt; font-family: 'Times New Roman', Times, serif; overflow: visible !important; }
-          .print\\:hidden { display: none !important; }
-          .print\\:block { display: block !important; }
-          .print\\:mt-0 { margin-top: 0 !important; }
-          .print\\:p-0 { padding: 0 !important; }
-          .print\\:border-0 { border: 0 !important; }
-          .print\\:overflow-visible { overflow: visible !important; }
-          ::-webkit-scrollbar { display: none !important; }
-          body { overflow-y: visible !important; }
-          table { width: 100%; border-collapse: collapse; margin: 0 auto; font-size: 10pt; }
-          th, td { border: 1px solid #000; padding: 6px 8px; vertical-align: top; }
-          th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
-          td { text-align: left; }
-          td.text-center { text-align: center; }
-          thead { display: table-header-group; }
-          tr { page-break-inside: avoid; }
-          @page { size: A4; margin: 2cm; }
-        }
-      `}</style>
+<style>{`
+  @media print {
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { margin: 0 !important; padding: 0 !important; background: white !important; font-size: 11pt; font-family: 'Times New Roman', Times, serif; overflow: visible !important; }
+    .print\\:hidden { display: none !important; }
+    .print\\:block { display: block !important; }
+    .print\\:mt-0 { margin-top: 0 !important; }
+    .print\\:p-0 { padding: 0 !important; }
+    .print\\:border-0 { border: none !important; }
+    .print\\:overflow-visible { overflow: visible !important; }
+
+    /* HILANGKAN SEMUA SCROLL DI CETAK */
+    * { overflow: visible !important; }
+    table { 
+      width: 100% !important; 
+      border-collapse: collapse !important; 
+      margin: 0 auto !important; 
+      font-size: 10pt !important;
+      min-width: 0 !important; /* biar gak memaksa lebar minimum */
+    }
+    th, td { 
+      border: 1px solid #000 !important; 
+      padding: 6px 8px !important; 
+      vertical-align: top !important; 
+      word-break: break-word;
+    }
+    th { 
+      background-color: #f2f2f2 !important; 
+      font-weight: bold !important; 
+      text-align: center !important; 
+    }
+    td { text-align: left !important; }
+    td.text-center { text-align: center !important; }
+    thead { display: table-header-group !important; }
+    tr { page-break-inside: avoid !important; }
+    @page { size: A4; margin: 2cm; }
+  }
+`}</style>
     </div>
   );
 }
