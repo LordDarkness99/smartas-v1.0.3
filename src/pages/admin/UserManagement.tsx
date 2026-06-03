@@ -36,7 +36,7 @@ import {
   Upload, Download, AlertCircle, Loader2, Edit, RefreshCw,
   Plus, Sun, Moon, Cloud, Users, School, User, UserCheck,
   Sparkles, Shield, GraduationCap, Search, X, Filter,
-  UserMinus, UserPlus, Building2, ChevronDown,
+  PowerOff, Power, Building2, ChevronDown,
 } from "lucide-react";
 
 // ==================== TYPES ====================
@@ -1749,7 +1749,7 @@ export default function UserManagement() {
                               {isSiswa && <TableCell>{(item as SiswaData).nama_kelas || "-"}</TableCell>}
                               {isAdminJur && <TableCell>{(item as AdminJurusanData).jurusan_nama || "-"}</TableCell>}
                               <TableCell><Badge className={item.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>{item.aktif ? "Aktif" : "Nonaktif"}</Badge></TableCell>
-                              <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditDialog(item)}><Edit className="h-4 w-4 text-[#2C5EAD]" /></Button>{item.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmDeactivate(item)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmActivate(item)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}</div></TableCell>
+                              <TableCell className="text-center"><div className="flex gap-1 justify-center"><Button variant="ghost" size="sm" onClick={() => openEditDialog(item)}><Edit className="h-4 w-4 text-[#2C5EAD]" /></Button>{item.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmDeactivate(item)}><PowerOff className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmActivate(item)}><Power className="h-4 w-4 text-green-500" /></Button>}</div></TableCell>
                             </TableRow>);
                           })}
                           {paginatedUserList.length === 0 && <TableRow><TableCell colSpan={selectMode ? 10 : 9} className="text-center py-8 text-slate-500"><Users className="h-8 w-8 mx-auto mb-2 text-slate-300" />Tidak ada data</TableCell></TableRow>}
@@ -1809,8 +1809,8 @@ export default function UserManagement() {
                                 <div className="flex gap-1 justify-center">
                                   <Button variant="ghost" size="sm" onClick={() => handleEditKelas(kelas)}><Edit className="h-4 w-4 text-[#2C5EAD]" /></Button>
                                   {kelas.aktif ? 
-                                    <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, false)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : 
-                                    <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, true)}><UserPlus className="h-4 w-4 text-green-500" /></Button>
+                                    <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, false)}><PowerOff className="h-4 w-4 text-red-500" /></Button> : 
+                                    <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveKelas(kelas, true)}><Power className="h-4 w-4 text-green-500" /></Button>
                                   }
                                 </div>
                               </TableCell>

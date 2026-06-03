@@ -61,8 +61,8 @@ import {
   Cloud,
   Sparkles,
   Search,
-  UserMinus,
-  UserPlus,
+  PowerOff,
+  Power,
   Upload,
   Download,
   X,
@@ -1305,8 +1305,8 @@ export default function ScheduleManagement() {
                                       <div className="flex gap-1 justify-center">
                                         <Button variant="ghost" size="sm" onClick={() => openEditJadwal(j)}><Edit className="h-4 w-4 text-[#2C5EAD]" /></Button>
                                         {j.aktif ? 
-                                          <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : 
-                                          <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)}><UserPlus className="h-4 w-4 text-green-500" /></Button>
+                                          <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)}><PowerOff className="h-4 w-4 text-red-500" /></Button> : 
+                                          <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)}><Power className="h-4 w-4 text-green-500" /></Button>
                                         }
                                       </div>
                                     </TableCell>
@@ -1354,8 +1354,8 @@ export default function ScheduleManagement() {
                               <div className="flex gap-2 mt-3 pt-3 border-t">
                                 <Button variant="ghost" size="sm" onClick={() => openEditJadwal(j)} className="flex-1 text-xs text-[#2C5EAD]"><Edit className="h-3.5 w-3.5 mr-1" /> Edit</Button>
                                 {j.aktif ? 
-                                  <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)} className="flex-1 text-red-500 text-xs"><UserMinus className="h-3.5 w-3.5 mr-1" /> Nonaktif</Button> : 
-                                  <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)} className="flex-1 text-green-500 text-xs"><UserPlus className="h-3.5 w-3.5 mr-1" /> Aktif</Button>
+                                  <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, false)} className="flex-1 text-red-500 text-xs"><PowerOff className="h-3.5 w-3.5 mr-1" /> Nonaktif</Button> : 
+                                  <Button variant="ghost" size="sm" onClick={() => confirmToggleJadwal(j, true)} className="flex-1 text-green-500 text-xs"><Power className="h-3.5 w-3.5 mr-1" /> Aktif</Button>
                                 }
                               </div>
                             )}
@@ -1429,7 +1429,7 @@ export default function ScheduleManagement() {
                                 <TableCell className="text-center">
                                   <div className="flex gap-1 justify-center">
                                     <Button variant="ghost" size="sm" onClick={() => openEditMapel(m)}><Edit className="h-4 w-4 text-[#2C5EAD]" /></Button>
-                                    {m.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleMapel(m, false)}><UserMinus className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleMapel(m, true)}><UserPlus className="h-4 w-4 text-green-500" /></Button>}
+                                    {m.aktif ? <Button variant="ghost" size="sm" onClick={() => confirmToggleMapel(m, false)}><PowerOff className="h-4 w-4 text-red-500" /></Button> : <Button variant="ghost" size="sm" onClick={() => confirmToggleMapel(m, true)}><Power className="h-4 w-4 text-green-500" /></Button>}
                                   </div>
                                 </TableCell>
                               )}
