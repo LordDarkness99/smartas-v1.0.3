@@ -72,11 +72,14 @@ interface Siswa {
   id_pkl: number | null;
 }
 
+// Perubahan: Interface PresensiHarian sekarang mencakup data pulang
 interface PresensiHarian {
   id_pres_harian: number | null;
   id_siswa: number;
   status_presensi: string | null;
   waktu_presensi: string | null;
+  status_pulang: string | null;
+  waktu_pulang: string | null;
   siswa?: Siswa;
 }
 
@@ -135,7 +138,7 @@ export default function AttendanceManagement() {
   const [isFetchingHarian, setIsFetchingHarian] = useState(false);
   const [isSavingHarian, setIsSavingHarian] = useState(false);
   const [pendingHarianMasuk, setPendingHarianMasuk] = useState<Map<number, string>>(new Map());
-  // Untuk presensi pulang: map menyimpan boolean (true = Pulang, false = Tidak Pulang)
+  // Untuk presensi pulang: map menyimpan status pulang (true = Pulang, false = Tidak Pulang)
   const [pendingHarianPulangMap, setPendingHarianPulangMap] = useState<Map<number, boolean>>(new Map());
   const [autoAlfaProcessedHarian, setAutoAlfaProcessedHarian] = useState(false);
   const [presensiTypeHarian, setPresensiTypeHarian] = useState<"masuk" | "pulang">("masuk");
@@ -416,7 +419,7 @@ export default function AttendanceManagement() {
     init();
   }, []);
 
-  // ========== PRESENSI HARIAN ==========
+  // ========== PRESENSI HARIAN (DIPERBAIKI UNTUK PULANG) ==========
   const fetchPresensiHarian = async (kelasIdParam?: string, tanggalParam?: string, skipAutoAlfa = false) => {
     const kelasId = kelasIdParam ?? selectedKelasHarian;
     const tanggal = tanggalParam ?? selectedTanggal;
@@ -445,21 +448,16 @@ export default function AttendanceManagement() {
       const startDate = `${tanggal}T00:00:00`;
       const endDate = `${tanggal}T23:59:59`;
       
-      let query = supabase
+      // Ambil semua record presensi harian untuk tanggal tersebut (tanpa filter tipe)
+      const { data: presensiData, error: presensiError } = await supabase
         .from("presensi_harian")
         .select("*")
         .gte("waktu_presensi", startDate)
         .lte("waktu_presensi", endDate);
       
-      if (presensiTypeHarian === "masuk") {
-        query = query.neq("status_presensi", "Pulang");
-      } else {
-        query = query.eq("status_presensi", "Pulang");
-      }
-      
-      const { data: presensiData, error: presensiError } = await query;
       if (presensiError) throw presensiError;
 
+      // Gabungkan data siswa dengan data presensi yang ada
       const combined = siswaList.map((siswa) => {
         const existing = presensiData?.find((p) => p.id_siswa === siswa.id_siswa);
         return {
@@ -467,11 +465,14 @@ export default function AttendanceManagement() {
           id_siswa: siswa.id_siswa,
           status_presensi: existing?.status_presensi || null,
           waktu_presensi: existing?.waktu_presensi || null,
+          status_pulang: existing?.status_pulang || null,
+          waktu_pulang: existing?.waktu_pulang || null,
           siswa: siswa,
         };
       });
       setPresensiHarian(combined);
 
+      // Auto Alfa hanya untuk mode masuk, bukan pulang
       if (presensiTypeHarian === "masuk" && !skipAutoAlfa && !autoAlfaProcessedHarian && combined.some(p => !p.status_presensi)) {
         setAutoAlfaProcessedHarian(true);
         const belumAbsen = combined.filter(p => !p.status_presensi);
@@ -496,6 +497,7 @@ export default function AttendanceManagement() {
 
   const savePresensiHarian = async () => {
     if (presensiTypeHarian === "masuk") {
+      // Sama seperti sebelumnya (menyimpan status masuk)
       if (pendingHarianMasuk.size === 0) {
         toast({ title: "Info", description: "Tidak ada perubahan yang perlu disimpan" });
         return;
@@ -525,7 +527,7 @@ export default function AttendanceManagement() {
         setIsSavingHarian(false);
       }
     } else {
-      // Presensi Pulang - menggunakan map pendingHarianPulangMap
+      // ========== PRESENSI PULANG (DIPERBAIKI) ==========
       const hasChanges = pendingHarianPulangMap.size > 0;
       if (!hasChanges) {
         toast({ title: "Info", description: "Tidak ada perubahan yang perlu disimpan" });
@@ -534,30 +536,41 @@ export default function AttendanceManagement() {
       setIsSavingHarian(true);
       try {
         for (const item of presensiHarian) {
-          const desiredPulang = pendingHarianPulangMap.get(item.id_siswa) ?? (item.status_presensi === "Pulang");
-          const originalPulang = item.status_presensi === "Pulang";
+          const desiredPulang = pendingHarianPulangMap.get(item.id_siswa) ?? (item.status_pulang === "Pulang");
+          const originalPulang = item.status_pulang === "Pulang";
+          
           if (desiredPulang === originalPulang) continue;
           
           if (desiredPulang) {
-            // Harus pulang
+            // Siswa pulang: update atau insert record dengan mengisi kolom pulang
             if (item.id_pres_harian) {
+              // Update record yang sudah ada (masuk) dengan menambah data pulang
               await supabase
                 .from("presensi_harian")
-                .update({ status_presensi: "Pulang", waktu_presensi: new Date().toISOString() })
+                .update({ 
+                  status_pulang: "Pulang", 
+                  waktu_pulang: new Date().toISOString() 
+                })
                 .eq("id_pres_harian", item.id_pres_harian);
             } else {
+              // Jika belum ada record sama sekali (belum absen masuk), buat record baru dengan status_pulang
               await supabase.from("presensi_harian").insert({
                 id_siswa: item.id_siswa,
-                status_presensi: "Pulang",
-                waktu_presensi: new Date().toISOString(),
+                status_presensi: null, // kosong, karena belum masuk
+                waktu_presensi: null,
+                status_pulang: "Pulang",
+                waktu_pulang: new Date().toISOString(),
               });
             }
           } else {
-            // Harus tidak pulang -> hapus record pulang
+            // Batalkan pulang: hapus data pulang (set null)
             if (item.id_pres_harian) {
               await supabase
                 .from("presensi_harian")
-                .delete()
+                .update({ 
+                  status_pulang: null, 
+                  waktu_pulang: null 
+                })
                 .eq("id_pres_harian", item.id_pres_harian);
             }
           }
@@ -606,7 +619,7 @@ export default function AttendanceManagement() {
     setPendingHarianPulangMap(prev => {
       const newMap = new Map(prev);
       // Jika nilai sama dengan original, hapus dari pending (tidak perlu simpan)
-      const original = presensiHarian.find(p => p.id_siswa === siswaId)?.status_presensi === "Pulang";
+      const original = presensiHarian.find(p => p.id_siswa === siswaId)?.status_pulang === "Pulang";
       if (isPulang === original) {
         newMap.delete(siswaId);
       } else {
@@ -620,7 +633,7 @@ export default function AttendanceManagement() {
   const handleBulkPulangTrue = () => {
     const newMap = new Map<number, boolean>();
     for (const item of presensiHarian) {
-      const original = item.status_presensi === "Pulang";
+      const original = item.status_pulang === "Pulang";
       if (!original) {
         newMap.set(item.id_siswa, true);
       }
@@ -654,7 +667,7 @@ export default function AttendanceManagement() {
     fetchPresensiHarian(pendingHarianKelas, pendingHarianTanggal);
   };
 
-  // ========== PRESENSI MAPEL ==========
+  // ========== PRESENSI MAPEL (tidak berubah) ==========
   const fetchPresensiMapel = async (jadwalParam?: Jadwal | null, skipAutoAlfa = false) => {
     const jadwal = jadwalParam ?? selectedJadwal;
     if (!jadwal) return;
@@ -781,7 +794,6 @@ export default function AttendanceManagement() {
     toast({ title: "Info", description: "Perubahan yang belum disimpan dibatalkan" });
   };
 
-  // Handler untuk konfirmasi pilih jadwal mapel
   const handleSelectJadwal = (jadwal: Jadwal) => {
     setPendingMapelJadwal(jadwal);
     setConfirmMapelOpen(true);
@@ -798,7 +810,7 @@ export default function AttendanceManagement() {
     setConfirmMapelOpen(false);
   };
 
-  // ========== QR GENERATION ==========
+  // ========== QR GENERATION (tidak berubah) ==========
   const generateQRCode = async (jadwal: Jadwal) => {
     const daysMap: Record<string, number> = {
       Senin: 1, Selasa: 2, Rabu: 3, Kamis: 4, Jumat: 5, Sabtu: 6, Minggu: 0,
@@ -885,7 +897,7 @@ export default function AttendanceManagement() {
 
   return (
     <div className="min-h-screen bg-[#F0F7FC]">
-      {/* HEADER */}
+      {/* HEADER (tidak berubah) */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] shadow-xl mx-4 mt-4">
         <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
         <div className="relative container mx-auto px-4 sm:px-6 py-4 sm:py-6">
@@ -1042,21 +1054,19 @@ export default function AttendanceManagement() {
                                     </TableHead>
                                   ))
                                 ) : (
-                                  // Header untuk presensi pulang: hanya kolom "Pulang" dengan checkbox bulk
                                   <TableHead className="text-center font-semibold text-xs sm:text-sm min-w-[100px]">
                                     <div className="flex flex-col items-center gap-1">
                                       <span>Pulang</span>
                                       <Checkbox 
                                         checked={presensiHarian.length > 0 && presensiHarian.every(item => 
-                                          (pendingHarianPulangMap.get(item.id_siswa) ?? (item.status_presensi === "Pulang")) === true
+                                          (pendingHarianPulangMap.get(item.id_siswa) ?? (item.status_pulang === "Pulang")) === true
                                         )} 
                                         onCheckedChange={(checked) => {
                                           if (checked) handleBulkPulangTrue();
                                           else {
-                                            // Jika ingin membatalkan semua centang, kita harus set semua menjadi tidak pulang
                                             const newMap = new Map<number, boolean>();
                                             for (const item of presensiHarian) {
-                                              const original = item.status_presensi === "Pulang";
+                                              const original = item.status_pulang === "Pulang";
                                               if (original) {
                                                 newMap.set(item.id_siswa, false);
                                               }
@@ -1104,7 +1114,7 @@ export default function AttendanceManagement() {
                                     );
                                   } else {
                                     // Presensi Pulang: checkbox centang = pulang
-                                    const isPulang = pendingHarianPulangMap.get(item.id_siswa) ?? (item.status_presensi === "Pulang");
+                                    const isPulang = pendingHarianPulangMap.get(item.id_siswa) ?? (item.status_pulang === "Pulang");
                                     return (
                                       <TableRow key={item.id_siswa} className="hover:bg-slate-50 transition-colors">
                                         <TableCell className="text-center font-mono text-xs sm:text-sm">{item.siswa?.nis}</TableCell>
@@ -1138,8 +1148,9 @@ export default function AttendanceManagement() {
                 )}
               </TabsContent>
 
-              {/* TAB PRESENSI MAPEL */}
+              {/* TAB PRESENSI MAPEL (tidak berubah) */}
               <TabsContent value="mapel" className="space-y-4 sm:space-y-5">
+                {/* ... kode mapel tetap sama seperti asli ... */}
                 <div className="flex flex-col sm:flex-row gap-4 items-start">
                   <div className="w-full sm:w-64 flex-shrink-0">
                     <Label className="text-slate-700 text-xs sm:text-sm font-medium">Pilih Kelas</Label>
@@ -1329,9 +1340,11 @@ export default function AttendanceManagement() {
                 <p><strong>Tanggal:</strong> {pendingHarianTanggal}</p>
                 <p><strong>Jenis:</strong> {presensiTypeHarian === "masuk" ? "Presensi Masuk" : "Presensi Pulang"}</p>
               </div>
-              <p className="text-xs text-amber-600 mt-2">
-                ⚠️ Siswa yang belum melakukan presensi masuk akan otomatis diisi <strong>Alfa</strong> (kecuali sudah ada presensi sebelumnya).
-              </p>
+              {presensiTypeHarian === "masuk" && (
+                <p className="text-xs text-amber-600 mt-2">
+                  ⚠️ Siswa yang belum melakukan presensi masuk akan otomatis diisi <strong>Alfa</strong> (kecuali sudah ada presensi sebelumnya).
+                </p>
+              )}
             </div>
             <DialogFooter className="gap-2 sm:gap-0">
               <Button variant="outline" onClick={() => setConfirmHarianOpen(false)} className="rounded-lg">

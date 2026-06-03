@@ -319,24 +319,33 @@ export type Database = {
       presensi_harian: {
         Row: {
           ekspresi: string | null
+          ekspresi_pul: string | null
           id_pres_harian: number
           id_siswa: number
           status_presensi: string | null
+          status_pulang: string | null
           waktu_presensi: string | null
+          waktu_pulang: string | null
         }
         Insert: {
           ekspresi?: string | null
+          ekspresi_pul?: string | null
           id_pres_harian?: number
           id_siswa: number
           status_presensi?: string | null
+          status_pulang?: string | null
           waktu_presensi?: string | null
+          waktu_pulang?: string | null
         }
         Update: {
           ekspresi?: string | null
+          ekspresi_pul?: string | null
           id_pres_harian?: number
           id_siswa?: number
           status_presensi?: string | null
+          status_pulang?: string | null
           waktu_presensi?: string | null
+          waktu_pulang?: string | null
         }
         Relationships: [
           {
@@ -440,14 +449,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      insert_missing_presensi_harian: {
-        Args: { p_end_date: string; p_start_date: string; p_status: string }
-        Returns: undefined
-      }
-      insert_missing_presensi_mapel: {
-        Args: { p_date: string }
-        Returns: undefined
-      }
+      [_ in never]: never
     }
     Enums: {
       [_ in never]: never
