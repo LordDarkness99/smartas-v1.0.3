@@ -97,10 +97,10 @@ interface EvaluasiPembelajaran {
   pesan: string;
 }
 
-const SCHOOL_NAME = "SMK NEGERI 1 CONTOH";
+const SCHOOL_NAME = "SMK NEGERI 1 HARVARD";
 const SCHOOL_ADDRESS = "Jl. Pendidikan No. 123, Kota Contoh, Provinsi Contoh";
 const SCHOOL_PHONE = "(021) 1234567";
-const SCHOOL_EMAIL = "info@smkn1contoh.sch.id";
+const SCHOOL_EMAIL = "info@smkn1HARVARD.sch.id";
 const SCHOOL_NPSN = "12345678";
 
 const EKSPRESI_POSITIF = ["neutral", "happy", "surprised"];
@@ -1316,10 +1316,27 @@ export default function AttendanceReport() {
                 </TableBody>
               </Table>
             </div>
+            {/* Tanda tangan untuk laporan harian/mapel (username diganti Petugas) */}
             <div className="hidden print:block mt-8">
               <div className="flex justify-between mt-12">
-                <div className="text-center w-1/2"><p>Mengetahui,</p><p className="mt-6 font-semibold">Kepala Sekolah</p><div className="mt-8"><p className="mt-8">_________________________</p><p className="text-sm">NIP. 196912311997021001</p></div></div>
-                <div className="text-center w-1/2"><p>Petugas,</p><p className="mt-6 font-semibold">{user?.nama || userRoleDisplay()}</p><div className="mt-8"><p className="mt-8">_________________________</p><p className="text-sm">NIP. 197501012005012001</p></div></div>
+                <div className="text-center w-1/2">
+                  <p>Mengetahui,</p>
+                  <p className="mt-2 font-semibold">Kepala Sekolah</p>
+                  <div className="mt-6">
+                    <p className="mt-20">_________________________</p>
+                    <p className="text-sm mt-2">&nbsp;</p>
+                    <p className="text-sm">NIK. &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</p>
+                  </div>
+                </div>
+                <div className="text-center w-1/2">
+                  <p>&nbsp;</p>
+                  <p className="mt-2 font-semibold">Petugas</p>
+                  <div className="mt-6">
+                    <p className="mt-20">_________________________</p>
+                    <p className="text-sm mt-2">&nbsp;</p>
+                    <p className="text-sm">NIK. &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</p>
+                  </div>
+                </div>
               </div>
               <div className="text-center text-xs mt-8"><p>Dicetak pada: {new Date().toLocaleString("id-ID")}</p></div>
             </div>
@@ -1366,9 +1383,26 @@ export default function AttendanceReport() {
                 </tbody>
               </table>
             </div>
+            {/* Tanda tangan evaluasi (username diganti Petugas) */}
             <div className="flex justify-between mt-8">
-              <div className="text-center w-1/2"><p>Mengetahui,</p><p className="mt-6 font-semibold">Kepala Sekolah</p><div className="mt-8"><p className="mt-8">_________________________</p><p className="text-sm">NIP. 196912311997021001</p></div></div>
-              <div className="text-center w-1/2"><p>Petugas,</p><p className="mt-6 font-semibold">{user?.nama || userRoleDisplay()}</p><div className="mt-8"><p className="mt-8">_________________________</p><p className="text-sm">NIP. 197501012005012001</p></div></div>
+              <div className="text-center w-1/2">
+                <p>Mengetahui,</p>
+                <p className="mt-2 font-semibold">Kepala Sekolah</p>
+                <div className="mt-6">
+                  <p className="mt-20">_________________________</p>
+                  <p className="text-sm mt-2">&nbsp;</p>
+                  <p className="text-sm">NIK. &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</p>
+                </div>
+              </div>
+              <div className="text-center w-1/2">
+                <p>&nbsp;</p>
+                <p className="mt-2 font-semibold">Petugas</p>
+                <div className="mt-6">
+                  <p className="mt-20">_________________________</p>
+                  <p className="text-sm mt-2">&nbsp;</p>
+                  <p className="text-sm">NIK. &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</p>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1387,44 +1421,44 @@ export default function AttendanceReport() {
         <div className="print:hidden text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Laporan Presensi - SmartAS</p><p className="text-[10px] text-slate-300 mt-1">Sistem Informasi Akademik</p></div>
       </div>
 
-<style>{`
-  @media print {
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { margin: 0 !important; padding: 0 !important; background: white !important; font-size: 11pt; font-family: 'Times New Roman', Times, serif; overflow: visible !important; }
-    .print\\:hidden { display: none !important; }
-    .print\\:block { display: block !important; }
-    .print\\:mt-0 { margin-top: 0 !important; }
-    .print\\:p-0 { padding: 0 !important; }
-    .print\\:border-0 { border: none !important; }
-    .print\\:overflow-visible { overflow: visible !important; }
+  <style>{`
+    @media print {
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { margin: 0 !important; padding: 0 !important; background: white !important; font-size: 11pt; font-family: 'Times New Roman', Times, serif; overflow: visible !important; }
+      .print\\:hidden { display: none !important; }
+      .print\\:block { display: block !important; }
+      .print\\:mt-0 { margin-top: 0 !important; }
+      .print\\:p-0 { padding: 0 !important; }
+      .print\\:border-0 { border: none !important; }
+      .print\\:overflow-visible { overflow: visible !important; }
 
-    /* HILANGKAN SEMUA SCROLL DI CETAK */
-    * { overflow: visible !important; }
-    table { 
-      width: 100% !important; 
-      border-collapse: collapse !important; 
-      margin: 0 auto !important; 
-      font-size: 10pt !important;
-      min-width: 0 !important; /* biar gak memaksa lebar minimum */
+      /* HILANGKAN SEMUA SCROLL DI CETAK */
+      * { overflow: visible !important; }
+      table { 
+        width: 100% !important; 
+        border-collapse: collapse !important; 
+        margin: 0 auto !important; 
+        font-size: 10pt !important;
+        min-width: 0 !important; /* biar gak memaksa lebar minimum */
+      }
+      th, td { 
+        border: 1px solid #000 !important; 
+        padding: 6px 8px !important; 
+        vertical-align: top !important; 
+        word-break: break-word;
+      }
+      th { 
+        background-color: #f2f2f2 !important; 
+        font-weight: bold !important; 
+        text-align: center !important; 
+      }
+      td { text-align: left !important; }
+      td.text-center { text-align: center !important; }
+      thead { display: table-header-group !important; }
+      tr { page-break-inside: avoid !important; }
+      @page { size: A4; margin: 2cm; }
     }
-    th, td { 
-      border: 1px solid #000 !important; 
-      padding: 6px 8px !important; 
-      vertical-align: top !important; 
-      word-break: break-word;
-    }
-    th { 
-      background-color: #f2f2f2 !important; 
-      font-weight: bold !important; 
-      text-align: center !important; 
-    }
-    td { text-align: left !important; }
-    td.text-center { text-align: center !important; }
-    thead { display: table-header-group !important; }
-    tr { page-break-inside: avoid !important; }
-    @page { size: A4; margin: 2cm; }
-  }
-`}</style>
+  `}</style>
     </div>
   );
 }

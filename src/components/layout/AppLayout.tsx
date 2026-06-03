@@ -21,11 +21,14 @@ export function AppLayout() {
     <SidebarProvider>
       <div className="flex h-screen w-full bg-gradient-to-br from-indigo-50 via-white to-purple-50 overflow-hidden">
         
-        <AppSidebar userRole={user?.peran} userName={user?.nama} />
+        {/* Sidebar hanya di layar, sembunyi saat cetak */}
+        <div className="print:hidden">
+          <AppSidebar userRole={user?.peran} userName={user?.nama} />
+        </div>
         
         <main className="flex-1 flex flex-col min-w-0">
-          {/* HEADER MOBILE - putih bersih */}
-          <header className="flex h-16 shrink-0 items-center justify-between border-b border-indigo-100 bg-white px-4 lg:hidden shadow-sm">
+          {/* HEADER MOBILE - sembunyi saat cetak */}
+          <header className="flex h-16 shrink-0 items-center justify-between border-b border-indigo-100 bg-white px-4 lg:hidden shadow-sm print:hidden">
             <div className="flex items-center gap-2">
               <img src="/New.png" alt="Logo" className="h-8 w-auto" />
               <span className="text-xl font-black italic tracking-tighter bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] bg-clip-text text-transparent uppercase leading-[0.8]">
@@ -39,12 +42,14 @@ export function AppLayout() {
                 {userInitials}
               </div>
 
-              {/* Tombol hamburger - warna disesuaikan dengan palette */}
-              <SidebarTrigger>
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-[#C4E2F5] text-[#2C5EAD] transition-all active:scale-90">
-                  <Menu className="h-7 w-7" />
-                </div>
-              </SidebarTrigger>
+              {/* Tombol hamburger - sembunyi saat cetak */}
+              <div className="print:hidden">
+                <SidebarTrigger>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-[#C4E2F5] text-[#2C5EAD] transition-all active:scale-90">
+                    <Menu className="h-7 w-7" />
+                  </div>
+                </SidebarTrigger>
+              </div>
             </div>
           </header>
 
