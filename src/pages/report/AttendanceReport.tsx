@@ -730,10 +730,10 @@ export default function AttendanceReport() {
                 <div className="flex justify-center">
                   <TabsList className="bg-[#2C5EAD] p-1 rounded-xl">
                     <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-3 sm:px-4 py-1.5 text-xs sm:text-sm gap-2 text-white/80">
-                      <Calendar className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Presensi Harian
+                      <Calendar className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Harian
                     </TabsTrigger>
                     <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-3 sm:px-4 py-1.5 text-xs sm:text-sm gap-2 text-white/80">
-                      <BookOpen className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Presensi Mapel
+                      <BookOpen className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Mapel
                     </TabsTrigger>
                     <TabsTrigger value="evaluasi" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-3 sm:px-4 py-1.5 text-xs sm:text-sm gap-2 text-white/80">
                       <Brain className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Evaluasi Pembelajaran
