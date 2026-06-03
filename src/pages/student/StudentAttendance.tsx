@@ -67,6 +67,17 @@ interface JadwalHariIni {
   sudah_presensi: boolean;
 }
 
+// Data presensi harian (satu record untuk masuk & pulang)
+interface PresensiHarianRecord {
+  id_pres_harian: number;
+  status_presensi: string;   // "Hadir" / "Terlambat"
+  waktu_presensi: string;
+  ekspresi: string;
+  waktu_pulang?: string;
+  status_pulang?: string;     // "Pulang"
+  ekspresi_pul?: string;
+}
+
 // ==================== MODAL UNTUK SCAN WAJAH ====================
 interface FaceCaptureModalProps {
   isOpen: boolean;
@@ -226,12 +237,12 @@ export default function StudentAttendance() {
   // Presensi harian
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [locationStatus, setLocationStatus] = useState<{ verified: boolean; message: string } | null>(null);
-  const [todayPresensi, setTodayPresensi] = useState<{ masuk?: any; pulang?: any }>({});
+  const [todayPresensi, setTodayPresensi] = useState<PresensiHarianRecord | null>(null); // satu record untuk masuk & pulang
 
   // State untuk modal scan wajah
   const [showFaceModal, setShowFaceModal] = useState(false);
   const [presensiType, setPresensiType] = useState<"masuk" | "pulang">("masuk");
-  const [pendingPresensiData, setPendingPresensiData] = useState<{ status: string } | null>(null);
+  const [pendingPresensiData, setPendingPresensiData] = useState<{ status: string; type: "masuk" | "pulang" } | null>(null);
 
   // Presensi mapel
   const [jadwalHariIni, setJadwalHariIni] = useState<JadwalHariIni[]>([]);
@@ -241,8 +252,8 @@ export default function StudentAttendance() {
   const scannerContainerId = "qr-reader";
 
   // Koordinat sekolah
-  // const SCHOOL_COORD = { lat: -7.3154902, lng: 112.7266169 };
   const SCHOOL_COORD = { lat: -7.316298604672446, lng: 112.72544806432117 };
+
   // ==================== GREETING EFFECT ====================
   useEffect(() => {
     const hour = new Date().getHours();
@@ -289,28 +300,30 @@ export default function StudentAttendance() {
     fetchSiswaData();
   }, [user, toast]);
 
-  // ==================== FETCH TODAY PRESENSI ====================
-  useEffect(() => {
+  // ==================== FETCH TODAY PRESENSI (SATU RECORD) ====================
+  const fetchTodayPresensi = async () => {
     if (!siswa) return;
-    const fetchTodayPresensi = async () => {
-      const today = new Date().toISOString().split("T")[0];
-      const start = `${today}T00:00:00`;
-      const end = `${today}T23:59:59`;
-      const { data, error } = await supabase
-        .from("presensi_harian")
-        .select("*")
-        .eq("id_siswa", siswa.id_siswa)
-        .gte("waktu_presensi", start)
-        .lte("waktu_presensi", end);
-      if (error) {
-        console.error(error);
-        return;
-      }
-      const masuk = data?.find(p => p.status_presensi === "Hadir" || p.status_presensi === "Terlambat");
-      const pulang = data?.find(p => p.status_presensi === "Pulang");
-      setTodayPresensi({ masuk, pulang });
-    };
-    fetchTodayPresensi();
+    const today = new Date().toISOString().split("T")[0];
+    const start = `${today}T00:00:00`;
+    const end = `${today}T23:59:59`;
+    const { data, error } = await supabase
+      .from("presensi_harian")
+      .select("*")
+      .eq("id_siswa", siswa.id_siswa)
+      .gte("waktu_presensi", start)
+      .lte("waktu_presensi", end)
+      .maybeSingle(); // hanya ambil satu record (jika ada)
+    if (error) {
+      console.error(error);
+      return;
+    }
+    setTodayPresensi(data || null);
+  };
+
+  useEffect(() => {
+    if (siswa) {
+      fetchTodayPresensi();
+    }
   }, [siswa]);
 
   // ==================== FETCH JADWAL HARI INI ====================
@@ -427,28 +440,40 @@ export default function StudentAttendance() {
   const prosesPresensiDenganEkspresi = async (ekspresi: string) => {
     if (!siswa || !pendingPresensiData) return;
     const now = new Date();
-    const status = pendingPresensiData.status;
+    const { status, type } = pendingPresensiData;
+
     try {
-      const { error } = await supabase.from("presensi_harian").insert({
-        id_siswa: siswa.id_siswa,
-        status_presensi: status,
-        waktu_presensi: now.toISOString(),
-        ekspresi: ekspresi,
-      });
-      if (error) throw error;
-      toast({ title: "Berhasil", description: `✅ Presensi ${status === "Pulang" ? "pulang" : "masuk"} tercatat dengan ekspresi ${ekspresi}` });
-      const today = new Date().toISOString().split("T")[0];
-      const start = `${today}T00:00:00`;
-      const end = `${today}T23:59:59`;
-      const { data } = await supabase
-        .from("presensi_harian")
-        .select("*")
-        .eq("id_siswa", siswa.id_siswa)
-        .gte("waktu_presensi", start)
-        .lte("waktu_presensi", end);
-      const masuk = data?.find(p => p.status_presensi === "Hadir" || p.status_presensi === "Terlambat");
-      const pulang = data?.find(p => p.status_presensi === "Pulang");
-      setTodayPresensi({ masuk, pulang });
+      if (type === "masuk") {
+        // INSERT record baru untuk presensi masuk
+        const { error } = await supabase.from("presensi_harian").insert({
+          id_siswa: siswa.id_siswa,
+          status_presensi: status,
+          waktu_presensi: now.toISOString(),
+          ekspresi: ekspresi,
+        });
+        if (error) throw error;
+        toast({ title: "Berhasil", description: `✅ Presensi masuk tercatat dengan ekspresi ${ekspresi}` });
+      } 
+      else if (type === "pulang") {
+        // UPDATE record yang sudah ada (presensi masuk) dengan data pulang
+        if (!todayPresensi) {
+          toast({ title: "Error", description: "Belum ada presensi masuk hari ini", variant: "destructive" });
+          return;
+        }
+        const { error } = await supabase
+          .from("presensi_harian")
+          .update({
+            status_pulang: status,   // "Pulang"
+            waktu_pulang: now.toISOString(),
+            ekspresi_pul: ekspresi,
+          })
+          .eq("id_pres_harian", todayPresensi.id_pres_harian);
+        if (error) throw error;
+        toast({ title: "Berhasil", description: `✅ Presensi pulang tercatat dengan ekspresi ${ekspresi}` });
+      }
+
+      // Refresh data presensi setelah berhasil
+      await fetchTodayPresensi();
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
@@ -474,15 +499,21 @@ export default function StudentAttendance() {
     const batasTerlambat = 7 * 60 + 30;
     const currentMinutes = currentHour * 60 + currentMinute;
     const status = currentMinutes <= batasTerlambat ? "Hadir" : "Terlambat";
-    setPendingPresensiData({ status });
+    setPendingPresensiData({ status, type: "masuk" });
     setPresensiType("masuk");
     setShowFaceModal(true);
     setIsSubmitting(false);
   };
 
   const handlePulang = async () => {
-    if (!todayPresensi.masuk) {
+    // Cek apakah sudah presensi masuk hari ini
+    if (!todayPresensi) {
       toast({ title: "Belum masuk", description: "Silakan presensi masuk terlebih dahulu", variant: "destructive" });
+      return;
+    }
+    // Cek apakah sudah pernah pulang
+    if (todayPresensi.waktu_pulang) {
+      toast({ title: "Sudah pulang", description: "Anda sudah melakukan presensi pulang hari ini", variant: "destructive" });
       return;
     }
     setIsSubmitting(true);
@@ -495,7 +526,7 @@ export default function StudentAttendance() {
       return;
     }
     setLocationStatus({ verified: true, message });
-    setPendingPresensiData({ status: "Pulang" });
+    setPendingPresensiData({ status: "Pulang", type: "pulang" });
     setPresensiType("pulang");
     setShowFaceModal(true);
     setIsSubmitting(false);
@@ -655,6 +686,7 @@ export default function StudentAttendance() {
 
   const handleRefresh = () => {
     setRefreshing(true);
+    fetchTodayPresensi(); // refresh data presensi harian
     setTimeout(() => setRefreshing(false), 1500);
   };
 
@@ -782,22 +814,22 @@ export default function StudentAttendance() {
                       <CardDescription className="text-xs sm:text-sm">Jam masuk sekolah / PKL</CardDescription>
                     </CardHeader>
                     <CardContent className="p-4 sm:p-5 pt-0">
-                      {todayPresensi.masuk ? (
+                      {todayPresensi ? (
                         <div className="space-y-3">
                           <div className="bg-emerald-50 rounded-xl p-3 sm:p-4 flex items-center gap-3">
                             <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-600" />
                             <div>
-                              <p className="font-semibold text-emerald-800 text-sm sm:text-base">Sudah Presensi</p>
+                              <p className="font-semibold text-emerald-800 text-sm sm:text-base">Sudah Presensi Masuk</p>
                               <p className="text-xs sm:text-sm text-emerald-600">
-                                {new Date(todayPresensi.masuk.waktu_presensi).toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' })}
+                                {new Date(todayPresensi.waktu_presensi).toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' })}
                               </p>
-                              {todayPresensi.masuk.ekspresi && (
-                                <p className="text-xs text-emerald-600 mt-1 capitalize">Ekspresi: {todayPresensi.masuk.ekspresi}</p>
+                              {todayPresensi.ekspresi && (
+                                <p className="text-xs text-emerald-600 mt-1 capitalize">Ekspresi: {todayPresensi.ekspresi}</p>
                               )}
                             </div>
                           </div>
                           <Badge className="bg-emerald-100 text-emerald-700 rounded-full text-xs">
-                            Status: {todayPresensi.masuk.status_presensi}
+                            Status: {todayPresensi.status_presensi}
                           </Badge>
                         </div>
                       ) : (
@@ -825,23 +857,23 @@ export default function StudentAttendance() {
                       <CardDescription className="text-xs sm:text-sm">Jam pulang sekolah / PKL</CardDescription>
                     </CardHeader>
                     <CardContent className="p-4 sm:p-5 pt-0">
-                      {todayPresensi.pulang ? (
+                      {todayPresensi?.waktu_pulang ? (
                         <div className="bg-orange-50 rounded-xl p-3 sm:p-4 flex items-center gap-3">
                           <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-orange-600" />
                           <div>
-                            <p className="font-semibold text-orange-800 text-sm sm:text-base">Sudah Presensi</p>
+                            <p className="font-semibold text-orange-800 text-sm sm:text-base">Sudah Presensi Pulang</p>
                             <p className="text-xs sm:text-sm text-orange-600">
-                              {new Date(todayPresensi.pulang.waktu_presensi).toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' })}
+                              {new Date(todayPresensi.waktu_pulang).toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' })}
                             </p>
-                            {todayPresensi.pulang.ekspresi && (
-                              <p className="text-xs text-orange-600 mt-1 capitalize">Ekspresi: {todayPresensi.pulang.ekspresi}</p>
+                            {todayPresensi.ekspresi_pul && (
+                              <p className="text-xs text-orange-600 mt-1 capitalize">Ekspresi: {todayPresensi.ekspresi_pul}</p>
                             )}
                           </div>
                         </div>
                       ) : (
                         <Button
                           onClick={handlePulang}
-                          disabled={isSubmitting || !todayPresensi.masuk}
+                          disabled={isSubmitting || !todayPresensi}
                           variant="outline"
                           className="w-full rounded-xl text-sm sm:text-base h-9 sm:h-10 border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"
                         >

@@ -97,6 +97,16 @@ interface EvaluasiPembelajaran {
   pesan: string;
 }
 
+interface AnalisisHubungan {
+  total_hari_dengan_dua_ekspresi: number;
+  positif_ke_positif: number;
+  positif_ke_negatif: number;
+  negatif_ke_positif: number;
+  negatif_ke_negatif: number;
+  hanya_masuk: number;
+  hanya_pulang: number;
+}
+
 const SCHOOL_NAME = "SMK NEGERI 1 HARVARD";
 const SCHOOL_ADDRESS = "Jl. Pendidikan No. 123, Kota Contoh, Provinsi Contoh";
 const SCHOOL_PHONE = "(021) 1234567";
@@ -126,17 +136,16 @@ export default function AttendanceReport() {
   );
   const [endDate, setEndDate] = useState<string>(new Date().toISOString().split("T")[0]);
   
-  // Untuk tab mapel: daftar mata pelajaran unik berdasarkan kelas yang dipilih
   const [mapelOptions, setMapelOptions] = useState<{ nama: string }[]>([]);
   const [selectedMapelNama, setSelectedMapelNama] = useState<string>("");
   
-  // State untuk popover mata pelajaran
   const [popoverMapelOpen, setPopoverMapelOpen] = useState(false);
   const [mapelSearchQuery, setMapelSearchQuery] = useState("");
   
   const [rekapHarian, setRekapHarian] = useState<RekapHarian[]>([]);
   const [rekapMapel, setRekapMapel] = useState<RekapMapel[]>([]);
   const [evaluasiPembelajaran, setEvaluasiPembelajaran] = useState<EvaluasiPembelajaran | null>(null);
+  const [analisisHubungan, setAnalisisHubungan] = useState<AnalisisHubungan | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const [popoverKelasOpen, setPopoverKelasOpen] = useState(false);
@@ -167,7 +176,6 @@ export default function AttendanceReport() {
     return kelas?.nama || "";
   };
 
-  // Fetch daftar mata pelajaran unik untuk kelas yang dipilih (tab mapel)
   useEffect(() => {
     if (!selectedKelasMapel) {
       setMapelOptions([]);
@@ -178,7 +186,6 @@ export default function AttendanceReport() {
 
     const fetchMapelOptions = async () => {
       const idKelas = parseInt(selectedKelasMapel);
-      // Query jadwal untuk kelas tersebut
       let query = supabase
         .from("jadwal")
         .select(`
@@ -188,7 +195,6 @@ export default function AttendanceReport() {
         .eq("id_kelas", idKelas)
         .eq("aktif", true);
 
-      // Filter berdasarkan role
       const isAdminRole = isAdmin(user);
       const isBkRole = isBK(user);
       const isAdminJurusanRole = isAdminJurusan(user);
@@ -205,7 +211,6 @@ export default function AttendanceReport() {
         return;
       }
 
-      // Ambil nama mapel unik (case-insensitive, ambil yang pertama sebagai display)
       const mapelSet = new Map<string, string>();
       for (const item of data || []) {
         const rawNama = item.mapel?.nama;
@@ -219,7 +224,6 @@ export default function AttendanceReport() {
       const uniqueMapel = Array.from(mapelSet.values()).sort().map(nama => ({ nama }));
       setMapelOptions(uniqueMapel);
       
-      // Reset pilihan mapel jika tidak valid
       if (selectedMapelNama && !uniqueMapel.some(m => m.nama === selectedMapelNama)) {
         setSelectedMapelNama("");
       }
@@ -228,7 +232,6 @@ export default function AttendanceReport() {
     fetchMapelOptions();
   }, [selectedKelasMapel, user, waliKelasIds]);
 
-  // Greeting effect
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour < 12) setGreeting("Selamat Pagi");
@@ -441,7 +444,6 @@ export default function AttendanceReport() {
         .eq("aktif", true);
       if (siswaError) throw siswaError;
 
-      // Query presensi mapel dengan join ke jadwal dan mapel
       let query = supabase
         .from("presensi_siswa_mapel")
         .select(`
@@ -457,7 +459,6 @@ export default function AttendanceReport() {
         .lte("waktu_presensi", `${endDate}T23:59:59`)
         .eq("jadwal.id_kelas", idKelas);
 
-      // Filter berdasarkan mata pelajaran yang dipilih (jika bukan "all")
       if (selectedMapelNama && selectedMapelNama !== "all") {
         query = query.eq("jadwal.mapel.nama", selectedMapelNama);
       }
@@ -476,12 +477,11 @@ export default function AttendanceReport() {
         return;
       }
 
-      // Akumulasi per siswa dan nama mapel (normalisasi)
       const mapelMap = new Map<string, { hadir: number; izin: number; sakit: number; alfa: number; displayName: string }>();
       
       for (const pres of presensiData || []) {
         const rawMapelName = pres.jadwal?.mapel?.nama;
-        if (!rawMapelName) continue; // abaikan presensi tanpa mapel
+        if (!rawMapelName) continue;
         
         const normalized = rawMapelName.trim().toLowerCase();
         const key = `${pres.id_siswa}_${normalized}`;
@@ -558,7 +558,7 @@ export default function AttendanceReport() {
       
       const { data: presensiData, error: presensiError } = await supabase
         .from("presensi_harian")
-        .select("id_siswa, ekspresi, status_presensi, waktu_presensi")
+        .select("id_siswa, ekspresi, ekspresi_pul, status_presensi, waktu_presensi")
         .gte("waktu_presensi", start)
         .lte("waktu_presensi", end);
 
@@ -582,10 +582,12 @@ export default function AttendanceReport() {
           variant: "default",
         });
         setEvaluasiPembelajaran(null);
+        setAnalisisHubungan(null);
         setIsLoading(false);
         return;
       }
 
+      // Hitung ekspresi detail (semua)
       const ekspresiDetail = {
         neutral: 0,
         happy: 0,
@@ -596,10 +598,15 @@ export default function AttendanceReport() {
         surprised: 0,
       };
 
-      for (const pres of presensiKelas) {
-        if (pres.ekspresi && ekspresiDetail.hasOwnProperty(pres.ekspresi)) {
-          ekspresiDetail[pres.ekspresi as keyof typeof ekspresiDetail]++;
+      const tambahEkspresi = (ekspresi: string | null) => {
+        if (ekspresi && ekspresiDetail.hasOwnProperty(ekspresi)) {
+          ekspresiDetail[ekspresi as keyof typeof ekspresiDetail]++;
         }
+      };
+
+      for (const pres of presensiKelas) {
+        tambahEkspresi(pres.ekspresi);
+        tambahEkspresi(pres.ekspresi_pul);
       }
 
       const totalEkspresi = Object.values(ekspresiDetail).reduce((a, b) => a + b, 0);
@@ -615,24 +622,89 @@ export default function AttendanceReport() {
         }
       }
 
+      // Analisis hubungan masuk vs pulang per hari per siswa
+      const mapPerSiswaPerHari = new Map<string, { ekspresi_masuk: string | null; ekspresi_pulang: string | null }>();
+      
+      for (const pres of presensiKelas) {
+        const tgl = new Date(pres.waktu_presensi).toISOString().split('T')[0];
+        const key = `${pres.id_siswa}_${tgl}`;
+        if (!mapPerSiswaPerHari.has(key)) {
+          mapPerSiswaPerHari.set(key, { ekspresi_masuk: null, ekspresi_pulang: null });
+        }
+        const entry = mapPerSiswaPerHari.get(key)!;
+        if (pres.ekspresi) entry.ekspresi_masuk = pres.ekspresi;
+        if (pres.ekspresi_pul) entry.ekspresi_pulang = pres.ekspresi_pul;
+        mapPerSiswaPerHari.set(key, entry);
+      }
+
+      let positifKePositif = 0;
+      let positifKeNegatif = 0;
+      let negatifKePositif = 0;
+      let negatifKeNegatif = 0;
+      let hanyaMasuk = 0;
+      let hanyaPulang = 0;
+      let totalDuaEkspresi = 0;
+
+      for (const entry of mapPerSiswaPerHari.values()) {
+        const masuk = entry.ekspresi_masuk;
+        const pulang = entry.ekspresi_pulang;
+        
+        const isMasukPositif = masuk && EKSPRESI_POSITIF.includes(masuk);
+        const isMasukNegatif = masuk && EKSPRESI_NEGATIF.includes(masuk);
+        const isPulangPositif = pulang && EKSPRESI_POSITIF.includes(pulang);
+        const isPulangNegatif = pulang && EKSPRESI_NEGATIF.includes(pulang);
+        
+        if (masuk && pulang) {
+          totalDuaEkspresi++;
+          if (isMasukPositif && isPulangPositif) positifKePositif++;
+          else if (isMasukPositif && isPulangNegatif) positifKeNegatif++;
+          else if (isMasukNegatif && isPulangPositif) negatifKePositif++;
+          else if (isMasukNegatif && isPulangNegatif) negatifKeNegatif++;
+        } else if (masuk && !pulang) {
+          hanyaMasuk++;
+        } else if (!masuk && pulang) {
+          hanyaPulang++;
+        }
+      }
+
+      const analisisHubunganData: AnalisisHubungan = {
+        total_hari_dengan_dua_ekspresi: totalDuaEkspresi,
+        positif_ke_positif: positifKePositif,
+        positif_ke_negatif: positifKeNegatif,
+        negatif_ke_positif: negatifKePositif,
+        negatif_ke_negatif: negatifKeNegatif,
+        hanya_masuk: hanyaMasuk,
+        hanya_pulang: hanyaPulang,
+      };
+
+      setAnalisisHubungan(analisisHubunganData);
+
+      // Rekomendasi dan pesan (diperkaya dengan data hubungan)
       let rekomendasi: "PERTAHANKAN" | "EVALUASI";
       let pesan: string;
 
       if (totalEkspresi === 0) {
-        // Jika ada presensi tapi tidak ada data ekspresi
         rekomendasi = "PERTAHANKAN";
-        pesan = "Belum terdapat data ekspresi untuk periode ini. Lanjutkan metode pembelajaran yang ada.";
+        pesan = "Belum terdapat data ekspresi (baik saat masuk maupun pulang) untuk periode ini. Lanjutkan metode pembelajaran yang ada.";
       } else if (ekspresiPositif > ekspresiNegatif) {
         rekomendasi = "PERTAHANKAN";
         const persenPositif = ((ekspresiPositif / totalEkspresi) * 100).toFixed(1);
-        pesan = `Berdasarkan analisis ekspresi wajah siswa, ${persenPositif}% menunjukkan ekspresi positif (${ekspresiPositif} dari ${totalEkspresi} ekspresi). Metode pembelajaran saat ini sudah efektif dan perlu dipertahankan.`;
+        let insight = "";
+        if (analisisHubunganData.negatif_ke_positif > 0) {
+          insight = ` Terdapat ${analisisHubunganData.negatif_ke_positif} hari di mana siswa menunjukkan perbaikan mood (dari negatif/netral menjadi positif).`;
+        }
+        pesan = `Berdasarkan analisis ekspresi wajah siswa (saat masuk dan pulang), ${persenPositif}% menunjukkan ekspresi positif (${ekspresiPositif} dari ${totalEkspresi} ekspresi). Metode pembelajaran saat ini sudah efektif dan perlu dipertahankan.${insight}`;
       } else if (ekspresiNegatif > ekspresiPositif) {
         rekomendasi = "EVALUASI";
         const persenNegatif = ((ekspresiNegatif / totalEkspresi) * 100).toFixed(1);
-        pesan = `Peringatan! Berdasarkan analisis ekspresi wajah siswa, ${persenNegatif}% menunjukkan ekspresi negatif (${ekspresiNegatif} dari ${totalEkspresi} ekspresi). Diperlukan evaluasi mendalam terhadap metode pembelajaran.`;
+        let insight = "";
+        if (analisisHubunganData.positif_ke_negatif > 0) {
+          insight = ` Terdapat ${analisisHubunganData.positif_ke_negatif} hari di mana siswa mengalami penurunan mood (dari positif menjadi negatif). Ini indikasi perlunya evaluasi metode pembelajaran.`;
+        }
+        pesan = `Peringatan! Berdasarkan analisis ekspresi wajah siswa (saat masuk dan pulang), ${persenNegatif}% menunjukkan ekspresi negatif (${ekspresiNegatif} dari ${totalEkspresi} ekspresi). Diperlukan evaluasi mendalam terhadap metode pembelajaran.${insight}`;
       } else {
         rekomendasi = "EVALUASI";
-        pesan = `Hasil ekspresi positif dan negatif seimbang (${ekspresiPositif}:${ekspresiNegatif}). Disarankan untuk melakukan evaluasi dan observasi lebih lanjut terhadap proses pembelajaran.`;
+        pesan = `Hasil ekspresi positif dan negatif seimbang (${ekspresiPositif}:${ekspresiNegatif}) berdasarkan data masuk dan pulang. Disarankan untuk melakukan evaluasi dan observasi lebih lanjut terhadap proses pembelajaran.`;
       }
 
       setEvaluasiPembelajaran({
@@ -646,7 +718,7 @@ export default function AttendanceReport() {
 
       toast({
         title: "Analisis Selesai",
-        description: `Evaluasi pembelajaran untuk kelas ${getKelasNameEvaluasi()} telah dianalisis.`,
+        description: `Evaluasi pembelajaran untuk kelas ${getKelasNameEvaluasi()} telah dianalisis (termasuk hubungan ekspresi masuk dan pulang).`,
       });
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -701,15 +773,6 @@ export default function AttendanceReport() {
   const totalPresensiMapel = totalHadirMapel + totalIzinMapel + totalSakitMapel + totalAlfaMapel;
   const persenHadirMapel = totalPresensiMapel > 0 ? ((totalHadirMapel) / totalPresensiMapel * 100).toFixed(1) : 0;
 
-  const userRoleDisplay = () => {
-    if (isAdmin(user)) return "Admin";
-    if (isBK(user)) return "BK";
-    if (isAdminJurusan(user)) return "Admin Jurusan";
-    if (user?.peran === "guru") return "Guru";
-    return "Pengguna";
-  };
-
-  // Filter mapel berdasarkan pencarian
   const filteredMapelOptions = mapelOptions.filter(m =>
     m.nama.toLowerCase().includes(mapelSearchQuery.toLowerCase())
   );
@@ -775,7 +838,7 @@ export default function AttendanceReport() {
                   </TabsList>
                 </div>
 
-                {/* Tab Presensi Harian */}
+                {/* Tab Presensi Harian (sama seperti sebelumnya) */}
                 <TabsContent value="harian" className="space-y-4 sm:space-y-6">
                   {kelasListHarian.length === 0 ? (
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3">
@@ -830,7 +893,7 @@ export default function AttendanceReport() {
                   )}
                 </TabsContent>
 
-                {/* Tab Presensi Mapel */}
+                {/* Tab Presensi Mapel (sama seperti sebelumnya) */}
                 <TabsContent value="mapel" className="space-y-4 sm:space-y-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-3 items-end">
                     <div className="w-full sm:w-48">
@@ -1026,6 +1089,65 @@ export default function AttendanceReport() {
                             </CardContent>
                           </Card>
 
+                          {/* Analisis Hubungan Masuk vs Pulang */}
+                          {analisisHubungan && analisisHubungan.total_hari_dengan_dua_ekspresi > 0 && (
+                            <Card className="rounded-xl border-0 shadow-lg">
+                              <CardHeader className="pb-2">
+                                <CardTitle className="text-base flex items-center gap-2">
+                                  <TrendingUp className="h-4 w-4" />
+                                  Analisis Hubungan Ekspresi Masuk vs Pulang
+                                </CardTitle>
+                                <CardDescription>Perubahan mood siswa dari awal hingga akhir pembelajaran</CardDescription>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                  <div className="space-y-2">
+                                    <div className="flex justify-between items-center border-b pb-1">
+                                      <span className="text-sm">Total hari dengan data lengkap</span>
+                                      <span className="font-bold">{analisisHubungan.total_hari_dengan_dua_ekspresi}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center border-b pb-1">
+                                      <span className="text-sm text-emerald-600">Positif → Positif</span>
+                                      <span className="font-bold">{analisisHubungan.positif_ke_positif}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center border-b pb-1">
+                                      <span className="text-sm text-rose-600">Positif → Negatif</span>
+                                      <span className="font-bold">{analisisHubungan.positif_ke_negatif}</span>
+                                    </div>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <div className="flex justify-between items-center border-b pb-1">
+                                      <span className="text-sm text-emerald-600">Negatif → Positif (Membaik)</span>
+                                      <span className="font-bold">{analisisHubungan.negatif_ke_positif}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center border-b pb-1">
+                                      <span className="text-sm text-rose-600">Negatif → Negatif</span>
+                                      <span className="font-bold">{analisisHubungan.negatif_ke_negatif}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-sm text-slate-500">Hanya data masuk</span>
+                                      <span className="font-bold text-slate-500">{analisisHubungan.hanya_masuk}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-sm text-slate-500">Hanya data pulang</span>
+                                      <span className="font-bold text-slate-500">{analisisHubungan.hanya_pulang}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                {analisisHubungan.negatif_ke_positif > 0 && (
+                                  <div className="mt-3 p-2 bg-emerald-50 rounded-lg text-emerald-800 text-xs">
+                                    📈 Terdapat {analisisHubungan.negatif_ke_positif} kali perbaikan mood siswa selama pembelajaran.
+                                  </div>
+                                )}
+                                {analisisHubungan.positif_ke_negatif > 0 && (
+                                  <div className="mt-3 p-2 bg-rose-50 rounded-lg text-rose-800 text-xs">
+                                    📉 Terdapat {analisisHubungan.positif_ke_negatif} kali penurunan mood siswa. Perlu investigasi lebih lanjut.
+                                  </div>
+                                )}
+                              </CardContent>
+                            </Card>
+                          )}
+
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <Card className="rounded-xl border-0 shadow-lg">
                               <CardHeader className="pb-2">
@@ -1036,7 +1158,7 @@ export default function AttendanceReport() {
                               </CardHeader>
                               <CardContent className="space-y-3">
                                 <div className="flex justify-between items-center border-b pb-2">
-                                  <span className="text-slate-600">Total Ekspresi Terekam</span>
+                                  <span className="text-slate-600">Total Ekspresi Terekam (Masuk+Pulang)</span>
                                   <span className="font-bold text-lg">{evaluasiPembelajaran.total_ekspresi}</span>
                                 </div>
                                 <div className="flex justify-between items-center border-b pb-2">
@@ -1153,7 +1275,7 @@ export default function AttendanceReport() {
           </Card>
         </div>
 
-        {/* Summary Card */}
+        {/* Summary Card - sama seperti sebelumnya */}
         {((activeTab === "harian" && rekapHarian.length > 0) || (activeTab === "mapel" && rekapMapel.length > 0)) && (
           <div className="print:hidden">
             <Card className="rounded-xl border-0 shadow-lg bg-white">
@@ -1232,7 +1354,7 @@ export default function AttendanceReport() {
           </div>
         )}
 
-        {/* Tabel Laporan */}
+        {/* Tabel Laporan (sama seperti sebelumnya) */}
         {(rekapHarian.length > 0 || rekapMapel.length > 0) && activeTab !== "evaluasi" && (
           <div className="print:mt-0 print:p-0">
             <div className="hidden print:block text-center mb-6" style={{ pageBreakInside: 'avoid' }}>
@@ -1316,7 +1438,6 @@ export default function AttendanceReport() {
                 </TableBody>
               </Table>
             </div>
-            {/* Tanda tangan untuk laporan harian/mapel (username diganti Petugas) */}
             <div className="hidden print:block mt-8">
               <div className="flex justify-between mt-12">
                 <div className="text-center w-1/2">
@@ -1359,11 +1480,24 @@ export default function AttendanceReport() {
               <h3 className="font-bold text-lg">Rekomendasi: {evaluasiPembelajaran.rekomendasi === "PERTAHANKAN" ? "Pertahankan Metode Pembelajaran" : "Evaluasi Metode Pembelajaran"}</h3>
               <p className="mt-2">{evaluasiPembelajaran.pesan}</p>
             </div>
+            {analisisHubungan && analisisHubungan.total_hari_dengan_dua_ekspresi > 0 && (
+              <div className="mb-4 p-4 border rounded-lg">
+                <h3 className="font-bold">Analisis Hubungan Ekspresi Masuk vs Pulang</h3>
+                <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
+                  <div>Positif → Positif: {analisisHubungan.positif_ke_positif}</div>
+                  <div>Positif → Negatif: {analisisHubungan.positif_ke_negatif}</div>
+                  <div>Negatif → Positif: {analisisHubungan.negatif_ke_positif}</div>
+                  <div>Negatif → Negatif: {analisisHubungan.negatif_ke_negatif}</div>
+                  <div>Hanya masuk: {analisisHubungan.hanya_masuk}</div>
+                  <div>Hanya pulang: {analisisHubungan.hanya_pulang}</div>
+                </div>
+              </div>
+            )}
             <div className="mb-4">
               <h3 className="font-bold">Ringkasan Analisis</h3>
               <table className="w-full border-collapse mt-2">
                 <tbody>
-                  <tr><td className="border p-2">Total Ekspresi Terekam</td><td className="border p-2">{evaluasiPembelajaran.total_ekspresi}</td></tr>
+                  <tr><td className="border p-2">Total Ekspresi (Masuk+Pulang)</td><td className="border p-2">{evaluasiPembelajaran.total_ekspresi}</td></tr>
                   <tr><td className="border p-2">Ekspresi Positif</td><td className="border p-2">{evaluasiPembelajaran.ekspresi_positif}</td></tr>
                   <tr><td className="border p-2">Ekspresi Negatif</td><td className="border p-2">{evaluasiPembelajaran.ekspresi_negatif}</td></tr>
                 </tbody>
@@ -1383,7 +1517,6 @@ export default function AttendanceReport() {
                 </tbody>
               </table>
             </div>
-            {/* Tanda tangan evaluasi (username diganti Petugas) */}
             <div className="flex justify-between mt-8">
               <div className="text-center w-1/2">
                 <p>Mengetahui,</p>
@@ -1412,7 +1545,7 @@ export default function AttendanceReport() {
             <CardContent className="p-4 sm:p-5">
               <div className="flex items-start gap-3 sm:gap-4">
                 <div className="bg-[#2C5EAD]/10 p-2 sm:p-3 rounded-xl flex-shrink-0"><Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-[#2C5EAD]" /></div>
-                <div><h3 className="font-semibold text-slate-800 text-sm sm:text-base mb-1">Tips Laporan Presensi</h3><p className="text-xs sm:text-sm text-slate-600">Pilih kelas dan rentang waktu yang diinginkan, lalu klik tombol "Tampilkan" untuk melihat laporan. Gunakan tombol "Cetak" untuk mencetak laporan dalam format yang rapi. Fitur Evaluasi Pembelajaran menganalisis ekspresi wajah siswa untuk memberikan rekomendasi metode pembelajaran.</p></div>
+                <div><h3 className="font-semibold text-slate-800 text-sm sm:text-base mb-1">Tips Laporan Presensi</h3><p className="text-xs sm:text-sm text-slate-600">Pilih kelas dan rentang waktu yang diinginkan, lalu klik tombol "Tampilkan" untuk melihat laporan. Gunakan tombol "Cetak" untuk mencetak laporan dalam format yang rapi. Fitur Evaluasi Pembelajaran menganalisis ekspresi wajah siswa (baik saat masuk maupun pulang) untuk memberikan rekomendasi metode pembelajaran, termasuk analisis perubahan mood selama pembelajaran.</p></div>
               </div>
             </CardContent>
           </Card>
@@ -1421,44 +1554,42 @@ export default function AttendanceReport() {
         <div className="print:hidden text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Laporan Presensi - SmartAS</p><p className="text-[10px] text-slate-300 mt-1">Sistem Informasi Akademik</p></div>
       </div>
 
-  <style>{`
-    @media print {
-      * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body { margin: 0 !important; padding: 0 !important; background: white !important; font-size: 11pt; font-family: 'Times New Roman', Times, serif; overflow: visible !important; }
-      .print\\:hidden { display: none !important; }
-      .print\\:block { display: block !important; }
-      .print\\:mt-0 { margin-top: 0 !important; }
-      .print\\:p-0 { padding: 0 !important; }
-      .print\\:border-0 { border: none !important; }
-      .print\\:overflow-visible { overflow: visible !important; }
-
-      /* HILANGKAN SEMUA SCROLL DI CETAK */
-      * { overflow: visible !important; }
-      table { 
-        width: 100% !important; 
-        border-collapse: collapse !important; 
-        margin: 0 auto !important; 
-        font-size: 10pt !important;
-        min-width: 0 !important; /* biar gak memaksa lebar minimum */
-      }
-      th, td { 
-        border: 1px solid #000 !important; 
-        padding: 6px 8px !important; 
-        vertical-align: top !important; 
-        word-break: break-word;
-      }
-      th { 
-        background-color: #f2f2f2 !important; 
-        font-weight: bold !important; 
-        text-align: center !important; 
-      }
-      td { text-align: left !important; }
-      td.text-center { text-align: center !important; }
-      thead { display: table-header-group !important; }
-      tr { page-break-inside: avoid !important; }
-      @page { size: A4; margin: 2cm; }
-    }
-  `}</style>
+      <style>{`
+        @media print {
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          html, body { margin: 0 !important; padding: 0 !important; background: white !important; font-size: 11pt; font-family: 'Times New Roman', Times, serif; overflow: visible !important; }
+          .print\\:hidden { display: none !important; }
+          .print\\:block { display: block !important; }
+          .print\\:mt-0 { margin-top: 0 !important; }
+          .print\\:p-0 { padding: 0 !important; }
+          .print\\:border-0 { border: none !important; }
+          .print\\:overflow-visible { overflow: visible !important; }
+          * { overflow: visible !important; }
+          table { 
+            width: 100% !important; 
+            border-collapse: collapse !important; 
+            margin: 0 auto !important; 
+            font-size: 10pt !important;
+            min-width: 0 !important;
+          }
+          th, td { 
+            border: 1px solid #000 !important; 
+            padding: 6px 8px !important; 
+            vertical-align: top !important; 
+            word-break: break-word;
+          }
+          th { 
+            background-color: #f2f2f2 !important; 
+            font-weight: bold !important; 
+            text-align: center !important; 
+          }
+          td { text-align: left !important; }
+          td.text-center { text-align: center !important; }
+          thead { display: table-header-group !important; }
+          tr { page-break-inside: avoid !important; }
+          @page { size: A4; margin: 2cm; }
+        }
+      `}</style>
     </div>
   );
 }
