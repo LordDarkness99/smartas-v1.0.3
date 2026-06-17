@@ -1318,7 +1318,6 @@ export default function AttendanceManagement() {
             <div className="flex flex-col items-center space-y-3 py-3">
               {qrCodeDataUrl && <div className="bg-white p-2 sm:p-3 rounded-xl shadow-md"><img src={qrCodeDataUrl} alt="QR Code" className="w-48 h-48 sm:w-56 sm:h-56" /></div>}
               <div className="text-center space-y-0.5"><p className="font-semibold text-slate-800 text-xs sm:text-sm">{selectedJadwalForQR?.kelas_nama} - {selectedJadwalForQR?.mata_pelajaran}</p><p className="text-[10px] sm:text-xs text-slate-500">Hari: {selectedJadwalForQR?.hari}, Jam: {selectedJadwalForQR?.jam}</p><p className="text-[10px] text-amber-600 mt-1">⚠️ QR Code berubah setiap 30 detik dan hanya berlaku 30 detik. Tidak bisa dipakai ulang.</p></div>
-              <Button variant="outline" onClick={() => { const link = document.createElement("a"); link.download = `qr_${selectedJadwalForQR?.id_jadwal}.png`; link.href = qrCodeDataUrl; link.click(); }} className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"><Download className="mr-1.5 h-3.5 w-3.5" /> Download QR Saat Ini</Button>
             </div>
             <DialogFooter><Button variant="outline" onClick={() => setQrDialogOpen(false)} className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Tutup</Button></DialogFooter>
           </DialogContent>
