@@ -50,10 +50,6 @@ import {
   X,
   ChevronDown,
   AlertCircle,
-  Brain,
-  ThumbsUp,
-  ThumbsDown,
-  BarChart3,
 } from "lucide-react";
 import { isAdminJurusan, isBK, isAdmin } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -80,56 +76,24 @@ interface RekapMapel {
   alfa: number;
 }
 
-interface EvaluasiPembelajaran {
-  total_ekspresi: number;
-  ekspresi_positif: number;
-  ekspresi_negatif: number;
-  ekspresi_detail: {
-    neutral: number;
-    happy: number;
-    sad: number;
-    angry: number;
-    fearful: number;
-    disgusted: number;
-    surprised: number;
-  };
-  rekomendasi: "PERTAHANKAN" | "EVALUASI";
-  pesan: string;
-}
-
-interface AnalisisHubungan {
-  total_hari_dengan_dua_ekspresi: number;
-  positif_ke_positif: number;
-  positif_ke_negatif: number;
-  negatif_ke_positif: number;
-  negatif_ke_negatif: number;
-  hanya_masuk: number;
-  hanya_pulang: number;
-}
-
 const SCHOOL_NAME = "SMK NEGERI 1 HARVARD";
 const SCHOOL_ADDRESS = "Jl. Pendidikan No. 123, Kota Contoh, Provinsi Contoh";
 const SCHOOL_PHONE = "(021) 1234567";
 const SCHOOL_EMAIL = "info@smkn1HARVARD.sch.id";
 const SCHOOL_NPSN = "12345678";
 
-const EKSPRESI_POSITIF = ["neutral", "happy", "surprised"];
-const EKSPRESI_NEGATIF = ["sad", "angry", "fearful", "disgusted"];
-
 export default function AttendanceReport() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<"harian" | "mapel" | "evaluasi">("harian");
+  const [activeTab, setActiveTab] = useState<"harian" | "mapel">("harian");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
   
   const [kelasListMapel, setKelasListMapel] = useState<{ id_kelas: number; nama: string }[]>([]);
   const [kelasListHarian, setKelasListHarian] = useState<{ id_kelas: number; nama: string }[]>([]);
-  const [kelasListEvaluasi, setKelasListEvaluasi] = useState<{ id_kelas: number; nama: string }[]>([]);
   
   const [selectedKelasHarian, setSelectedKelasHarian] = useState<string>("");
   const [selectedKelasMapel, setSelectedKelasMapel] = useState<string>("");
-  const [selectedKelasEvaluasi, setSelectedKelasEvaluasi] = useState<string>("");
   
   const [startDate, setStartDate] = useState<string>(
     new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split("T")[0]
@@ -144,8 +108,6 @@ export default function AttendanceReport() {
   
   const [rekapHarian, setRekapHarian] = useState<RekapHarian[]>([]);
   const [rekapMapel, setRekapMapel] = useState<RekapMapel[]>([]);
-  const [evaluasiPembelajaran, setEvaluasiPembelajaran] = useState<EvaluasiPembelajaran | null>(null);
-  const [analisisHubungan, setAnalisisHubungan] = useState<AnalisisHubungan | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const [popoverKelasOpen, setPopoverKelasOpen] = useState(false);
@@ -169,7 +131,6 @@ export default function AttendanceReport() {
 
   const filteredKelasOptionsHarian = filterKelasOptions(kelasListHarian);
   const filteredKelasOptionsMapel = filterKelasOptions(kelasListMapel);
-  const filteredKelasOptionsEvaluasi = filterKelasOptions(kelasListEvaluasi);
 
   const getKelasNameById = (id_kelas: number, list: { id_kelas: number; nama: string }[]) => {
     const kelas = list.find(k => k.id_kelas === id_kelas);
@@ -268,7 +229,6 @@ export default function AttendanceReport() {
         console.error("Guru tidak memiliki id_guru");
         setKelasListMapel([]);
         setKelasListHarian([]);
-        setKelasListEvaluasi([]);
         return;
       }
 
@@ -312,7 +272,6 @@ export default function AttendanceReport() {
       );
       setKelasListMapel(kelasListUnik);
       setKelasListHarian(waliKelas || []);
-      setKelasListEvaluasi(waliKelas || []);
     } else if (isAdminJurusanRole) {
       const { data, error } = await supabase
         .from("kelas")
@@ -324,7 +283,6 @@ export default function AttendanceReport() {
       else {
         setKelasListMapel(data || []);
         setKelasListHarian(data || []);
-        setKelasListEvaluasi(data || []);
       }
       setWaliKelasIds([]);
     } else if (isAdminSuper || isBkRole) {
@@ -337,13 +295,11 @@ export default function AttendanceReport() {
       else {
         setKelasListMapel(data || []);
         setKelasListHarian(data || []);
-        setKelasListEvaluasi(data || []);
       }
       setWaliKelasIds([]);
     } else {
       setKelasListMapel([]);
       setKelasListHarian([]);
-      setKelasListEvaluasi([]);
     }
   };
 
@@ -360,13 +316,6 @@ export default function AttendanceReport() {
       if (!isValid) setSelectedKelasMapel("");
     }
   }, [kelasListMapel, selectedKelasMapel]);
-
-  useEffect(() => {
-    if (selectedKelasEvaluasi && kelasListEvaluasi.length > 0) {
-      const isValid = kelasListEvaluasi.some(k => k.id_kelas.toString() === selectedKelasEvaluasi);
-      if (!isValid) setSelectedKelasEvaluasi("");
-    }
-  }, [kelasListEvaluasi, selectedKelasEvaluasi]);
 
   useEffect(() => {
     if (user) {
@@ -546,187 +495,6 @@ export default function AttendanceReport() {
     }
   };
 
-  const generateEvaluasiPembelajaran = async () => {
-    if (!selectedKelasEvaluasi) {
-      toast({ title: "Error", description: "Pilih kelas terlebih dahulu", variant: "destructive" });
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const start = `${startDate}T00:00:00`;
-      const end = `${endDate}T23:59:59`;
-      
-      const { data: presensiData, error: presensiError } = await supabase
-        .from("presensi_harian")
-        .select("id_siswa, ekspresi, ekspresi_pul, status_presensi, waktu_presensi")
-        .gte("waktu_presensi", start)
-        .lte("waktu_presensi", end);
-
-      if (presensiError) throw presensiError;
-
-      const { data: siswaKelas, error: siswaError } = await supabase
-        .from("siswa")
-        .select("id_siswa, nama, nis")
-        .eq("id_kelas", parseInt(selectedKelasEvaluasi))
-        .eq("aktif", true);
-
-      if (siswaError) throw siswaError;
-
-      const siswaIds = siswaKelas.map(s => s.id_siswa);
-      const presensiKelas = presensiData?.filter(p => siswaIds.includes(p.id_siswa)) || [];
-
-      if (presensiKelas.length === 0) {
-        toast({
-          title: "Tidak Ada Data",
-          description: `Tidak ada data presensi untuk kelas ${getKelasNameEvaluasi()} pada rentang tanggal yang dipilih. Tidak dapat melakukan evaluasi.`,
-          variant: "default",
-        });
-        setEvaluasiPembelajaran(null);
-        setAnalisisHubungan(null);
-        setIsLoading(false);
-        return;
-      }
-
-      // Hitung ekspresi detail (semua)
-      const ekspresiDetail = {
-        neutral: 0,
-        happy: 0,
-        sad: 0,
-        angry: 0,
-        fearful: 0,
-        disgusted: 0,
-        surprised: 0,
-      };
-
-      const tambahEkspresi = (ekspresi: string | null) => {
-        if (ekspresi && ekspresiDetail.hasOwnProperty(ekspresi)) {
-          ekspresiDetail[ekspresi as keyof typeof ekspresiDetail]++;
-        }
-      };
-
-      for (const pres of presensiKelas) {
-        tambahEkspresi(pres.ekspresi);
-        tambahEkspresi(pres.ekspresi_pul);
-      }
-
-      const totalEkspresi = Object.values(ekspresiDetail).reduce((a, b) => a + b, 0);
-      
-      let ekspresiPositif = 0;
-      let ekspresiNegatif = 0;
-
-      for (const [ekspresi, count] of Object.entries(ekspresiDetail)) {
-        if (EKSPRESI_POSITIF.includes(ekspresi)) {
-          ekspresiPositif += count;
-        } else if (EKSPRESI_NEGATIF.includes(ekspresi)) {
-          ekspresiNegatif += count;
-        }
-      }
-
-      // Analisis hubungan masuk vs pulang per hari per siswa
-      const mapPerSiswaPerHari = new Map<string, { ekspresi_masuk: string | null; ekspresi_pulang: string | null }>();
-      
-      for (const pres of presensiKelas) {
-        const tgl = new Date(pres.waktu_presensi).toISOString().split('T')[0];
-        const key = `${pres.id_siswa}_${tgl}`;
-        if (!mapPerSiswaPerHari.has(key)) {
-          mapPerSiswaPerHari.set(key, { ekspresi_masuk: null, ekspresi_pulang: null });
-        }
-        const entry = mapPerSiswaPerHari.get(key)!;
-        if (pres.ekspresi) entry.ekspresi_masuk = pres.ekspresi;
-        if (pres.ekspresi_pul) entry.ekspresi_pulang = pres.ekspresi_pul;
-        mapPerSiswaPerHari.set(key, entry);
-      }
-
-      let positifKePositif = 0;
-      let positifKeNegatif = 0;
-      let negatifKePositif = 0;
-      let negatifKeNegatif = 0;
-      let hanyaMasuk = 0;
-      let hanyaPulang = 0;
-      let totalDuaEkspresi = 0;
-
-      for (const entry of mapPerSiswaPerHari.values()) {
-        const masuk = entry.ekspresi_masuk;
-        const pulang = entry.ekspresi_pulang;
-        
-        const isMasukPositif = masuk && EKSPRESI_POSITIF.includes(masuk);
-        const isMasukNegatif = masuk && EKSPRESI_NEGATIF.includes(masuk);
-        const isPulangPositif = pulang && EKSPRESI_POSITIF.includes(pulang);
-        const isPulangNegatif = pulang && EKSPRESI_NEGATIF.includes(pulang);
-        
-        if (masuk && pulang) {
-          totalDuaEkspresi++;
-          if (isMasukPositif && isPulangPositif) positifKePositif++;
-          else if (isMasukPositif && isPulangNegatif) positifKeNegatif++;
-          else if (isMasukNegatif && isPulangPositif) negatifKePositif++;
-          else if (isMasukNegatif && isPulangNegatif) negatifKeNegatif++;
-        } else if (masuk && !pulang) {
-          hanyaMasuk++;
-        } else if (!masuk && pulang) {
-          hanyaPulang++;
-        }
-      }
-
-      const analisisHubunganData: AnalisisHubungan = {
-        total_hari_dengan_dua_ekspresi: totalDuaEkspresi,
-        positif_ke_positif: positifKePositif,
-        positif_ke_negatif: positifKeNegatif,
-        negatif_ke_positif: negatifKePositif,
-        negatif_ke_negatif: negatifKeNegatif,
-        hanya_masuk: hanyaMasuk,
-        hanya_pulang: hanyaPulang,
-      };
-
-      setAnalisisHubungan(analisisHubunganData);
-
-      // Rekomendasi dan pesan (diperkaya dengan data hubungan)
-      let rekomendasi: "PERTAHANKAN" | "EVALUASI";
-      let pesan: string;
-
-      if (totalEkspresi === 0) {
-        rekomendasi = "PERTAHANKAN";
-        pesan = "Belum terdapat data ekspresi (baik saat masuk maupun pulang) untuk periode ini. Lanjutkan metode pembelajaran yang ada.";
-      } else if (ekspresiPositif > ekspresiNegatif) {
-        rekomendasi = "PERTAHANKAN";
-        const persenPositif = ((ekspresiPositif / totalEkspresi) * 100).toFixed(1);
-        let insight = "";
-        if (analisisHubunganData.negatif_ke_positif > 0) {
-          insight = ` Terdapat ${analisisHubunganData.negatif_ke_positif} hari di mana siswa menunjukkan perbaikan mood (dari negatif/netral menjadi positif).`;
-        }
-        pesan = `Berdasarkan analisis ekspresi wajah siswa (saat masuk dan pulang), ${persenPositif}% menunjukkan ekspresi positif (${ekspresiPositif} dari ${totalEkspresi} ekspresi). Metode pembelajaran saat ini sudah efektif dan perlu dipertahankan.${insight}`;
-      } else if (ekspresiNegatif > ekspresiPositif) {
-        rekomendasi = "EVALUASI";
-        const persenNegatif = ((ekspresiNegatif / totalEkspresi) * 100).toFixed(1);
-        let insight = "";
-        if (analisisHubunganData.positif_ke_negatif > 0) {
-          insight = ` Terdapat ${analisisHubunganData.positif_ke_negatif} hari di mana siswa mengalami penurunan mood (dari positif menjadi negatif). Ini indikasi perlunya evaluasi metode pembelajaran.`;
-        }
-        pesan = `Peringatan! Berdasarkan analisis ekspresi wajah siswa (saat masuk dan pulang), ${persenNegatif}% menunjukkan ekspresi negatif (${ekspresiNegatif} dari ${totalEkspresi} ekspresi). Diperlukan evaluasi mendalam terhadap metode pembelajaran.${insight}`;
-      } else {
-        rekomendasi = "EVALUASI";
-        pesan = `Hasil ekspresi positif dan negatif seimbang (${ekspresiPositif}:${ekspresiNegatif}) berdasarkan data masuk dan pulang. Disarankan untuk melakukan evaluasi dan observasi lebih lanjut terhadap proses pembelajaran.`;
-      }
-
-      setEvaluasiPembelajaran({
-        total_ekspresi: totalEkspresi,
-        ekspresi_positif: ekspresiPositif,
-        ekspresi_negatif: ekspresiNegatif,
-        ekspresi_detail: ekspresiDetail,
-        rekomendasi: rekomendasi,
-        pesan: pesan,
-      });
-
-      toast({
-        title: "Analisis Selesai",
-        description: `Evaluasi pembelajaran untuk kelas ${getKelasNameEvaluasi()} telah dianalisis (termasuk hubungan ekspresi masuk dan pulang).`,
-      });
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handlePrint = () => window.print();
 
   const formatDate = (date: string) => {
@@ -741,11 +509,6 @@ export default function AttendanceReport() {
 
   const getKelasNameMapel = () => {
     const kelas = kelasListMapel.find(k => k.id_kelas.toString() === selectedKelasMapel);
-    return kelas?.nama || "";
-  };
-
-  const getKelasNameEvaluasi = () => {
-    const kelas = kelasListEvaluasi.find(k => k.id_kelas.toString() === selectedKelasEvaluasi);
     return kelas?.nama || "";
   };
 
@@ -823,7 +586,7 @@ export default function AttendanceReport() {
               </div>
             </CardHeader>
             <CardContent className="p-4 sm:p-6">
-              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "harian" | "mapel" | "evaluasi")} className="space-y-4 sm:space-y-6">
+              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "harian" | "mapel")} className="space-y-4 sm:space-y-6">
                 <div className="flex justify-center">
                   <TabsList className="bg-[#2C5EAD] p-1 rounded-xl">
                     <TabsTrigger value="harian" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-3 sm:px-4 py-1.5 text-xs sm:text-sm gap-2 text-white/80">
@@ -832,13 +595,10 @@ export default function AttendanceReport() {
                     <TabsTrigger value="mapel" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-3 sm:px-4 py-1.5 text-xs sm:text-sm gap-2 text-white/80">
                       <BookOpen className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Mapel
                     </TabsTrigger>
-                    <TabsTrigger value="evaluasi" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] data-[state=active]:shadow-sm px-3 sm:px-4 py-1.5 text-xs sm:text-sm gap-2 text-white/80">
-                      <Brain className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Evaluasi Pembelajaran
-                    </TabsTrigger>
                   </TabsList>
                 </div>
 
-                {/* Tab Presensi Harian (sama seperti sebelumnya) */}
+                {/* Tab Presensi Harian */}
                 <TabsContent value="harian" className="space-y-4 sm:space-y-6">
                   {kelasListHarian.length === 0 ? (
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3">
@@ -893,7 +653,7 @@ export default function AttendanceReport() {
                   )}
                 </TabsContent>
 
-                {/* Tab Presensi Mapel (sama seperti sebelumnya) */}
+                {/* Tab Presensi Mapel */}
                 <TabsContent value="mapel" className="space-y-4 sm:space-y-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-3 items-end">
                     <div className="w-full sm:w-48">
@@ -1010,272 +770,12 @@ export default function AttendanceReport() {
                     </div>
                   </div>
                 </TabsContent>
-
-                {/* Tab Evaluasi Pembelajaran */}
-                <TabsContent value="evaluasi" className="space-y-4 sm:space-y-6">
-                  {kelasListEvaluasi.length === 0 ? (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3">
-                      <AlertCircle className="h-5 w-5 text-amber-600" />
-                      <p className="text-sm text-amber-700">Anda tidak memiliki akses ke evaluasi pembelajaran.</p>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-3 items-end">
-                        <div className="w-full sm:w-48">
-                          <Label className="text-slate-700 text-xs sm:text-sm font-medium">Kelas</Label>
-                          <Popover open={popoverKelasOpen} onOpenChange={setPopoverKelasOpen}>
-                            <PopoverTrigger asChild>
-                              <Button variant="outline" className="w-full justify-between rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm font-normal mt-1">
-                                {selectedKelasEvaluasi ? getKelasNameEvaluasi() || "Pilih Kelas" : "Pilih Kelas"}
-                                <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 opacity-50" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-64 p-0" align="start" sideOffset={5}>
-                              <div className="p-2 border-b bg-slate-50">
-                                <div className="flex gap-1 mb-2">
-                                  {["all", "X", "XI", "XII"].map(jenjang => (
-                                    <Button key={jenjang} variant={kelasJenjangFilter === jenjang ? "default" : "ghost"} size="sm" className={`h-7 px-2 text-xs rounded-md ${kelasJenjangFilter === jenjang ? "bg-[#2C5EAD] text-white" : "text-slate-600 hover:bg-slate-100"}`} onClick={() => setKelasJenjangFilter(jenjang)}>
-                                      {jenjang === "all" ? "Semua" : jenjang}
-                                    </Button>
-                                  ))}
-                                </div>
-                                <div className="relative">
-                                  <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                                  <Input placeholder="Cari kelas..." value={kelasSearchQuery} onChange={(e) => setKelasSearchQuery(e.target.value)} className="pl-7 h-8 text-sm rounded-lg" onClick={(e) => e.stopPropagation()} />
-                                  {kelasSearchQuery && <button onClick={() => setKelasSearchQuery("")} className="absolute right-2 top-1/2 transform -translate-y-1/2"><X className="h-3.5 w-3.5 text-slate-400" /></button>}
-                                </div>
-                              </div>
-                              <div className="max-h-60 overflow-y-auto">
-                                {filteredKelasOptionsEvaluasi.length === 0 ? <div className="px-3 py-4 text-center text-sm text-slate-500">Tidak ada kelas yang cocok</div> : filteredKelasOptionsEvaluasi.map(kelas => (
-                                  <button key={kelas.id_kelas} className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${selectedKelasEvaluasi === kelas.id_kelas.toString() ? "bg-[#C4E2F5] text-[#2C5EAD] font-medium" : "text-slate-700"}`} onClick={() => { setSelectedKelasEvaluasi(kelas.id_kelas.toString()); setPopoverKelasOpen(false); setKelasSearchQuery(""); setKelasJenjangFilter("all"); }}>
-                                    {kelas.nama}
-                                  </button>
-                                ))}
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                        <div className="w-full sm:w-40"><Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Awal</Label><Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm" /></div>
-                        <div className="w-full sm:w-40"><Label className="text-slate-700 text-xs sm:text-sm font-medium">Tanggal Akhir</Label><Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="rounded-lg border-slate-200 h-8 sm:h-9 text-xs sm:text-sm" /></div>
-                        <div className="flex gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
-                          <Button onClick={generateEvaluasiPembelajaran} disabled={isLoading || !selectedKelasEvaluasi} className="rounded-lg h-8 sm:h-9 text-xs sm:text-sm bg-[#1591DC] hover:bg-[#1591DC]/80 flex-1 sm:flex-initial">
-                            {isLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Brain className="mr-1.5 h-3.5 w-3.5" />} Analisis Ekspresi
-                          </Button>
-                        </div>
-                      </div>
-
-                      {evaluasiPembelajaran && (
-                        <div className="mt-6 space-y-4">
-                          {/* Rekomendasi Card */}
-                          <Card className={`rounded-xl border-0 shadow-lg overflow-hidden ${
-                            evaluasiPembelajaran.rekomendasi === "PERTAHANKAN" 
-                              ? "bg-gradient-to-r from-emerald-50 to-teal-50 border-l-8 border-l-emerald-500" 
-                              : "bg-gradient-to-r from-rose-50 to-orange-50 border-l-8 border-l-rose-500"
-                          }`}>
-                            <CardContent className="p-5">
-                              <div className="flex items-center gap-3 mb-3">
-                                {evaluasiPembelajaran.rekomendasi === "PERTAHANKAN" ? (
-                                  <ThumbsUp className="h-8 w-8 text-emerald-600" />
-                                ) : (
-                                  <ThumbsDown className="h-8 w-8 text-rose-600" />
-                                )}
-                                <h3 className="text-lg font-bold">
-                                  Rekomendasi: {evaluasiPembelajaran.rekomendasi === "PERTAHANKAN" ? "Pertahankan Metode Pembelajaran" : "Evaluasi Metode Pembelajaran"}
-                                </h3>
-                              </div>
-                              <p className="text-slate-700 text-sm leading-relaxed">
-                                {evaluasiPembelajaran.pesan}
-                              </p>
-                            </CardContent>
-                          </Card>
-
-                          {/* Analisis Hubungan Masuk vs Pulang */}
-                          {analisisHubungan && analisisHubungan.total_hari_dengan_dua_ekspresi > 0 && (
-                            <Card className="rounded-xl border-0 shadow-lg">
-                              <CardHeader className="pb-2">
-                                <CardTitle className="text-base flex items-center gap-2">
-                                  <TrendingUp className="h-4 w-4" />
-                                  Analisis Hubungan Ekspresi Masuk vs Pulang
-                                </CardTitle>
-                                <CardDescription>Perubahan mood siswa dari awal hingga akhir pembelajaran</CardDescription>
-                              </CardHeader>
-                              <CardContent>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                  <div className="space-y-2">
-                                    <div className="flex justify-between items-center border-b pb-1">
-                                      <span className="text-sm">Total hari dengan data lengkap</span>
-                                      <span className="font-bold">{analisisHubungan.total_hari_dengan_dua_ekspresi}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center border-b pb-1">
-                                      <span className="text-sm text-emerald-600">Positif → Positif</span>
-                                      <span className="font-bold">{analisisHubungan.positif_ke_positif}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center border-b pb-1">
-                                      <span className="text-sm text-rose-600">Positif → Negatif</span>
-                                      <span className="font-bold">{analisisHubungan.positif_ke_negatif}</span>
-                                    </div>
-                                  </div>
-                                  <div className="space-y-2">
-                                    <div className="flex justify-between items-center border-b pb-1">
-                                      <span className="text-sm text-emerald-600">Negatif → Positif (Membaik)</span>
-                                      <span className="font-bold">{analisisHubungan.negatif_ke_positif}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center border-b pb-1">
-                                      <span className="text-sm text-rose-600">Negatif → Negatif</span>
-                                      <span className="font-bold">{analisisHubungan.negatif_ke_negatif}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                      <span className="text-sm text-slate-500">Hanya data masuk</span>
-                                      <span className="font-bold text-slate-500">{analisisHubungan.hanya_masuk}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                      <span className="text-sm text-slate-500">Hanya data pulang</span>
-                                      <span className="font-bold text-slate-500">{analisisHubungan.hanya_pulang}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                                {analisisHubungan.negatif_ke_positif > 0 && (
-                                  <div className="mt-3 p-2 bg-emerald-50 rounded-lg text-emerald-800 text-xs">
-                                    📈 Terdapat {analisisHubungan.negatif_ke_positif} kali perbaikan mood siswa selama pembelajaran.
-                                  </div>
-                                )}
-                                {analisisHubungan.positif_ke_negatif > 0 && (
-                                  <div className="mt-3 p-2 bg-rose-50 rounded-lg text-rose-800 text-xs">
-                                    📉 Terdapat {analisisHubungan.positif_ke_negatif} kali penurunan mood siswa. Perlu investigasi lebih lanjut.
-                                  </div>
-                                )}
-                              </CardContent>
-                            </Card>
-                          )}
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Card className="rounded-xl border-0 shadow-lg">
-                              <CardHeader className="pb-2">
-                                <CardTitle className="text-base flex items-center gap-2">
-                                  <BarChart3 className="h-4 w-4" />
-                                  Ringkasan Analisis
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent className="space-y-3">
-                                <div className="flex justify-between items-center border-b pb-2">
-                                  <span className="text-slate-600">Total Ekspresi Terekam (Masuk+Pulang)</span>
-                                  <span className="font-bold text-lg">{evaluasiPembelajaran.total_ekspresi}</span>
-                                </div>
-                                <div className="flex justify-between items-center border-b pb-2">
-                                  <span className="text-emerald-600 flex items-center gap-1">
-                                    <ThumbsUp className="h-3 w-3" /> Ekspresi Positif
-                                  </span>
-                                  <span className="font-bold text-emerald-600">{evaluasiPembelajaran.ekspresi_positif}</span>
-                                </div>
-                                <div className="flex justify-between items-center border-b pb-2">
-                                  <span className="text-rose-600 flex items-center gap-1">
-                                    <ThumbsDown className="h-3 w-3" /> Ekspresi Negatif
-                                  </span>
-                                  <span className="font-bold text-rose-600">{evaluasiPembelajaran.ekspresi_negatif}</span>
-                                </div>
-                                <div className="flex justify-between items-center pt-2">
-                                  <span className="text-slate-600">Rasio Positif:Negatif</span>
-                                  <span className="font-mono font-bold">
-                                    {evaluasiPembelajaran.ekspresi_positif}:{evaluasiPembelajaran.ekspresi_negatif}
-                                  </span>
-                                </div>
-                              </CardContent>
-                            </Card>
-
-                            <Card className="rounded-xl border-0 shadow-lg">
-                              <CardHeader className="pb-2">
-                                <CardTitle className="text-base flex items-center gap-2">
-                                  <Brain className="h-4 w-4" />
-                                  Detail Ekspresi Wajah
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent>
-                                <div className="space-y-2">
-                                  <div className="flex justify-between text-sm">
-                                    <span>😐 Netral</span>
-                                    <span className="font-medium">{evaluasiPembelajaran.ekspresi_detail.neutral}</span>
-                                  </div>
-                                  <div className="flex justify-between text-sm">
-                                    <span>😊 Bahagia</span>
-                                    <span className="font-medium text-emerald-600">{evaluasiPembelajaran.ekspresi_detail.happy}</span>
-                                  </div>
-                                  <div className="flex justify-between text-sm">
-                                    <span>😲 Terkejut</span>
-                                    <span className="font-medium text-blue-600">{evaluasiPembelajaran.ekspresi_detail.surprised}</span>
-                                  </div>
-                                  <div className="flex justify-between text-sm">
-                                    <span>😢 Sedih</span>
-                                    <span className="font-medium text-amber-600">{evaluasiPembelajaran.ekspresi_detail.sad}</span>
-                                  </div>
-                                  <div className="flex justify-between text-sm">
-                                    <span>😠 Marah</span>
-                                    <span className="font-medium text-rose-600">{evaluasiPembelajaran.ekspresi_detail.angry}</span>
-                                  </div>
-                                  <div className="flex justify-between text-sm">
-                                    <span>😨 Takut</span>
-                                    <span className="font-medium text-purple-600">{evaluasiPembelajaran.ekspresi_detail.fearful}</span>
-                                  </div>
-                                  <div className="flex justify-between text-sm">
-                                    <span>🤢 Jijik</span>
-                                    <span className="font-medium text-orange-600">{evaluasiPembelajaran.ekspresi_detail.disgusted}</span>
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </div>
-
-                          {evaluasiPembelajaran.total_ekspresi > 0 && (
-                            <Card className="rounded-xl border-0 shadow-lg">
-                              <CardHeader className="pb-2">
-                                <CardTitle className="text-base">Visualisasi Ekspresi</CardTitle>
-                              </CardHeader>
-                              <CardContent>
-                                <div className="space-y-3">
-                                  <div>
-                                    <div className="flex justify-between text-xs mb-1">
-                                      <span>Positif ({evaluasiPembelajaran.ekspresi_positif})</span>
-                                      <span>{((evaluasiPembelajaran.ekspresi_positif / evaluasiPembelajaran.total_ekspresi) * 100).toFixed(1)}%</span>
-                                    </div>
-                                    <div className="w-full bg-slate-200 rounded-full h-2">
-                                      <div 
-                                        className="bg-emerald-500 h-2 rounded-full transition-all duration-500"
-                                        style={{ width: `${(evaluasiPembelajaran.ekspresi_positif / evaluasiPembelajaran.total_ekspresi) * 100}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <div className="flex justify-between text-xs mb-1">
-                                      <span>Negatif ({evaluasiPembelajaran.ekspresi_negatif})</span>
-                                      <span>{((evaluasiPembelajaran.ekspresi_negatif / evaluasiPembelajaran.total_ekspresi) * 100).toFixed(1)}%</span>
-                                    </div>
-                                    <div className="w-full bg-slate-200 rounded-full h-2">
-                                      <div 
-                                        className="bg-rose-500 h-2 rounded-full transition-all duration-500"
-                                        style={{ width: `${(evaluasiPembelajaran.ekspresi_negatif / evaluasiPembelajaran.total_ekspresi) * 100}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          )}
-
-                          <div className="flex justify-end">
-                            <Button onClick={handlePrint} variant="outline" className="rounded-lg border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">
-                              <Printer className="mr-2 h-4 w-4" /> Cetak Evaluasi
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </TabsContent>
               </Tabs>
             </CardContent>
           </Card>
         </div>
 
-        {/* Summary Card - sama seperti sebelumnya */}
+        {/* Summary Card */}
         {((activeTab === "harian" && rekapHarian.length > 0) || (activeTab === "mapel" && rekapMapel.length > 0)) && (
           <div className="print:hidden">
             <Card className="rounded-xl border-0 shadow-lg bg-white">
@@ -1354,8 +854,8 @@ export default function AttendanceReport() {
           </div>
         )}
 
-        {/* Tabel Laporan (sama seperti sebelumnya) */}
-        {(rekapHarian.length > 0 || rekapMapel.length > 0) && activeTab !== "evaluasi" && (
+        {/* Tabel Laporan */}
+        {(rekapHarian.length > 0 || rekapMapel.length > 0) && (
           <div className="print:mt-0 print:p-0">
             <div className="hidden print:block text-center mb-6" style={{ pageBreakInside: 'avoid' }}>
               <h1 className="text-2xl font-bold uppercase">{SCHOOL_NAME}</h1>
@@ -1464,88 +964,12 @@ export default function AttendanceReport() {
           </div>
         )}
 
-        {evaluasiPembelajaran && activeTab === "evaluasi" && (
-          <div className="print:block hidden">
-            <div className="text-center mb-6">
-              <h1 className="text-2xl font-bold uppercase">{SCHOOL_NAME}</h1>
-              <p className="text-sm">{SCHOOL_ADDRESS}</p>
-              <p className="text-sm">Telp. {SCHOOL_PHONE} | Email: {SCHOOL_EMAIL} | NPSN: {SCHOOL_NPSN}</p>
-              <div className="border-t-2 border-black mt-3"></div><div className="border-b border-black"></div>
-            </div>
-            <div className="text-center mb-4">
-              <h2 className="text-xl font-bold uppercase">EVALUASI PEMBELAJARAN</h2>
-              <p className="text-sm mt-1">Kelas: {getKelasNameEvaluasi()} | Periode: {formatDate(startDate)} s.d. {formatDate(endDate)}</p>
-            </div>
-            <div className="mb-4 p-4 border rounded-lg">
-              <h3 className="font-bold text-lg">Rekomendasi: {evaluasiPembelajaran.rekomendasi === "PERTAHANKAN" ? "Pertahankan Metode Pembelajaran" : "Evaluasi Metode Pembelajaran"}</h3>
-              <p className="mt-2">{evaluasiPembelajaran.pesan}</p>
-            </div>
-            {analisisHubungan && analisisHubungan.total_hari_dengan_dua_ekspresi > 0 && (
-              <div className="mb-4 p-4 border rounded-lg">
-                <h3 className="font-bold">Analisis Hubungan Ekspresi Masuk vs Pulang</h3>
-                <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
-                  <div>Positif → Positif: {analisisHubungan.positif_ke_positif}</div>
-                  <div>Positif → Negatif: {analisisHubungan.positif_ke_negatif}</div>
-                  <div>Negatif → Positif: {analisisHubungan.negatif_ke_positif}</div>
-                  <div>Negatif → Negatif: {analisisHubungan.negatif_ke_negatif}</div>
-                  <div>Hanya masuk: {analisisHubungan.hanya_masuk}</div>
-                  <div>Hanya pulang: {analisisHubungan.hanya_pulang}</div>
-                </div>
-              </div>
-            )}
-            <div className="mb-4">
-              <h3 className="font-bold">Ringkasan Analisis</h3>
-              <table className="w-full border-collapse mt-2">
-                <tbody>
-                  <tr><td className="border p-2">Total Ekspresi (Masuk+Pulang)</td><td className="border p-2">{evaluasiPembelajaran.total_ekspresi}</td></tr>
-                  <tr><td className="border p-2">Ekspresi Positif</td><td className="border p-2">{evaluasiPembelajaran.ekspresi_positif}</td></tr>
-                  <tr><td className="border p-2">Ekspresi Negatif</td><td className="border p-2">{evaluasiPembelajaran.ekspresi_negatif}</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <div>
-              <h3 className="font-bold">Detail Ekspresi</h3>
-              <table className="w-full border-collapse mt-2">
-                <tbody>
-                  <tr><td className="border p-2">Netral</td><td className="border p-2">{evaluasiPembelajaran.ekspresi_detail.neutral}</td></tr>
-                  <tr><td className="border p-2">Bahagia</td><td className="border p-2">{evaluasiPembelajaran.ekspresi_detail.happy}</td></tr>
-                  <tr><td className="border p-2">Terkejut</td><td className="border p-2">{evaluasiPembelajaran.ekspresi_detail.surprised}</td></tr>
-                  <tr><td className="border p-2">Sedih</td><td className="border p-2">{evaluasiPembelajaran.ekspresi_detail.sad}</td></tr>
-                  <tr><td className="border p-2">Marah</td><td className="border p-2">{evaluasiPembelajaran.ekspresi_detail.angry}</td></tr>
-                  <tr><td className="border p-2">Takut</td><td className="border p-2">{evaluasiPembelajaran.ekspresi_detail.fearful}</td></tr>
-                  <tr><td className="border p-2">Jijik</td><td className="border p-2">{evaluasiPembelajaran.ekspresi_detail.disgusted}</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <div className="flex justify-between mt-8">
-              <div className="text-center w-1/2">
-                <p>Mengetahui,</p>
-                <p className="mt-2 font-semibold">Kepala Sekolah</p>
-                <div className="mt-6">
-                  <p className="mt-20">_________________________</p>
-                  <p className="text-sm mt-2">&nbsp;</p>
-                  <p className="text-sm">NIK. &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</p>
-                </div>
-              </div>
-              <div className="text-center w-1/2">
-                <p>&nbsp;</p>
-                <p className="mt-2 font-semibold">Petugas</p>
-                <div className="mt-6">
-                  <p className="mt-20">_________________________</p>
-                  <p className="text-sm mt-2">&nbsp;</p>
-                  <p className="text-sm">NIK. &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         <div className="print:hidden">
           <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-[#C4E2F5]/50 to-[#4BB8FA]/20 max-w-3xl mx-auto">
             <CardContent className="p-4 sm:p-5">
               <div className="flex items-start gap-3 sm:gap-4">
                 <div className="bg-[#2C5EAD]/10 p-2 sm:p-3 rounded-xl flex-shrink-0"><Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-[#2C5EAD]" /></div>
-                <div><h3 className="font-semibold text-slate-800 text-sm sm:text-base mb-1">Tips Laporan Presensi</h3><p className="text-xs sm:text-sm text-slate-600">Pilih kelas dan rentang waktu yang diinginkan, lalu klik tombol "Tampilkan" untuk melihat laporan. Gunakan tombol "Cetak" untuk mencetak laporan dalam format yang rapi. Fitur Evaluasi Pembelajaran menganalisis ekspresi wajah siswa (baik saat masuk maupun pulang) untuk memberikan rekomendasi metode pembelajaran, termasuk analisis perubahan mood selama pembelajaran.</p></div>
+                <div><h3 className="font-semibold text-slate-800 text-sm sm:text-base mb-1">Tips Laporan Presensi</h3><p className="text-xs sm:text-sm text-slate-600">Pilih kelas dan rentang waktu yang diinginkan, lalu klik tombol "Tampilkan" untuk melihat laporan. Gunakan tombol "Cetak" untuk mencetak laporan dalam format yang rapi.</p></div>
               </div>
             </CardContent>
           </Card>
