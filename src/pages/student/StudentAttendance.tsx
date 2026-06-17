@@ -1,8 +1,9 @@
+// src/pages/student/StudentAttendance.tsx
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -19,34 +20,17 @@ import {
   CheckCircle,
   XCircle,
   User,
-  GraduationCap,
   School,
   Briefcase,
-  Home,
   Sun,
   Moon,
   Cloud,
   RefreshCw,
   Info,
-  AlertCircle,
-  Sparkles,
-  Trophy,
-  Star,
   Activity,
-  Bell,
-  Fingerprint,
-  Smartphone,
   Shield,
-  Heart,
-  Smile,
-  ThumbsUp,
-  Camera,
-  ScanFace,
+  Fingerprint,
 } from "lucide-react";
-
-// 👇 Impor untuk face-api dan webcam
-import * as faceapi from "face-api.js";
-import Webcam from "react-webcam";
 
 // ==================== TIPE DATA ====================
 interface SiswaData {
@@ -67,159 +51,12 @@ interface JadwalHariIni {
   sudah_presensi: boolean;
 }
 
-// Data presensi harian (satu record untuk masuk & pulang)
 interface PresensiHarianRecord {
   id_pres_harian: number;
   status_presensi: string;   // "Hadir" / "Terlambat"
   waktu_presensi: string;
-  ekspresi: string;
   waktu_pulang?: string;
   status_pulang?: string;     // "Pulang"
-  ekspresi_pul?: string;
-}
-
-// ==================== MODAL UNTUK SCAN WAJAH ====================
-interface FaceCaptureModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onCapture: (expression: string) => void;
-  isLoading?: boolean;
-}
-
-function FaceCaptureModal({ isOpen, onClose, onCapture, isLoading }: FaceCaptureModalProps) {
-  const webcamRef = useRef<Webcam>(null);
-  const [modelsLoaded, setModelsLoaded] = useState(false);
-  const [detecting, setDetecting] = useState(false);
-  const [detectedExpression, setDetectedExpression] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const loadModels = async () => {
-      try {
-        const MODEL_URL = "/models";
-        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-        setModelsLoaded(true);
-        setError(null);
-      } catch (err: any) {
-        console.error(err);
-        setError("Gagal memuat model deteksi wajah.");
-      }
-    };
-    loadModels();
-  }, [isOpen]);
-
-  const detectExpression = async () => {
-    if (!webcamRef.current || !modelsLoaded) return;
-    const video = webcamRef.current.video;
-    if (!video || video.readyState !== 4) return;
-    setDetecting(true);
-    setError(null);
-    try {
-      const detection = await faceapi
-        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-        .withFaceExpressions();
-      if (detection) {
-        const expressions = detection.expressions;
-        const topExpression = Object.entries(expressions).reduce((a, b) => (a[1] > b[1] ? a : b));
-        const expressionName = topExpression[0];
-        const confidence = topExpression[1];
-        if (confidence > 0.5) {
-          setDetectedExpression(expressionName);
-          setError(null);
-        } else {
-          setError("Ekspresi kurang jelas, coba hadap langsung ke kamera.");
-        }
-      } else {
-        setError("Tidak ada wajah terdeteksi.");
-      }
-    } catch (err: any) {
-      setError("Gagal mendeteksi ekspresi: " + err.message);
-    } finally {
-      setDetecting(false);
-    }
-  };
-
-  const confirmExpression = () => {
-    if (detectedExpression) {
-      onCapture(detectedExpression);
-      onClose();
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] px-4 py-3 flex justify-between items-center">
-          <div className="flex items-center gap-2 text-white">
-            <ScanFace className="h-5 w-5" />
-            <h3 className="font-semibold">Scan Wajah & Deteksi Ekspresi</h3>
-          </div>
-          <button onClick={onClose} className="text-white/80 hover:text-white">✕</button>
-        </div>
-        <div className="p-4 space-y-4">
-          {!modelsLoaded ? (
-            <div className="flex flex-col items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-[#2C5EAD]" />
-              <p className="mt-2 text-sm text-slate-500">Memuat model deteksi wajah...</p>
-            </div>
-          ) : error && !detectedExpression ? (
-            <div className="bg-red-50 rounded-xl p-3 text-red-700 text-sm flex items-start gap-2">
-              <AlertCircle className="h-5 w-5 shrink-0" />
-              <span>{error}</span>
-            </div>
-          ) : null}
-          <div className="relative rounded-xl overflow-hidden bg-black/5">
-            <Webcam
-              ref={webcamRef}
-              audio={false}
-              screenshotFormat="image/jpeg"
-              videoConstraints={{ facingMode: "user" }}
-              className="w-full rounded-xl"
-              mirrored
-            />
-            {detecting && (
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-white" />
-              </div>
-            )}
-          </div>
-          {detectedExpression && (
-            <div className="bg-emerald-50 rounded-xl p-3 flex items-center gap-3">
-              <Smile className="h-6 w-6 text-emerald-600" />
-              <div>
-                <p className="text-sm font-medium text-emerald-800">Ekspresi terdeteksi:</p>
-                <p className="text-lg font-bold text-emerald-900 capitalize">{detectedExpression}</p>
-              </div>
-            </div>
-          )}
-          <div className="flex gap-2">
-            <Button
-              onClick={detectExpression}
-              disabled={detecting || !modelsLoaded}
-              className="flex-1 bg-[#2C5EAD] hover:bg-[#2C5EAD]/80"
-            >
-              {detecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-              Deteksi Ekspresi
-            </Button>
-            <Button
-              onClick={confirmExpression}
-              disabled={!detectedExpression || isLoading}
-              variant="default"
-              className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-            >
-              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
-              Gunakan Ekspresi Ini
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // ==================== KOMPONEN UTAMA ====================
@@ -237,12 +74,7 @@ export default function StudentAttendance() {
   // Presensi harian
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [locationStatus, setLocationStatus] = useState<{ verified: boolean; message: string } | null>(null);
-  const [todayPresensi, setTodayPresensi] = useState<PresensiHarianRecord | null>(null); // satu record untuk masuk & pulang
-
-  // State untuk modal scan wajah
-  const [showFaceModal, setShowFaceModal] = useState(false);
-  const [presensiType, setPresensiType] = useState<"masuk" | "pulang">("masuk");
-  const [pendingPresensiData, setPendingPresensiData] = useState<{ status: string; type: "masuk" | "pulang" } | null>(null);
+  const [todayPresensi, setTodayPresensi] = useState<PresensiHarianRecord | null>(null);
 
   // Presensi mapel
   const [jadwalHariIni, setJadwalHariIni] = useState<JadwalHariIni[]>([]);
@@ -252,7 +84,8 @@ export default function StudentAttendance() {
   const scannerContainerId = "qr-reader";
 
   // Koordinat sekolah
-  const SCHOOL_COORD = { lat: -7.316298604672446, lng: 112.72544806432117 };
+  //const SCHOOL_COORD = { lat: -7.316298604672446, lng: 112.72544806432117 };
+  const SCHOOL_COORD = { lat: -7.310492386369039, lng: 112.72432743671092 };
 
   // ==================== GREETING EFFECT ====================
   useEffect(() => {
@@ -300,7 +133,7 @@ export default function StudentAttendance() {
     fetchSiswaData();
   }, [user, toast]);
 
-  // ==================== FETCH TODAY PRESENSI (SATU RECORD) ====================
+  // ==================== FETCH TODAY PRESENSI ====================
   const fetchTodayPresensi = async () => {
     if (!siswa) return;
     const today = new Date().toISOString().split("T")[0];
@@ -312,7 +145,7 @@ export default function StudentAttendance() {
       .eq("id_siswa", siswa.id_siswa)
       .gte("waktu_presensi", start)
       .lte("waktu_presensi", end)
-      .maybeSingle(); // hanya ambil satu record (jika ada)
+      .maybeSingle();
     if (error) {
       console.error(error);
       return;
@@ -436,53 +269,14 @@ export default function StudentAttendance() {
     });
   };
 
-  // ==================== PROSES PRESENSI DENGAN EKSPRESI ====================
-  const prosesPresensiDenganEkspresi = async (ekspresi: string) => {
-    if (!siswa || !pendingPresensiData) return;
-    const now = new Date();
-    const { status, type } = pendingPresensiData;
-
-    try {
-      if (type === "masuk") {
-        // INSERT record baru untuk presensi masuk
-        const { error } = await supabase.from("presensi_harian").insert({
-          id_siswa: siswa.id_siswa,
-          status_presensi: status,
-          waktu_presensi: now.toISOString(),
-          ekspresi: ekspresi,
-        });
-        if (error) throw error;
-        toast({ title: "Berhasil", description: `✅ Presensi masuk tercatat dengan ekspresi ${ekspresi}` });
-      } 
-      else if (type === "pulang") {
-        // UPDATE record yang sudah ada (presensi masuk) dengan data pulang
-        if (!todayPresensi) {
-          toast({ title: "Error", description: "Belum ada presensi masuk hari ini", variant: "destructive" });
-          return;
-        }
-        const { error } = await supabase
-          .from("presensi_harian")
-          .update({
-            status_pulang: status,   // "Pulang"
-            waktu_pulang: now.toISOString(),
-            ekspresi_pul: ekspresi,
-          })
-          .eq("id_pres_harian", todayPresensi.id_pres_harian);
-        if (error) throw error;
-        toast({ title: "Berhasil", description: `✅ Presensi pulang tercatat dengan ekspresi ${ekspresi}` });
-      }
-
-      // Refresh data presensi setelah berhasil
-      await fetchTodayPresensi();
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } finally {
-      setIsSubmitting(false);
-      setPendingPresensiData(null);
-    }
-  };
-
+  // ==================== PRESENSI MASUK (hanya sekali) ====================
   const handleMasuk = async () => {
+    if (isSubmitting) return;
+    // Cegah duplikasi
+    if (todayPresensi) {
+      toast({ title: "Sudah presensi masuk", description: "Anda sudah melakukan presensi masuk hari ini", variant: "destructive" });
+      return;
+    }
     setIsSubmitting(true);
     setLocationStatus(null);
     const { valid, message } = await validateLocation();
@@ -493,25 +287,38 @@ export default function StudentAttendance() {
       return;
     }
     setLocationStatus({ verified: true, message });
+    // Tentukan status berdasarkan waktu
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
-    const batasTerlambat = 7 * 60 + 30;
+    const batasTerlambat = 7 * 60 + 30; // 07:30
     const currentMinutes = currentHour * 60 + currentMinute;
     const status = currentMinutes <= batasTerlambat ? "Hadir" : "Terlambat";
-    setPendingPresensiData({ status, type: "masuk" });
-    setPresensiType("masuk");
-    setShowFaceModal(true);
-    setIsSubmitting(false);
+
+    try {
+      const { error } = await supabase.from("presensi_harian").insert({
+        id_siswa: siswa!.id_siswa,
+        status_presensi: status,
+        waktu_presensi: now.toISOString(),
+      });
+      if (error) throw error;
+      toast({ title: "Berhasil", description: `✅ Presensi masuk tercatat (${status})` });
+      // Refresh data agar tombol langsung tidak aktif
+      await fetchTodayPresensi();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
+  // ==================== PRESENSI PULANG (hanya sekali) ====================
   const handlePulang = async () => {
-    // Cek apakah sudah presensi masuk hari ini
+    if (isSubmitting) return;
     if (!todayPresensi) {
       toast({ title: "Belum masuk", description: "Silakan presensi masuk terlebih dahulu", variant: "destructive" });
       return;
     }
-    // Cek apakah sudah pernah pulang
     if (todayPresensi.waktu_pulang) {
       toast({ title: "Sudah pulang", description: "Anda sudah melakukan presensi pulang hari ini", variant: "destructive" });
       return;
@@ -526,14 +333,23 @@ export default function StudentAttendance() {
       return;
     }
     setLocationStatus({ verified: true, message });
-    setPendingPresensiData({ status: "Pulang", type: "pulang" });
-    setPresensiType("pulang");
-    setShowFaceModal(true);
-    setIsSubmitting(false);
-  };
-
-  const handleFaceCaptured = (expression: string) => {
-    prosesPresensiDenganEkspresi(expression);
+    try {
+      const now = new Date();
+      const { error } = await supabase
+        .from("presensi_harian")
+        .update({
+          status_pulang: "Pulang",
+          waktu_pulang: now.toISOString(),
+        })
+        .eq("id_pres_harian", todayPresensi.id_pres_harian);
+      if (error) throw error;
+      toast({ title: "Berhasil", description: "✅ Presensi pulang tercatat" });
+      await fetchTodayPresensi();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // ==================== QR SCANNER FUNCTIONS ====================
@@ -686,7 +502,7 @@ export default function StudentAttendance() {
 
   const handleRefresh = () => {
     setRefreshing(true);
-    fetchTodayPresensi(); // refresh data presensi harian
+    fetchTodayPresensi();
     setTimeout(() => setRefreshing(false), 1500);
   };
 
@@ -720,7 +536,7 @@ export default function StudentAttendance() {
   return (
     <div className="min-h-screen bg-[#F0F7FC]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
-        {/* HEADER - Gradasi palette */}
+        {/* HEADER */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] shadow-xl">
           <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
           <div className="relative p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -770,7 +586,7 @@ export default function StudentAttendance() {
           </Card>
         )}
 
-        {/* MAIN CARD - Form Presensi */}
+        {/* MAIN CARD */}
         <Card className="rounded-xl sm:rounded-2xl border-0 shadow-xl overflow-hidden">
           <CardHeader className="bg-[#1591DC] text-white p-4 sm:p-6">
             <div className="flex items-center gap-3">
@@ -823,9 +639,6 @@ export default function StudentAttendance() {
                               <p className="text-xs sm:text-sm text-emerald-600">
                                 {new Date(todayPresensi.waktu_presensi).toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' })}
                               </p>
-                              {todayPresensi.ekspresi && (
-                                <p className="text-xs text-emerald-600 mt-1 capitalize">Ekspresi: {todayPresensi.ekspresi}</p>
-                              )}
                             </div>
                           </div>
                           <Badge className="bg-emerald-100 text-emerald-700 rounded-full text-xs">
@@ -836,10 +649,10 @@ export default function StudentAttendance() {
                         <Button
                           onClick={handleMasuk}
                           disabled={isSubmitting}
-                          className="w-full rounded-xl bg-[#2C5EAD] hover:bg-[#2C5EAD]/80 text-sm sm:text-base h-9 sm:h-10"
+                          className="w-full rounded-xl bg-[#2C5EAD] hover:bg-[#2C5EAD]/80 text-sm sm:text-base h-10 sm:h-11"
                         >
-                          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-                          Scan Wajah & Presensi Masuk
+                          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapPin className="mr-2 h-4 w-4" />}
+                          Presensi Masuk
                         </Button>
                       )}
                     </CardContent>
@@ -865,9 +678,6 @@ export default function StudentAttendance() {
                             <p className="text-xs sm:text-sm text-orange-600">
                               {new Date(todayPresensi.waktu_pulang).toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' })}
                             </p>
-                            {todayPresensi.ekspresi_pul && (
-                              <p className="text-xs text-orange-600 mt-1 capitalize">Ekspresi: {todayPresensi.ekspresi_pul}</p>
-                            )}
                           </div>
                         </div>
                       ) : (
@@ -875,10 +685,10 @@ export default function StudentAttendance() {
                           onClick={handlePulang}
                           disabled={isSubmitting || !todayPresensi}
                           variant="outline"
-                          className="w-full rounded-xl text-sm sm:text-base h-9 sm:h-10 border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"
+                          className="w-full rounded-xl text-sm sm:text-base h-10 sm:h-11 border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"
                         >
-                          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-                          Scan Wajah & Presensi Pulang
+                          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapPin className="mr-2 h-4 w-4" />}
+                          Presensi Pulang
                         </Button>
                       )}
                     </CardContent>
@@ -897,18 +707,19 @@ export default function StudentAttendance() {
                   </Alert>
                 )}
 
-                {/* Tips */}
+                {/* Info */}
                 <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-3 sm:p-4">
                   <div className="flex items-start gap-3">
                     <div className="bg-blue-100 p-1.5 sm:p-2 rounded-xl">
-                      <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+                      <Info className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                     </div>
                     <div>
-                      <p className="font-medium text-slate-800 text-sm sm:text-base">Tips Presensi Wajah</p>
+                      <p className="font-medium text-slate-800 text-sm sm:text-base">Informasi Presensi</p>
                       <p className="text-xs sm:text-sm text-slate-600">
-                        Pastikan GPS aktif dan Anda berada di lokasi sekolah/PKL. Kamera hanya dapat diakses jika lokasi valid.
-                        Hadapkan wajah dengan jelas ke kamera, lalu tekan tombol <strong>"Deteksi Ekspresi"</strong>.
-                        Ekspresi yang terdeteksi (senang, netral, dll) akan disimpan sebagai bukti presensi.
+                        Pastikan GPS aktif dan Anda berada di lokasi sekolah/PKL. 
+                        Presensi masuk dibagi menjadi <strong>Hadir</strong> (sebelum 07:30) atau <strong>Terlambat</strong> (setelah 07:30).
+                        Presensi pulang dapat dilakukan setelah presensi masuk. 
+                        <span className="block mt-1 text-amber-600 font-semibold">⚠️ Setiap hari hanya bisa melakukan presensi masuk dan pulang masing-masing satu kali.</span>
                       </p>
                     </div>
                   </div>
@@ -1037,18 +848,6 @@ export default function StudentAttendance() {
           </p>
         </div>
       </div>
-
-      {/* MODAL SCAN WAJAH */}
-      <FaceCaptureModal
-        isOpen={showFaceModal}
-        onClose={() => {
-          setShowFaceModal(false);
-          setPendingPresensiData(null);
-          setIsSubmitting(false);
-        }}
-        onCapture={handleFaceCaptured}
-        isLoading={isSubmitting}
-      />
     </div>
   );
 }
