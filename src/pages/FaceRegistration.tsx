@@ -175,14 +175,15 @@ export default function FaceRegistration() {
 
       if (detection) {
         const confidence = detection.detection.score;
-        if (confidence < 0.8) {
+        // Ubah threshold dari 0.8 menjadi 0.94
+        if (confidence < 0.94) {
           // Tentukan penyebab berdasarkan tingkat akurasi
           let penyebab = "";
-          if (confidence < 0.5) penyebab = "Wajah terlalu jauh atau pencahayaan sangat buruk.";
-          else if (confidence < 0.7) penyebab = "Pencahayaan kurang atau wajah tidak menghadap kamera dengan jelas.";
+          if (confidence < 0.6) penyebab = "Wajah terlalu jauh atau pencahayaan sangat buruk.";
+          else if (confidence < 0.8) penyebab = "Pencahayaan kurang atau wajah tidak menghadap kamera dengan jelas.";
           else penyebab = "Pastikan wajah bersih dari penghalang (kacamata hitam, topi) dan pencahayaan cukup.";
           
-          const msg = `Akurasi wajah terlalu rendah (${(confidence * 100).toFixed(1)}%). ${penyebab} Silakan deteksi ulang.`;
+          const msg = `Akurasi wajah terlalu rendah (${(confidence * 100).toFixed(1)}%). Minimal 94%. ${penyebab} Silakan deteksi ulang.`;
           setAccuracyMessage(msg);
           setAccuracyDialogOpen(true); // Tampilkan pop-up dialog
           
