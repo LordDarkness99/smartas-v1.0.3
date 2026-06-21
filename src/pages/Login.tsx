@@ -264,7 +264,7 @@ export default function Login() {
         <div className="h-2 bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA]" />
         <CardHeader className="text-center space-y-4 pt-6">
           <div className="mx-auto flex h-24 w-24 items-center justify-center">
-            <img src="/New.png" alt="SMARTAS Logo" className="h-full w-full object-contain" />
+            <img src="/smk2.png" alt="SMARTAS Logo" className="h-full w-full object-contain" />
           </div>
           <div>
             <CardTitle className="text-3xl font-bold bg-gradient-to-r from-[#2C5EAD] to-[#1591DC] bg-clip-text text-transparent">
