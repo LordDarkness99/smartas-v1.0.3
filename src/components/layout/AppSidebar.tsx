@@ -78,7 +78,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
         { title: "Laporan Data", icon: FileText, path: "/guru/reports" },
         { title: "Registrasi Wajah", icon: Camera, path: "/face-registration" },
       ];
-    } else if (role === "admin") {
+    } else if (role === "pimpinan") {
       return [
         { title: "Dashboard", icon: LayoutDashboard, path: "/admin/dashboard" },
         { title: "Kelola User", icon: Users, path: "/admin/manage-users" },
@@ -94,7 +94,7 @@ export function AppSidebar({ userRole, userName }: AppSidebarProps) {
         { title: "Laporan Presensi", icon: FileText, path: "/bk/reports" },
         { title: "Registrasi Wajah", icon: Camera, path: "/face-registration" },
       ];
-    } else if (role === "admin_jurusan") {
+    } else if (role === "kepala_jurusan") {
       return [
         { title: "Dashboard", icon: LayoutDashboard, path: "/admin-jurusan/dashboard" },
         { title: "Kelola User", icon: Users, path: "/admin-jurusan/manage-users" },

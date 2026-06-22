@@ -27,9 +27,9 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     // Redirect ke dashboard sesuai role
     if (user.peran === "siswa") return <Navigate to="/student/dashboard" replace />;
     if (user.peran === "guru") return <Navigate to="/guru/dashboard" replace />;
-    if (user.peran === "admin") return <Navigate to="/admin/dashboard" replace />;
+    if (user.peran === "pimpinan") return <Navigate to="/admin/dashboard" replace />;
     if (user.peran === "bk") return <Navigate to="/bk/dashboard" replace />;
-    if (user.peran === "admin_jurusan") return <Navigate to="/admin-jurusan/dashboard" replace />;
+    if (user.peran === "kepala_jurusan") return <Navigate to="/admin-jurusan/dashboard" replace />;
     return <Navigate to="/" replace />;
   }
 

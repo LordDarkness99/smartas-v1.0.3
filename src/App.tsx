@@ -12,7 +12,7 @@ import FaceRegistration from "./pages/FaceRegistration";
 import StudentDashboard from "@/pages/student/Dashboard";
 import StudentAttendance from "@/pages/student/StudentAttendance";
 
-// Admin pages
+// Admin pages (now used by pimpinan, kepala_jurusan, bk)
 import AdminDashboard from "@/pages/admin/Dashboard";
 import UserManagement from "@/pages/admin/UserManagement";
 import ScheduleManagement from "@/pages/admin/ScheduleManagement";
@@ -25,21 +25,17 @@ import GuruDashboard from "@/pages/guru/Dashboard";
 import ScheduleView from "@/pages/schedule/ScheduleView";
 import AttendanceManagementGuru from "@/pages/guru/AttendanceManagement";
 
-// BK & Admin Jurusan (gunakan komponen yang sama dengan filter role)
-// Dashboard sederhana untuk BK dan Admin Jurusan bisa menggunakan AdminDashboard yang sudah ada,
-// atau buat komponen terpisah. Untuk kemudahan, kita gunakan AdminDashboard dengan conditional render.
-// Untuk BK, hanya tampilkan statistik dan laporan; untuk Admin Jurusan, tampilkan semua fitur tetapi data terfilter.
-
-// Fungsi untuk merender dashboard sesuai role
+// Fungsi untuk merender dashboard sesuai role (peran baru)
 function DashboardRenderer() {
   const { user } = useAuth();
   const role = user?.peran;
 
   if (role === "siswa") return <StudentDashboard />;
   if (role === "guru") return <GuruDashboard />;
-  if (role === "admin") return <AdminDashboard />;
-  if (role === "bk") return <AdminDashboard />; // BK bisa menggunakan AdminDashboard dengan modifikasi internal (filter menu)
-  if (role === "admin_jurusan") return <AdminDashboard />;
+  // Peran baru: pimpinan, kepala_jurusan, bk → gunakan AdminDashboard
+  if (role === "pimpinan") return <AdminDashboard />;
+  if (role === "kepala_jurusan") return <AdminDashboard />;
+  if (role === "bk") return <AdminDashboard />;
   return <Navigate to="/login" replace />;
 }
 
@@ -55,12 +51,12 @@ function RootRouter() {
   }
 
   if (user) {
-    // Redirect berdasarkan role ke dashboard yang sesuai
+    // Redirect berdasarkan role (peran baru)
     if (user.peran === "siswa") return <Navigate to="/student/dashboard" replace />;
     if (user.peran === "guru") return <Navigate to="/guru/dashboard" replace />;
-    if (user.peran === "admin") return <Navigate to="/admin/dashboard" replace />;
+    if (user.peran === "pimpinan") return <Navigate to="/admin/dashboard" replace />;
+    if (user.peran === "kepala_jurusan") return <Navigate to="/admin-jurusan/dashboard" replace />;
     if (user.peran === "bk") return <Navigate to="/bk/dashboard" replace />;
-    if (user.peran === "admin_jurusan") return <Navigate to="/admin-jurusan/dashboard" replace />;
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -111,11 +107,11 @@ function App() {
             <Route path="face-registration" element={<FaceRegistration />} />
           </Route>
 
-          {/* Admin Routes */}
+          {/* Pimpinan Routes (URL tetap /admin) */}
           <Route
             path="/admin"
             element={
-              <ProtectedRoute allowedRoles={["admin"]}>
+              <ProtectedRoute allowedRoles={["pimpinan"]}>
                 <AppLayout />
               </ProtectedRoute>
             }
@@ -130,7 +126,7 @@ function App() {
             <Route path="face-registration" element={<FaceRegistration />} />
           </Route>
 
-          {/* BK Routes (hanya dashboard dan laporan) */}
+          {/* BK Routes */}
           <Route
             path="/bk"
             element={
@@ -145,11 +141,11 @@ function App() {
             <Route path="face-registration" element={<FaceRegistration />} />
           </Route>
 
-          {/* Admin Jurusan Routes (akses seperti admin namun data terfilter) */}
+          {/* Kepala Jurusan Routes (URL tetap /admin-jurusan) */}
           <Route
             path="/admin-jurusan"
             element={
-              <ProtectedRoute allowedRoles={["admin_jurusan"]}>
+              <ProtectedRoute allowedRoles={["kepala_jurusan"]}>
                 <AppLayout />
               </ProtectedRoute>
             }

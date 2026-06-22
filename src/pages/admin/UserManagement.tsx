@@ -61,12 +61,12 @@ type KelasWithGuru = {
 export default function UserManagement() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const isAdminSuper = user?.peran === "admin";
-  const isAdminJurusan = user?.peran === "admin_jurusan";
+  const isAdminSuper = user?.peran === "pimpinan";
+  const isAdminJurusan = user?.peran === "kepala_jurusan";
 
   // UI state
   const [activeTab, setActiveTab] = useState<"list" | "kelas">("list");
-  const [userType, setUserType] = useState<"guru" | "siswa" | "admin_jurusan" | "bk">("guru");
+  const [userType, setUserType] = useState<"guru" | "siswa" | "kepala_jurusan" | "bk">("guru");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -104,7 +104,7 @@ export default function UserManagement() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [addForm, setAddForm] = useState({
     nama: "", username: "", password: "", gender: "", nik: "", nis: "",
-    kelas_id: "", peran: "guru" as "guru" | "siswa" | "admin_jurusan" | "bk",
+    kelas_id: "", peran: "guru" as "guru" | "siswa" | "kepala_jurusan" | "bk",
     id_jurusan: "",
   });
 
@@ -113,7 +113,7 @@ export default function UserManagement() {
   const [editingUser, setEditingUser] = useState<UserItem | null>(null);
   const [editForm, setEditForm] = useState({
     nama: "", username: "", password: "", gender: "", nik: "", nis: "",
-    kelas_id: "", peran: "guru" as "guru" | "siswa" | "admin_jurusan" | "bk",
+    kelas_id: "", peran: "guru" as "guru" | "siswa" | "kepala_jurusan" | "bk",
     id_jurusan: "", aktif: true,
   });
 
@@ -126,7 +126,6 @@ export default function UserManagement() {
   // Kelas CRUD
   const [kelasDialogOpen, setKelasDialogOpen] = useState(false);
   const [editingKelas, setEditingKelas] = useState<Kelas | null>(null);
-  // MODIFIKASI: tambah id_jurusan ke kelasForm
   const [kelasForm, setKelasForm] = useState({ nama: "", id_guru: "", id_jurusan: "" });
   const [isSavingKelas, setIsSavingKelas] = useState(false);
   const [toggleKelasDialogOpen, setToggleKelasDialogOpen] = useState(false);
@@ -156,7 +155,7 @@ export default function UserManagement() {
     canProcessIds: string[];
   } | null>(null);
 
-  // Jurusan missing saat import admin_jurusan
+  // Jurusan missing saat import kepala_jurusan
   const [importJurusanMissing, setImportJurusanMissing] = useState<string[]>([]);
   const [missingJurusanDialogOpen, setMissingJurusanDialogOpen] = useState(false);
   const [isAddingMissingJurusan, setIsAddingMissingJurusan] = useState(false);
@@ -194,7 +193,7 @@ export default function UserManagement() {
         .from("siswa").select("*", { count: "exact", head: true });
       setTotalSiswa(siswaCount || 0);
       const { count: adminJurusanCount } = await supabase
-        .from("akun").select("*", { count: "exact", head: true }).eq("peran", "admin_jurusan");
+        .from("akun").select("*", { count: "exact", head: true }).eq("peran", "kepala_jurusan");
       setTotalAdminJurusan(adminJurusanCount || 0);
       const { count: bkCount } = await supabase
         .from("akun").select("*", { count: "exact", head: true }).eq("peran", "bk");
@@ -283,12 +282,12 @@ export default function UserManagement() {
             nama_kelas: s.id_kelas ? kelasMap.get(s.id_kelas) || null : null,
           };
         });
-      } else if (userType === "admin_jurusan") {
+      } else if (userType === "kepala_jurusan") {
         if (!isAdminSuper) { setUserList([]); setIsFetching(false); return; }
         const { data: akunData, error } = await supabase
           .from("akun")
           .select("id_akun, nama, username, peran, aktif, id_jurusan")
-          .eq("peran", "admin_jurusan")
+          .eq("peran", "kepala_jurusan")
           .order("nama", { ascending: true });
         if (error) throw error;
         const jurusanIds = akunData?.map(a => a.id_jurusan).filter(Boolean) as number[];
@@ -302,7 +301,7 @@ export default function UserManagement() {
           id_akun: a.id_akun,
           nama: a.nama,
           username: a.username,
-          peran: "admin_jurusan" as const,
+          peran: "kepala_jurusan" as const,
           aktif: a.aktif,
           id_jurusan: a.id_jurusan,
           jurusan_nama: a.id_jurusan ? jurusanMap.get(a.id_jurusan) || "-" : "-",
@@ -483,16 +482,16 @@ export default function UserManagement() {
       toast({ title: "Error", description: "NIS harus diisi untuk siswa", variant: "destructive" });
       return;
     }
-    if (addForm.peran === "admin_jurusan" && !addForm.id_jurusan) {
-      toast({ title: "Error", description: "Pilih jurusan untuk admin jurusan", variant: "destructive" });
+    if (addForm.peran === "kepala_jurusan" && !addForm.id_jurusan) {
+      toast({ title: "Error", description: "Pilih jurusan untuk kepala jurusan", variant: "destructive" });
       return;
     }
-    if (addForm.peran !== "bk" && !addForm.gender && addForm.peran !== "admin_jurusan") {
+    if (addForm.peran !== "bk" && !addForm.gender && addForm.peran !== "kepala_jurusan") {
       toast({ title: "Error", description: "Jenis kelamin harus dipilih", variant: "destructive" });
       return;
     }
-    if ((addForm.peran === "admin_jurusan" || addForm.peran === "bk") && !isAdminSuper) {
-      toast({ title: "Error", description: "Hanya admin super yang dapat menambahkan pengguna sistem", variant: "destructive" });
+    if ((addForm.peran === "kepala_jurusan" || addForm.peran === "bk") && !isAdminSuper) {
+      toast({ title: "Error", description: "Hanya pimpinan yang dapat menambahkan pengguna sistem", variant: "destructive" });
       return;
     }
 
@@ -579,11 +578,11 @@ export default function UserManagement() {
         });
         if (akunError) throw akunError;
 
-      } else if (addForm.peran === "admin_jurusan") {
+      } else if (addForm.peran === "kepala_jurusan") {
         await supabase.from("akun").insert({
           nama: addForm.nama,
           username: addForm.username,
-          peran: "admin_jurusan",
+          peran: "kepala_jurusan",
           aktif: true,
           dibuat_pada: now,
           id_guru: null,
@@ -615,8 +614,8 @@ export default function UserManagement() {
   };
 
   const openEditDialog = (userItem: UserItem) => {
-    if ((userItem.peran === "admin_jurusan" || userItem.peran === "bk") && !isAdminSuper) {
-      toast({ title: "Error", description: "Hanya admin super yang dapat mengedit akun sistem", variant: "destructive" });
+    if ((userItem.peran === "kepala_jurusan" || userItem.peran === "bk") && !isAdminSuper) {
+      toast({ title: "Error", description: "Hanya pimpinan yang dapat mengedit akun sistem", variant: "destructive" });
       return;
     }
     if (userItem.peran === "siswa") {
@@ -637,11 +636,11 @@ export default function UserManagement() {
         nik: "", nis: siswa.nis, kelas_id: siswa.id_kelas?.toString() || "",
         peran: "siswa", id_jurusan: "", aktif: siswa.aktif,
       });
-    } else if (userItem.peran === "admin_jurusan") {
+    } else if (userItem.peran === "kepala_jurusan") {
       const adminJur = userItem as AdminJurusanData;
       setEditForm({
         nama: adminJur.nama, username: adminJur.username, password: "", gender: "",
-        nik: "", nis: "", kelas_id: "", peran: "admin_jurusan",
+        nik: "", nis: "", kelas_id: "", peran: "kepala_jurusan",
         id_jurusan: adminJur.id_jurusan?.toString() || "", aktif: adminJur.aktif,
       });
     } else if (userItem.peran === "bk") {
@@ -656,8 +655,8 @@ export default function UserManagement() {
 
   const handleUpdateUser = async () => {
     if (!editingUser) return;
-    if ((editForm.peran === "admin_jurusan" || editForm.peran === "bk") && !isAdminSuper) {
-      toast({ title: "Error", description: "Hanya admin super yang dapat mengubah ke role sistem", variant: "destructive" });
+    if ((editForm.peran === "kepala_jurusan" || editForm.peran === "bk") && !isAdminSuper) {
+      toast({ title: "Error", description: "Hanya pimpinan yang dapat mengubah ke role sistem", variant: "destructive" });
       return;
     }
     setIsLoading(true);
@@ -688,7 +687,7 @@ export default function UserManagement() {
           updateData.id_guru = null;
         } else if (oldRole === "siswa") {
           updateData.id_siswa = null;
-        } else if (oldRole === "admin_jurusan" || oldRole === "bk") {
+        } else if (oldRole === "kepala_jurusan" || oldRole === "bk") {
           updateData.id_jurusan = null;
         }
       }
@@ -731,13 +730,13 @@ export default function UserManagement() {
         else if (newRole === "siswa" && oldRole !== "siswa") {
           throw new Error("Tidak dapat mengubah role menjadi siswa.");
         } 
-        else if (newRole === "admin_jurusan" && oldRole !== "admin_jurusan") {
+        else if (newRole === "kepala_jurusan" && oldRole !== "kepala_jurusan") {
           if (editForm.id_jurusan && editForm.id_jurusan !== "none") {
             await supabase.from("akun").update({ id_jurusan: parseInt(editForm.id_jurusan) }).eq("id_akun", editingUser.id_akun);
           }
         }
       } else {
-        if (newRole === "admin_jurusan" && editForm.id_jurusan && editForm.id_jurusan !== "none") {
+        if (newRole === "kepala_jurusan" && editForm.id_jurusan && editForm.id_jurusan !== "none") {
           await supabase.from("akun").update({ id_jurusan: parseInt(editForm.id_jurusan) }).eq("id_akun", editingUser.id_akun);
         }
         if (newRole === "guru") {
@@ -924,10 +923,9 @@ export default function UserManagement() {
   };
 
   // ========== KELAS MANAGEMENT (DENGAN JURUSAN) ==========
-  // MODIFIKASI: handleAddKelas dengan jurusan default untuk admin jurusan
   const handleAddKelas = () => {
     if (isAdminJurusan && !user?.id_jurusan) {
-      toast({ title: "Error", description: "Admin jurusan tidak memiliki jurusan", variant: "destructive" });
+      toast({ title: "Error", description: "Kepala jurusan tidak memiliki jurusan", variant: "destructive" });
       return;
     }
     setEditingKelas(null);
@@ -939,7 +937,6 @@ export default function UserManagement() {
     setKelasDialogOpen(true);
   };
 
-  // MODIFIKASI: handleEditKelas mengambil id_jurusan dari kelas yang diedit
   const handleEditKelas = (kelas: Kelas) => {
     setEditingKelas(kelas);
     setKelasForm({
@@ -950,7 +947,6 @@ export default function UserManagement() {
     setKelasDialogOpen(true);
   };
 
-  // MODIFIKASI: handleSaveKelas menyertakan id_jurusan
   const handleSaveKelas = async () => {
     if (!kelasForm.nama.trim()) {
       toast({ title: "Kesalahan", description: "Nama kelas tidak boleh kosong", variant: "destructive" });
@@ -963,12 +959,9 @@ export default function UserManagement() {
         id_guru: kelasForm.id_guru ? parseInt(kelasForm.id_guru) : null,
       };
 
-      // Tentukan id_jurusan berdasarkan role
       if (isAdminSuper) {
-        // Admin super: pilih dari form (bisa null jika pilih "none")
         data.id_jurusan = kelasForm.id_jurusan ? parseInt(kelasForm.id_jurusan) : null;
       } else if (isAdminJurusan && user?.id_jurusan) {
-        // Admin jurusan: otomatis menggunakan jurusannya
         data.id_jurusan = user.id_jurusan;
       }
 
@@ -1115,7 +1108,7 @@ export default function UserManagement() {
   };
 
   // ========== IMPORT EXCEL UNTUK PENGGUNA ==========
-  const downloadTemplate = (type: "guru" | "siswa" | "admin_jurusan" | "bk") => {
+  const downloadTemplate = (type: "guru" | "siswa" | "kepala_jurusan" | "bk") => {
     let headers: string[];
     let data: (string | number)[][];
     if (type === "guru") {
@@ -1130,7 +1123,7 @@ export default function UserManagement() {
         ["Budi Raharjo", "1234567890", "budi.raharjo@student.com", "L", "XII RPL 1", "password123"],
         ["Anisa Fitri", "1234567891", "anisa.fitri@student.com", "P", "XII RPL 2", "password123"],
       ];
-    } else if (type === "admin_jurusan") {
+    } else if (type === "kepala_jurusan") {
       headers = ["nama", "username", "nama_jurusan", "password"];
       data = [
         ["Dr. Ahmad", "ahmad.admin", "RPL", "password123"],
@@ -1165,7 +1158,7 @@ export default function UserManagement() {
       let requiredColumns: string[];
       if (userType === "guru") requiredColumns = ["nama", "nik", "username", "gender"];
       else if (userType === "siswa") requiredColumns = ["nama", "nis", "username", "gender", "kelas"];
-      else if (userType === "admin_jurusan") requiredColumns = ["nama", "username", "nama_jurusan"];
+      else if (userType === "kepala_jurusan") requiredColumns = ["nama", "username", "nama_jurusan"];
       else requiredColumns = ["nama", "username"];
 
       const firstRow = jsonData[0];
@@ -1400,7 +1393,7 @@ export default function UserManagement() {
             errors.push(`Gagal import baris: ${JSON.stringify(row)} - ${err instanceof Error ? err.message : "Unknown error"}`);
           }
         }
-      } else if (userType === "admin_jurusan") {
+      } else if (userType === "kepala_jurusan") {
         const jurusanNames = [...new Set(previewData.map(row => row.nama_jurusan?.toString().trim()).filter(Boolean))];
         if (jurusanNames.length) {
           const { data: existingJurusan } = await supabase
@@ -1453,7 +1446,7 @@ export default function UserManagement() {
             await supabase.from("akun").insert({
               nama,
               username,
-              peran: "admin_jurusan",
+              peran: "kepala_jurusan",
               aktif: true,
               dibuat_pada: new Date().toISOString(),
               id_guru: null,
@@ -1463,7 +1456,7 @@ export default function UserManagement() {
             });
             successCount++;
           } catch (err) {
-            console.error("Gagal import admin_jurusan:", row, err);
+            console.error("Gagal import kepala_jurusan:", row, err);
             skipCount++;
             errors.push(`Gagal import baris: ${JSON.stringify(row)} - ${err instanceof Error ? err.message : "Unknown error"}`);
           }
@@ -1661,7 +1654,7 @@ export default function UserManagement() {
           <Card className="rounded-xl border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-all">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
-                <div><p className="text-[10px] sm:text-xs text-slate-500 font-medium">Admin Jurusan</p><p className="text-lg sm:text-2xl font-bold text-slate-800">{totalAdminJurusan}</p></div>
+                <div><p className="text-[10px] sm:text-xs text-slate-500 font-medium">Kepala Jurusan</p><p className="text-lg sm:text-2xl font-bold text-slate-800">{totalAdminJurusan}</p></div>
                 <div className="p-2 rounded-full bg-purple-100"><Building2 className="h-5 w-5 text-purple-600" /></div>
               </div>
             </CardContent>
@@ -1696,11 +1689,11 @@ export default function UserManagement() {
               <TabsContent value="list" className="space-y-4 sm:space-y-6">
                 <div className="flex flex-col gap-4">
                   <div className="flex justify-start">
-                    <Select value={userType} onValueChange={(v) => { setUserType(v as any); resetPagination(); }} disabled={isAdminJurusan && (userType === "admin_jurusan" || userType === "bk")}>
+                    <Select value={userType} onValueChange={(v) => { setUserType(v as any); resetPagination(); }} disabled={isAdminJurusan && (userType === "kepala_jurusan" || userType === "bk")}>
                       <SelectTrigger className="w-[180px] rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD]/20 focus:ring-[#2C5EAD]"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="guru">Guru</SelectItem><SelectItem value="siswa">Siswa</SelectItem>
-                        {isAdminSuper && <SelectItem value="admin_jurusan">Admin Jurusan</SelectItem>}
+                        {isAdminSuper && <SelectItem value="kepala_jurusan">Kepala Jurusan</SelectItem>}
                         {isAdminSuper && <SelectItem value="bk">BK</SelectItem>}
                       </SelectContent>
                     </Select>
@@ -1734,12 +1727,12 @@ export default function UserManagement() {
                           <TableHead>Nama</TableHead><TableHead>Nama Pengguna</TableHead>
                           {userType === "guru" && <TableHead>NIK</TableHead>}{userType === "guru" && <TableHead>Jurusan</TableHead>}
                           {userType === "siswa" && <TableHead>NIS</TableHead>}{userType === "siswa" && <TableHead>Kelas</TableHead>}
-                          {userType === "admin_jurusan" && <TableHead>Jurusan</TableHead>}
+                          {userType === "kepala_jurusan" && <TableHead>Jurusan</TableHead>}
                           <TableHead>Status</TableHead><TableHead className="text-center">Aksi</TableHead>
                         </TableRow></TableHeader>
                         <TableBody>
                           {paginatedUserList.map(item => {
-                            const isGuru = item.peran === "guru", isSiswa = item.peran === "siswa", isAdminJur = item.peran === "admin_jurusan";
+                            const isGuru = item.peran === "guru", isSiswa = item.peran === "siswa", isAdminJur = item.peran === "kepala_jurusan";
                             return (<TableRow key={item.id_akun} className="hover:bg-slate-50">
                               {selectMode && <TableCell><Checkbox checked={selectedIds.includes(item.id_akun)} onCheckedChange={() => handleSelectItem(item.id_akun)} className="data-[state=checked]:bg-[#2C5EAD] data-[state=checked]:border-[#2C5EAD]" /></TableCell>}
                               <TableCell className="whitespace-nowrap">{item.nama}</TableCell><TableCell className="break-all min-w-[180px]">{item.username}</TableCell>
@@ -1782,7 +1775,7 @@ export default function UserManagement() {
                           <TableRow className="bg-slate-50">
                             <TableHead>Nama Kelas</TableHead>
                             <TableHead>Wali Kelas</TableHead>
-                            <TableHead>Jurusan</TableHead>  {/* KOLOM BARU */}
+                            <TableHead>Jurusan</TableHead>
                             <TableHead className="text-center">Status</TableHead>
                             <TableHead className="text-center">Aksi</TableHead>
                           </TableRow>
@@ -1829,43 +1822,43 @@ export default function UserManagement() {
 
         {/* TIPS SECTION */}
         <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-[#C4E2F5]/50 to-[#4BB8FA]/20 max-w-3xl mx-auto">
-          <CardContent className="p-4 sm:p-5"><div className="flex gap-3"><div className="bg-[#2C5EAD]/10 p-2 rounded-xl"><Sparkles className="h-5 w-5 text-[#2C5EAD]" /></div><div><h3 className="font-semibold text-sm">Tips Mengelola Data</h3><p className="text-xs text-slate-600">Gunakan impor Excel untuk data massal. {isAdminJurusan ? "Anda hanya dapat mengelola guru, siswa, dan kelas dalam jurusan Anda." : "Admin super dapat mengelola semua jenis pengguna."}</p></div></div></CardContent>
+          <CardContent className="p-4 sm:p-5"><div className="flex gap-3"><div className="bg-[#2C5EAD]/10 p-2 rounded-xl"><Sparkles className="h-5 w-5 text-[#2C5EAD]" /></div><div><h3 className="font-semibold text-sm">Tips Mengelola Data</h3><p className="text-xs text-slate-600">Gunakan impor Excel untuk data massal. {isAdminJurusan ? "Anda hanya dapat mengelola guru, siswa, dan kelas dalam jurusan Anda." : "Pimpinan dapat mengelola semua jenis pengguna."}</p></div></div></CardContent>
         </Card>
         <div className="text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Manajemen Pengguna &amp; Kelas - SmartAS</p></div>
       </div>
 
-      {/* DIALOG TAMBAH USER (tidak berubah) */}
+      {/* DIALOG TAMBAH USER */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent className="rounded-2xl max-w-md">
-          <DialogHeader><DialogTitle><Plus className="h-5 w-5 inline mr-2 text-emerald-600" /> Tambah {addForm.peran === "guru" ? "Guru" : addForm.peran === "siswa" ? "Siswa" : addForm.peran === "admin_jurusan" ? "Admin Jurusan" : "BK"}</DialogTitle><DialogDescription>Isi data pengguna baru. Kata sandi default "password123".</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle><Plus className="h-5 w-5 inline mr-2 text-emerald-600" /> Tambah {addForm.peran === "guru" ? "Guru" : addForm.peran === "siswa" ? "Siswa" : addForm.peran === "kepala_jurusan" ? "Kepala Jurusan" : "BK"}</DialogTitle><DialogDescription>Isi data pengguna baru. Kata sandi default "password123".</DialogDescription></DialogHeader>
           <div className="space-y-4">
             <div><Label>Nama Lengkap</Label><Input value={addForm.nama} onChange={e => setAddForm({ ...addForm, nama: e.target.value })} className="rounded-xl" /></div>
             <div><Label>Nama Pengguna</Label><Input value={addForm.username} onChange={e => setAddForm({ ...addForm, username: e.target.value })} className="rounded-xl" /></div>
-            {addForm.peran !== "bk" && addForm.peran !== "admin_jurusan" && <div><Label>Jenis Kelamin</Label><Select value={addForm.gender} onValueChange={v => setAddForm({ ...addForm, gender: v })}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jenis kelamin" /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>}
+            {addForm.peran !== "bk" && addForm.peran !== "kepala_jurusan" && <div><Label>Jenis Kelamin</Label><Select value={addForm.gender} onValueChange={v => setAddForm({ ...addForm, gender: v })}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jenis kelamin" /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>}
             {addForm.peran === "guru" && <div><Label>NIK</Label><Input value={addForm.nik} onChange={e => setAddForm({ ...addForm, nik: e.target.value })} className="rounded-xl" /></div>}
             {addForm.peran === "guru" && isAdminSuper && <div><Label>Jurusan</Label><Select value={addForm.id_jurusan} onValueChange={v => setAddForm({ ...addForm, id_jurusan: v })}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan (opsional)" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
             {addForm.peran === "siswa" && <div><Label>NIS</Label><Input value={addForm.nis} onChange={e => setAddForm({ ...addForm, nis: e.target.value })} className="rounded-xl" /></div>}
             {addForm.peran === "siswa" && <div><Label>Kelas</Label><Select value={addForm.kelas_id} onValueChange={v => setAddForm({ ...addForm, kelas_id: v })}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih kelas (opsional)" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada kelas</SelectItem>{kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}</SelectContent></Select></div>}
-            {addForm.peran === "admin_jurusan" && <div><Label>Jurusan</Label><Select value={addForm.id_jurusan || "none"} onValueChange={v => setAddForm({ ...addForm, id_jurusan: v })}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent><SelectItem value="none" disabled>Pilih jurusan</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
+            {addForm.peran === "kepala_jurusan" && <div><Label>Jurusan</Label><Select value={addForm.id_jurusan || "none"} onValueChange={v => setAddForm({ ...addForm, id_jurusan: v })}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent><SelectItem value="none" disabled>Pilih jurusan</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
             <div><Label>Kata Sandi (opsional)</Label><Input type="password" value={addForm.password} onChange={e => setAddForm({ ...addForm, password: e.target.value })} className="rounded-xl" placeholder="Kosongkan untuk default: password123" /></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setAddDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button><Button onClick={handleAddUser} disabled={isLoading} className="rounded-xl bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG EDIT USER (tidak berubah) */}
+      {/* DIALOG EDIT USER */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="rounded-2xl max-w-sm p-4 max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle><Edit className="h-5 w-5 inline mr-2 text-blue-600" /> Edit Pengguna</DialogTitle><DialogDescription>Ubah informasi pengguna. Kosongkan kata sandi jika tidak ingin mengubah.</DialogDescription></DialogHeader>
           <div className="space-y-3">
             <div><Label className="text-xs">Nama</Label><Input value={editForm.nama} onChange={e => setEditForm({ ...editForm, nama: e.target.value })} className="rounded-lg text-sm h-9" /></div>
             <div><Label className="text-xs">Nama Pengguna</Label><Input value={editForm.username} onChange={e => setEditForm({ ...editForm, username: e.target.value })} className="rounded-lg text-sm h-9" /></div>
-            {editForm.peran !== "bk" && editForm.peran !== "admin_jurusan" && <div><Label className="text-xs">Jenis Kelamin</Label><Select value={editForm.gender} onValueChange={v => setEditForm({ ...editForm, gender: v })}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>}
+            {editForm.peran !== "bk" && editForm.peran !== "kepala_jurusan" && <div><Label className="text-xs">Jenis Kelamin</Label><Select value={editForm.gender} onValueChange={v => setEditForm({ ...editForm, gender: v })}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>}
             {editForm.peran === "guru" && <div><Label className="text-xs">NIK</Label><Input value={editForm.nik} onChange={e => setEditForm({ ...editForm, nik: e.target.value })} className="rounded-lg text-sm h-9" /></div>}
             {editForm.peran === "guru" && isAdminSuper && <div><Label className="text-xs">Jurusan</Label><Select value={editForm.id_jurusan} onValueChange={v => setEditForm({ ...editForm, id_jurusan: v })}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
             {editForm.peran === "siswa" && (<><div><Label className="text-xs">NIS</Label><Input value={editForm.nis} onChange={e => setEditForm({ ...editForm, nis: e.target.value })} className="rounded-lg text-sm h-9" /></div><div><Label className="text-xs">Kelas</Label><Select value={editForm.kelas_id} onValueChange={v => setEditForm({ ...editForm, kelas_id: v })}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue placeholder="Pilih kelas" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada kelas</SelectItem>{kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}</SelectContent></Select></div></>)}
-            {editForm.peran === "admin_jurusan" && <div><Label className="text-xs">Jurusan</Label><Select value={editForm.id_jurusan || "none"} onValueChange={v => setEditForm({ ...editForm, id_jurusan: v })}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent><SelectItem value="none" disabled>Pilih jurusan</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
-            <div><Label className="text-xs">Role</Label><Select value={editForm.peran} onValueChange={v => setEditForm({ ...editForm, peran: v as any })} disabled={!isAdminSuper || editingUser?.peran === "siswa"}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="guru">Guru</SelectItem><SelectItem value="siswa">Siswa</SelectItem>{isAdminSuper && <SelectItem value="admin_jurusan">Admin Jurusan</SelectItem>}{isAdminSuper && <SelectItem value="bk">BK</SelectItem>}</SelectContent></Select></div>
+            {editForm.peran === "kepala_jurusan" && <div><Label className="text-xs">Jurusan</Label><Select value={editForm.id_jurusan || "none"} onValueChange={v => setEditForm({ ...editForm, id_jurusan: v })}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent><SelectItem value="none" disabled>Pilih jurusan</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
+            <div><Label className="text-xs">Role</Label><Select value={editForm.peran} onValueChange={v => setEditForm({ ...editForm, peran: v as any })} disabled={!isAdminSuper || editingUser?.peran === "siswa"}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="guru">Guru</SelectItem><SelectItem value="siswa">Siswa</SelectItem>{isAdminSuper && <SelectItem value="kepala_jurusan">Kepala Jurusan</SelectItem>}{isAdminSuper && <SelectItem value="bk">BK</SelectItem>}</SelectContent></Select></div>
             <div><Label className="text-xs">Kata Sandi Baru (Opsional)</Label><Input type="password" placeholder="Kosongkan jika tidak ingin mengubah" value={editForm.password} onChange={e => setEditForm({ ...editForm, password: e.target.value })} className="rounded-lg text-sm h-9" /></div>
             <div className="flex items-center space-x-2"><Checkbox id="edit_aktif" checked={editForm.aktif} onCheckedChange={(checked) => setEditForm({ ...editForm, aktif: checked === true })} /><Label htmlFor="edit_aktif" className="text-xs">Aktif (centang agar pengguna dapat login)</Label></div>
           </div>
@@ -1873,7 +1866,7 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG DEACTIVATE / ACTIVATE (tidak berubah) */}
+      {/* DIALOG DEACTIVATE / ACTIVATE */}
       <Dialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
         <DialogContent className="rounded-2xl max-w-lg">
           <DialogHeader><DialogTitle>{isActivatingMode ? "Aktifkan Pengguna" : "Nonaktifkan Pengguna"}</DialogTitle><DialogDescription>{isActivatingMode ? `Aktifkan kembali ${deactivatingUser?.nama}?` : `Yakin ingin menonaktifkan ${deactivatingUser?.nama}?`}</DialogDescription></DialogHeader>
@@ -1882,7 +1875,7 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG BULK ACTION (tidak berubah) */}
+      {/* DIALOG BULK ACTION */}
       <Dialog open={bulkActionDialogOpen} onOpenChange={setBulkActionDialogOpen}>
         <DialogContent className="rounded-2xl max-w-lg">
           <DialogHeader><DialogTitle>{bulkActionType === "activate" ? "Aktifkan Massal" : "Nonaktifkan Massal"}</DialogTitle><DialogDescription>Anda akan {bulkActionType === "activate" ? "mengaktifkan" : "menonaktifkan"} {bulkActionData?.users.length} pengguna.</DialogDescription></DialogHeader>
@@ -1978,7 +1971,7 @@ export default function UserManagement() {
                 </PopoverContent>
               </Popover>
             </div>
-            {/* DROPDOWN JURUSAN - HANYA UNTUK ADMIN SUPER */}
+            {/* DROPDOWN JURUSAN - HANYA UNTUK PIMPINAN */}
             {isAdminSuper && (
               <div>
                 <Label className="text-slate-700 font-medium text-xs sm:text-sm">Jurusan</Label>
@@ -2035,7 +2028,7 @@ export default function UserManagement() {
         <DialogContent className="rounded-2xl max-w-lg"><DialogHeader><DialogTitle>{isActivatingKelasMode ? "Aktifkan Kelas" : "Nonaktifkan Kelas"}</DialogTitle><DialogDescription>{isActivatingKelasMode ? `Aktifkan kembali kelas ${togglingKelas?.nama}?` : `Yakin ingin menonaktifkan kelas ${togglingKelas?.nama}?`}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setToggleKelasDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button><Button onClick={executeToggleActiveKelas} disabled={isSavingKelas}>{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isActivatingKelasMode ? "Aktifkan" : "Nonaktifkan"}</Button></DialogFooter></DialogContent>
       </Dialog>
 
-      {/* IMPORT KELAS DIALOGS (tidak berubah) */}
+      {/* IMPORT KELAS DIALOGS */}
       <Dialog open={importKelasDialogOpen} onOpenChange={setImportKelasDialogOpen}>
         <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader><DialogTitle>Impor Kelas dari Excel</DialogTitle><DialogDescription>Unggah file Excel untuk menambah kelas secara massal</DialogDescription></DialogHeader>
@@ -2048,12 +2041,12 @@ export default function UserManagement() {
         <DialogContent className="rounded-xl max-w-md"><DialogHeader><DialogTitle>Wali Kelas Tidak Ditemukan</DialogTitle><DialogDescription>Beberapa NIK wali kelas tidak ditemukan.</DialogDescription></DialogHeader><div className="bg-yellow-50 p-3 rounded-lg"><p className="font-medium">NIK tidak ditemukan:</p><ul className="list-disc list-inside mt-1">{Array.from(importKelasMissingGurus).map(nik => <li key={nik} className="font-mono">{nik}</li>)}</ul><p className="text-sm mt-2">Baris dengan NIK tidak ditemukan akan dilewati. Lanjutkan?</p></div><DialogFooter><Button variant="outline" onClick={() => { setMissingGuruDialogOpen(false); setImportKelasDialogOpen(false); setImportKelasRawData([]); }}>Batalkan Impor</Button><Button onClick={handleSkipMissingGurus} className="bg-green-600">Lanjutkan (Lewati Baris Bermasalah)</Button></DialogFooter></DialogContent>
       </Dialog>
 
-      {/* IMPORT USER DIALOG (tidak berubah) */}
+      {/* IMPORT USER DIALOG */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-          <DialogHeader><DialogTitle>Impor {userType === "guru" ? "Guru" : userType === "siswa" ? "Siswa" : userType === "admin_jurusan" ? "Admin Jurusan" : "BK"} dari Excel</DialogTitle><DialogDescription>Unggah file Excel untuk menambah data secara massal</DialogDescription></DialogHeader>
-          {importStep === "upload" && (<div className="space-y-4"><div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50"><div className="flex flex-col items-center gap-2"><Upload className="h-8 w-8 text-slate-400" /><label htmlFor="user-file-input" className="cursor-pointer"><span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk unggah</span><input id="user-file-input" type="file" accept=".xlsx,.xls" onChange={handleUserFileUpload} className="hidden" disabled={isLoading} /></label><p className="text-xs text-slate-500">atau tarik & lepas file Excel di sini</p></div></div>{uploadError && <Alert className="bg-red-50 border-red-200"><AlertCircle className="h-4 w-4 text-red-600" /><AlertDescription className="text-red-700">{uploadError}</AlertDescription></Alert>}<Button variant="outline" onClick={() => downloadTemplate(userType)} className="w-full rounded-lg"><Download className="h-4 w-4 mr-2" /> Unduh Template Excel</Button><div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700"><p className="font-semibold">Format File:</p>{userType === "guru" && <p>Kolom yang diperlukan: <strong>nama, nik, username, gender</strong> (opsional: nama_jurusan, password)</p>}{userType === "siswa" && <p>Kolom yang diperlukan: <strong>nama, nis, username, gender, kelas</strong> (opsional: password)</p>}{userType === "admin_jurusan" && <p>Kolom yang diperlukan: <strong>nama, username, nama_jurusan</strong> (opsional: password)</p>}{userType === "bk" && <p>Kolom yang diperlukan: <strong>nama, username</strong> (opsional: password)</p>}<p className="text-xs mt-1">Kata sandi default "password123".</p></div></div>)}
-          {importStep === "preview" && previewData.length > 0 && (<div className="space-y-4"><div className="flex justify-between items-center"><p className="text-sm font-medium">Pratinjau Data ({previewData.length} baris)</p></div><div className="border rounded-lg overflow-x-auto max-h-96"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead>Nama</TableHead>{userType === "guru" && <TableHead>NIK</TableHead>}{userType === "siswa" && <TableHead>NIS</TableHead>}<TableHead>Nama Pengguna</TableHead>{userType !== "bk" && userType !== "admin_jurusan" && <TableHead>Jenis Kelamin</TableHead>}{userType === "siswa" && <TableHead>Kelas</TableHead>}{userType === "admin_jurusan" && <TableHead>Nama Jurusan</TableHead>}</TableRow></TableHeader><TableBody>{previewData.slice(0, 20).map((item, idx) => (<TableRow key={idx}><TableCell>{item.nama as string}</TableCell>{userType === "guru" && <TableCell>{item.nik as string}</TableCell>}{userType === "siswa" && <TableCell>{item.nis as string}</TableCell>}<TableCell>{item.username as string}</TableCell>{userType !== "bk" && userType !== "admin_jurusan" && <TableCell><Badge className={(item.gender as string) === "L" ? "bg-blue-100" : "bg-pink-100"}>{item.gender === "L" ? "Laki-laki" : "Perempuan"}</Badge></TableCell>}{userType === "siswa" && <TableCell>{item.kelas as string}</TableCell>}{userType === "admin_jurusan" && <TableCell>{item.nama_jurusan as string}</TableCell>}</TableRow>))}{previewData.length > 20 && <TableRow><TableCell colSpan={6} className="text-center text-slate-500">... dan {previewData.length - 20} baris lainnya</TableCell></TableRow>}</TableBody></Table></div><div className="flex gap-3 justify-end"><Button variant="outline" onClick={() => { setImportDialogOpen(false); setPreviewData([]); setImportRawData([]); setImportStep("upload"); }} className="rounded-lg">Batal</Button><Button onClick={handleImport} disabled={isLoading} className="rounded-lg bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Impor Data</Button></div></div>)}
+          <DialogHeader><DialogTitle>Impor {userType === "guru" ? "Guru" : userType === "siswa" ? "Siswa" : userType === "kepala_jurusan" ? "Kepala Jurusan" : "BK"} dari Excel</DialogTitle><DialogDescription>Unggah file Excel untuk menambah data secara massal</DialogDescription></DialogHeader>
+          {importStep === "upload" && (<div className="space-y-4"><div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50"><div className="flex flex-col items-center gap-2"><Upload className="h-8 w-8 text-slate-400" /><label htmlFor="user-file-input" className="cursor-pointer"><span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk unggah</span><input id="user-file-input" type="file" accept=".xlsx,.xls" onChange={handleUserFileUpload} className="hidden" disabled={isLoading} /></label><p className="text-xs text-slate-500">atau tarik & lepas file Excel di sini</p></div></div>{uploadError && <Alert className="bg-red-50 border-red-200"><AlertCircle className="h-4 w-4 text-red-600" /><AlertDescription className="text-red-700">{uploadError}</AlertDescription></Alert>}<Button variant="outline" onClick={() => downloadTemplate(userType)} className="w-full rounded-lg"><Download className="h-4 w-4 mr-2" /> Unduh Template Excel</Button><div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700"><p className="font-semibold">Format File:</p>{userType === "guru" && <p>Kolom yang diperlukan: <strong>nama, nik, username, gender</strong> (opsional: nama_jurusan, password)</p>}{userType === "siswa" && <p>Kolom yang diperlukan: <strong>nama, nis, username, gender, kelas</strong> (opsional: password)</p>}{userType === "kepala_jurusan" && <p>Kolom yang diperlukan: <strong>nama, username, nama_jurusan</strong> (opsional: password)</p>}{userType === "bk" && <p>Kolom yang diperlukan: <strong>nama, username</strong> (opsional: password)</p>}<p className="text-xs mt-1">Kata sandi default "password123".</p></div></div>)}
+          {importStep === "preview" && previewData.length > 0 && (<div className="space-y-4"><div className="flex justify-between items-center"><p className="text-sm font-medium">Pratinjau Data ({previewData.length} baris)</p></div><div className="border rounded-lg overflow-x-auto max-h-96"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead>Nama</TableHead>{userType === "guru" && <TableHead>NIK</TableHead>}{userType === "siswa" && <TableHead>NIS</TableHead>}<TableHead>Nama Pengguna</TableHead>{userType !== "bk" && userType !== "kepala_jurusan" && <TableHead>Jenis Kelamin</TableHead>}{userType === "siswa" && <TableHead>Kelas</TableHead>}{userType === "kepala_jurusan" && <TableHead>Nama Jurusan</TableHead>}</TableRow></TableHeader><TableBody>{previewData.slice(0, 20).map((item, idx) => (<TableRow key={idx}><TableCell>{item.nama as string}</TableCell>{userType === "guru" && <TableCell>{item.nik as string}</TableCell>}{userType === "siswa" && <TableCell>{item.nis as string}</TableCell>}<TableCell>{item.username as string}</TableCell>{userType !== "bk" && userType !== "kepala_jurusan" && <TableCell><Badge className={(item.gender as string) === "L" ? "bg-blue-100" : "bg-pink-100"}>{item.gender === "L" ? "Laki-laki" : "Perempuan"}</Badge></TableCell>}{userType === "siswa" && <TableCell>{item.kelas as string}</TableCell>}{userType === "kepala_jurusan" && <TableCell>{item.nama_jurusan as string}</TableCell>}</TableRow>))}{previewData.length > 20 && <TableRow><TableCell colSpan={6} className="text-center text-slate-500">... dan {previewData.length - 20} baris lainnya</TableCell></TableRow>}</TableBody></Table></div><div className="flex gap-3 justify-end"><Button variant="outline" onClick={() => { setImportDialogOpen(false); setPreviewData([]); setImportRawData([]); setImportStep("upload"); }} className="rounded-lg">Batal</Button><Button onClick={handleImport} disabled={isLoading} className="rounded-lg bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Impor Data</Button></div></div>)}
         </DialogContent>
       </Dialog>
 
