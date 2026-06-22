@@ -50,7 +50,7 @@ interface BKData extends BaseUser { }
 type UserItem = GuruData | SiswaData | AdminJurusanData | BKData;
 interface Kelas { id_kelas: number; nama: string; aktif: boolean; dibuat_pada: string; id_guru: number | null; guru_nama?: string | null; id_jurusan?: number | null; }
 interface GuruSimple { id_guru: number; nama: string; nik: string; id_jurusan?: number | null; }
-interface Jurusan { id_jurusan: number; nama_jurusan: string; }
+interface Jurusan { id_jurusan: number; nama_jurusan: string; aktif: boolean; }
 type ExcelRow = Record<string, string | number | boolean | null | undefined>;
 type KelasWithGuru = {
   id_kelas: number; nama: string; aktif: boolean; dibuat_pada: string;
@@ -65,12 +65,13 @@ export default function UserManagement() {
   const isAdminJurusan = user?.peran === "kepala_jurusan";
 
   // UI state
-  const [activeTab, setActiveTab] = useState<"list" | "kelas">("list");
+  const [activeTab, setActiveTab] = useState<"list" | "kelas" | "jurusan">("list");
   const [userType, setUserType] = useState<"guru" | "siswa" | "kepala_jurusan" | "bk">("guru");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchKelasQuery, setSearchKelasQuery] = useState("");
+  const [searchJurusanQuery, setSearchJurusanQuery] = useState("");
   const [filterKelas, setFilterKelas] = useState<string>("all");
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -85,6 +86,7 @@ export default function UserManagement() {
   const [isFetching, setIsFetching] = useState(false);
   const [kelasList, setKelasList] = useState<Kelas[]>([]);
   const [isFetchingKelas, setIsFetchingKelas] = useState(false);
+  const [isFetchingJurusan, setIsFetchingJurusan] = useState(false);
   const [guruOptions, setGuruOptions] = useState<GuruSimple[]>([]);
   const [jurusanList, setJurusanList] = useState<Jurusan[]>([]);
 
@@ -165,6 +167,33 @@ export default function UserManagement() {
   const [missingKelasDialogOpen, setMissingKelasDialogOpen] = useState(false);
   const [isAddingMissingKelas, setIsAddingMissingKelas] = useState(false);
   const [selectedJurusanForNewKelas, setSelectedJurusanForNewKelas] = useState<string>("");
+
+  // ===== State untuk Jurusan =====
+  const [jurusanDialogOpen, setJurusanDialogOpen] = useState(false);
+  const [editingJurusan, setEditingJurusan] = useState<Jurusan | null>(null);
+  const [jurusanForm, setJurusanForm] = useState({ nama_jurusan: "", aktif: true });
+  const [isSavingJurusan, setIsSavingJurusan] = useState(false);
+  const [toggleJurusanDialogOpen, setToggleJurusanDialogOpen] = useState(false);
+  const [togglingJurusan, setTogglingJurusan] = useState<Jurusan | null>(null);
+  const [isActivatingJurusanMode, setIsActivatingJurusanMode] = useState(false);
+
+  // ===== Missing Jurusan saat Import Kelas =====
+  const [importKelasMissingJurusan, setImportKelasMissingJurusan] = useState<string[]>([]);
+  const [missingJurusanKelasDialogOpen, setMissingJurusanKelasDialogOpen] = useState(false);
+  const [isAddingMissingJurusanKelas, setIsAddingMissingJurusanKelas] = useState(false);
+
+  // ===== Missing Jurusan saat Import Guru =====
+  const [importGuruMissingJurusan, setImportGuruMissingJurusan] = useState<string[]>([]);
+  const [missingGuruJurusanDialogOpen, setMissingGuruJurusanDialogOpen] = useState(false);
+  const [isAddingMissingGuruJurusan, setIsAddingMissingGuruJurusan] = useState(false);
+
+  // ===== Import Jurusan =====
+  const [importJurusanDialogOpen, setImportJurusanDialogOpen] = useState(false);
+  const [importJurusanRawData, setImportJurusanRawData] = useState<ExcelRow[]>([]);
+  const [importJurusanPreviewRows, setImportJurusanPreviewRows] = useState<any[]>([]);
+  const [isImportingJurusan, setIsImportingJurusan] = useState(false);
+  const [importJurusanUploadError, setImportJurusanUploadError] = useState<string | null>(null);
+  const [importJurusanStep, setImportJurusanStep] = useState<"upload" | "preview">("upload");
 
   // ========== GREETING ==========
   useEffect(() => {
@@ -379,14 +408,18 @@ export default function UserManagement() {
 
   const fetchJurusan = useCallback(async () => {
     try {
+      setIsFetchingJurusan(true);
       const { data, error } = await supabase
         .from("jurusan")
-        .select("id_jurusan, nama_jurusan")
-        .eq("aktif", true)
+        .select("id_jurusan, nama_jurusan, aktif")
         .order("nama_jurusan");
       if (error) throw error;
       setJurusanList(data || []);
-    } catch (error) { console.error(error); }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsFetchingJurusan(false);
+    }
   }, []);
 
   const refreshAll = useCallback(() => {
@@ -1006,53 +1039,299 @@ export default function UserManagement() {
     }
   };
 
-  // ========== IMPORT KELAS ==========
-  const downloadKelasTemplate = () => {
-    const headers = ["nama", "nik_wali", "aktif"];
-    const data = [["X IPA 1", "198512342021011001", "1"], ["XI IPS 2", "198709152021012002", "1"], ["XII RPL 3", "", "0"]];
+  // ========== CRUD JURUSAN ==========
+  const handleAddJurusan = () => {
+    if (!isAdminSuper) {
+      toast({ title: "Akses Ditolak", description: "Hanya pimpinan yang dapat mengelola jurusan", variant: "destructive" });
+      return;
+    }
+    setEditingJurusan(null);
+    setJurusanForm({ nama_jurusan: "", aktif: true });
+    setJurusanDialogOpen(true);
+  };
+
+  const handleEditJurusan = (jurusan: Jurusan) => {
+    if (!isAdminSuper) {
+      toast({ title: "Akses Ditolak", description: "Hanya pimpinan yang dapat mengelola jurusan", variant: "destructive" });
+      return;
+    }
+    setEditingJurusan(jurusan);
+    setJurusanForm({ nama_jurusan: jurusan.nama_jurusan, aktif: jurusan.aktif });
+    setJurusanDialogOpen(true);
+  };
+
+  const handleSaveJurusan = async () => {
+    if (!jurusanForm.nama_jurusan.trim()) {
+      toast({ title: "Error", description: "Nama jurusan tidak boleh kosong", variant: "destructive" });
+      return;
+    }
+    setIsSavingJurusan(true);
+    try {
+      const data = { nama_jurusan: jurusanForm.nama_jurusan.trim(), aktif: jurusanForm.aktif };
+      if (editingJurusan) {
+        await supabase.from("jurusan").update(data).eq("id_jurusan", editingJurusan.id_jurusan);
+        toast({ title: "Berhasil", description: "Jurusan berhasil diperbarui" });
+      } else {
+        await supabase.from("jurusan").insert({ ...data, dibuat_pada: new Date().toISOString() });
+        toast({ title: "Berhasil", description: "Jurusan baru berhasil ditambahkan" });
+      }
+      setJurusanDialogOpen(false);
+      refreshAll();
+    } catch (error: any) {
+      toast({ title: "Gagal", description: error.message, variant: "destructive" });
+    } finally {
+      setIsSavingJurusan(false);
+    }
+  };
+
+  const confirmToggleActiveJurusan = (jurusan: Jurusan, isActivating: boolean) => {
+    setTogglingJurusan(jurusan);
+    setIsActivatingJurusanMode(isActivating);
+    setToggleJurusanDialogOpen(true);
+  };
+
+  const executeToggleActiveJurusan = async () => {
+    if (!togglingJurusan) return;
+    setIsSavingJurusan(true);
+    setToggleJurusanDialogOpen(false);
+    try {
+      await supabase
+        .from("jurusan")
+        .update({ aktif: !togglingJurusan.aktif })
+        .eq("id_jurusan", togglingJurusan.id_jurusan);
+      toast({
+        title: "Berhasil",
+        description: `Jurusan ${togglingJurusan.nama_jurusan} telah ${!togglingJurusan.aktif ? "diaktifkan" : "dinonaktifkan"}.`,
+      });
+      refreshAll();
+    } catch (error: any) {
+      toast({ title: "Gagal", description: error.message, variant: "destructive" });
+    } finally {
+      setIsSavingJurusan(false);
+      setTogglingJurusan(null);
+    }
+  };
+
+  // ========== IMPORT JURUSAN ==========
+  const downloadJurusanTemplate = () => {
+    const headers = ["nama_jurusan", "aktif"];
+    const data = [
+      ["RPL", "1"],
+      ["TKJ", "1"],
+      ["IPA", "0"],
+    ];
     const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Template_Kelas");
-    XLSX.writeFile(wb, "template_import_kelas.xlsx");
+    XLSX.utils.book_append_sheet(wb, ws, "Template_Jurusan");
+    XLSX.writeFile(wb, "template_import_jurusan.xlsx");
   };
-  const handleKelasFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+
+  const handleJurusanFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    setImportKelasUploadError(null);
-    setIsImportingKelas(true);
-    setImportKelasStep("upload");
+    setImportJurusanUploadError(null);
+    setIsImportingJurusan(true);
+    setImportJurusanStep("upload");
     try {
       const arrayBuffer = await file.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(worksheet) as ExcelRow[];
       if (jsonData.length === 0) throw new Error("File kosong");
+      if (!("nama_jurusan" in jsonData[0])) throw new Error("Kolom 'nama_jurusan' tidak ditemukan");
+
+      // Validasi dan preview
+      const preview = jsonData.map((row, index) => {
+        const nama = row.nama_jurusan?.toString().trim();
+        const aktif = row.aktif === undefined ? true : (row.aktif === "1" || row.aktif === true);
+        const errors: string[] = [];
+        if (!nama) errors.push("Nama jurusan tidak boleh kosong");
+        return {
+          nama_jurusan: nama,
+          aktif,
+          rowIndex: index + 1,
+          isValid: !!nama,
+          validationErrors: errors,
+        };
+      });
+      setImportJurusanRawData(jsonData);
+      setImportJurusanPreviewRows(preview);
+      setImportJurusanStep("preview");
+      setImportJurusanDialogOpen(true);
+    } catch (error: any) {
+      setImportJurusanUploadError(error.message);
+      toast({ title: "Upload Gagal", description: error.message, variant: "destructive" });
+    } finally {
+      setIsImportingJurusan(false);
+      event.target.value = "";
+    }
+  };
+
+  const handleImportJurusan = async () => {
+    const validRows = importJurusanPreviewRows.filter(row => row.isValid);
+    if (validRows.length === 0) {
+      toast({ title: "Tidak Ada Data Valid", description: "Tidak ada baris yang valid untuk diimpor.", variant: "destructive" });
+      return;
+    }
+    setIsImportingJurusan(true);
+    let successCount = 0, failCount = 0;
+    for (const row of validRows) {
+      try {
+        const { data: existing } = await supabase
+          .from("jurusan")
+          .select("id_jurusan")
+          .eq("nama_jurusan", row.nama_jurusan)
+          .maybeSingle();
+        if (existing) { failCount++; continue; }
+        await supabase.from("jurusan").insert({
+          nama_jurusan: row.nama_jurusan,
+          aktif: row.aktif,
+          dibuat_pada: new Date().toISOString(),
+        });
+        successCount++;
+      } catch { failCount++; }
+    }
+    toast({
+      title: "Impor Selesai",
+      description: `${successCount} jurusan berhasil diimpor, ${failCount} gagal/duplikat.`,
+    });
+    refreshAll();
+    setImportJurusanDialogOpen(false);
+    setImportJurusanRawData([]);
+    setImportJurusanPreviewRows([]);
+    setImportJurusanStep("upload");
+    setIsImportingJurusan(false);
+  };
+
+  // ========== IMPORT KELAS ==========
+  const downloadKelasTemplate = () => {
+    const headers = ["nama", "nik_wali", "nama_jurusan", "aktif"];
+    const data = [
+      ["X IPA 1", "198512342021011001", "IPA", "1"],
+      ["XI IPS 2", "198709152021012002", "IPS", "1"],
+      ["XII RPL 3", "", "RPL", "0"],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template_Kelas");
+    XLSX.writeFile(wb, "template_import_kelas.xlsx");
+  };
+
+  const handleKelasFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setImportKelasUploadError(null);
+    setIsImportingKelas(true);
+    setImportKelasStep("upload");
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet) as ExcelRow[];
+
+      if (jsonData.length === 0) throw new Error("File kosong");
       if (!("nama" in jsonData[0])) throw new Error("Kolom 'nama' tidak ditemukan");
-      setImportKelasRawData(jsonData);
-      const missingGurusSet = new Set<string>();
+
+      // 1. Ambil semua nama jurusan dari file (jika ada)
+      const jurusanNamesFromFile = jsonData
+        .map(row => row.nama_jurusan?.toString().trim())
+        .filter((name): name is string => !!name);
+
+      // 2. Query semua jurusan yang ada di DB
+      const { data: allJurusan } = await supabase.from("jurusan").select("id_jurusan, nama_jurusan");
+      const jurusanMap = new Map<string, number>();
+      allJurusan?.forEach(j => jurusanMap.set(j.nama_jurusan, j.id_jurusan));
+
+      // 3. Cari missing jurusan
+      const missingJurusanSet = new Set<string>();
+      if (isAdminSuper) {
+        for (const name of jurusanNamesFromFile) {
+          if (!jurusanMap.has(name)) {
+            missingJurusanSet.add(name);
+          }
+        }
+      }
+
+      // 4. Query semua guru untuk validasi nik_wali
+      const { data: allGuru } = await supabase.from("guru").select("id_guru, nik").eq("aktif", true);
+      const guruMap = new Map<string, number>();
+      allGuru?.forEach(g => guruMap.set(g.nik.toString(), g.id_guru));
+
+      // 5. Buat preview rows dengan validasi
       const previewWithValidation = [];
+      const missingGurusSet = new Set<string>();
+
       for (let i = 0; i < jsonData.length; i++) {
         const row = jsonData[i];
         const nama = row.nama?.toString().trim();
         const nikWali = row.nik_wali?.toString().trim();
-        let guru = null;
+        const namaJurusan = row.nama_jurusan?.toString().trim();
+        let aktif = row.aktif === undefined ? true : (row.aktif === "1" || row.aktif === true);
+
+        let guruId = null;
+        let guruValid = true;
         if (nikWali) {
-          guru = guruOptions.find(g => g.nik === nikWali);
-          if (!guru) missingGurusSet.add(nikWali);
+          guruId = guruMap.get(nikWali) || null;
+          if (!guruId) {
+            missingGurusSet.add(nikWali);
+            guruValid = false;
+          }
         }
-        const aktif = row.aktif === undefined ? true : (row.aktif === "1" || row.aktif === true);
+
+        let jurusanId = null;
+        let jurusanValid = true;
+        if (isAdminSuper && namaJurusan) {
+          jurusanId = jurusanMap.get(namaJurusan) || null;
+          if (!jurusanId) {
+            jurusanValid = false; // akan ditangani oleh missing jurusan
+          }
+        } else if (isAdminJurusan && user?.id_jurusan) {
+          jurusanId = user.id_jurusan;
+        }
+
+        // Validasi nama wajib
+        const errors: string[] = [];
+        if (!nama) errors.push("Nama kelas tidak boleh kosong");
+
+        // Untuk admin super, jika jurusan diisi tapi tidak valid, tandai error
+        if (isAdminSuper && namaJurusan && !jurusanId) {
+          errors.push(`Jurusan "${namaJurusan}" tidak ditemukan`);
+        }
+
         previewWithValidation.push({
-          nama, nik_wali: nikWali || null, aktif, rowIndex: i + 1,
-          guruId: guru?.id_guru || null, guruValid: !nikWali || !!guru,
-          validationErrors: !nama ? ["Nama kelas tidak boleh kosong"] : [],
-          isValid: !!nama && (!nikWali || !!guru),
+          nama,
+          nik_wali: nikWali || null,
+          nama_jurusan: namaJurusan || null,
+          aktif,
+          rowIndex: i + 1,
+          guruId,
+          guruValid: !nikWali || !!guruId,
+          jurusanId,
+          jurusanValid: !(isAdminSuper && namaJurusan && !jurusanId),
+          validationErrors: errors,
+          isValid: !!nama && (!nikWali || !!guruId) && !(isAdminSuper && namaJurusan && !jurusanId),
         });
       }
-      setImportKelasMissingGurus(missingGurusSet);
+
+      // 6. Simpan state
+      setImportKelasRawData(jsonData);
       setImportKelasPreviewRows(previewWithValidation);
-      if (previewWithValidation.some(p => !p.guruValid && p.nik_wali)) {
+      setImportKelasMissingGurus(missingGurusSet);
+
+      // 7. Tentukan popup mana yang akan ditampilkan
+      const hasMissingGurus = missingGurusSet.size > 0;
+      const hasMissingJurusan = missingJurusanSet.size > 0;
+
+      if (hasMissingGurus) {
+        // Tampilkan popup missing guru dulu
         setMissingGuruDialogOpen(true);
+      } else if (hasMissingJurusan) {
+        // Jika tidak ada missing guru, langsung tampilkan popup missing jurusan
+        setImportKelasMissingJurusan(Array.from(missingJurusanSet));
+        setMissingJurusanKelasDialogOpen(true);
       } else {
+        // Semua valid, langsung buka preview
         setImportKelasStep("preview");
         setImportKelasDialogOpen(true);
       }
@@ -1064,6 +1343,91 @@ export default function UserManagement() {
       event.target.value = "";
     }
   };
+
+  const handleSkipMissingGurus = () => {
+    // Tandai baris dengan guru tidak valid sebagai tidak valid
+    const filteredRows = importKelasPreviewRows.map(row => {
+      if (!row.guruValid && row.nik_wali) {
+        return {
+          ...row,
+          isValid: false,
+          validationErrors: [...row.validationErrors, "NIK wali tidak ditemukan, baris akan dilewati"],
+        };
+      }
+      return row;
+    });
+    setImportKelasPreviewRows(filteredRows);
+    setMissingGuruDialogOpen(false);
+
+    // Periksa apakah masih ada missing jurusan
+    // Ambil daftar nama jurusan yang hilang dari baris yang masih valid (atau semua)
+    const jurusanNames = filteredRows
+      .filter(row => row.isValid && row.nama_jurusan)
+      .map(row => row.nama_jurusan as string);
+    const uniqueJurusanNames = [...new Set(jurusanNames)];
+
+    // Query jurusan yang ada di DB
+    supabase
+      .from("jurusan")
+      .select("nama_jurusan")
+      .then(({ data }) => {
+        const existingNames = data?.map(j => j.nama_jurusan) || [];
+        const missingJurusan = uniqueJurusanNames.filter(name => !existingNames.includes(name));
+        if (missingJurusan.length > 0) {
+          setImportKelasMissingJurusan(missingJurusan);
+          setMissingJurusanKelasDialogOpen(true);
+        } else {
+          setImportKelasStep("preview");
+          setImportKelasDialogOpen(true);
+        }
+      })
+      .catch(() => {
+        // Jika gagal query, langsung buka preview
+        setImportKelasStep("preview");
+        setImportKelasDialogOpen(true);
+      });
+  };
+
+  const addMissingJurusanKelasAndContinue = async () => {
+    if (importKelasMissingJurusan.length === 0) {
+      setMissingJurusanKelasDialogOpen(false);
+      setImportKelasStep("preview");
+      setImportKelasDialogOpen(true);
+      return;
+    }
+    setIsAddingMissingJurusanKelas(true);
+    let addedCount = 0;
+    try {
+      for (const namaJurusan of importKelasMissingJurusan) {
+        const { data: existing } = await supabase
+          .from("jurusan")
+          .select("id_jurusan")
+          .eq("nama_jurusan", namaJurusan)
+          .maybeSingle();
+        if (!existing) {
+          await supabase.from("jurusan").insert({
+            nama_jurusan: namaJurusan,
+            aktif: true,
+            dibuat_pada: new Date().toISOString(),
+          });
+          addedCount++;
+        }
+      }
+      toast({ title: "Berhasil", description: `${addedCount} jurusan berhasil ditambahkan.` });
+      setMissingJurusanKelasDialogOpen(false);
+      setImportKelasMissingJurusan([]);
+      // Refresh jurusan list
+      await fetchJurusan();
+      // Lanjut ke preview
+      setImportKelasStep("preview");
+      setImportKelasDialogOpen(true);
+    } catch (error: any) {
+      toast({ title: "Gagal", description: error.message, variant: "destructive" });
+    } finally {
+      setIsAddingMissingJurusanKelas(false);
+    }
+  };
+
   const confirmImportKelas = async () => {
     const validRows = importKelasPreviewRows.filter(row => row.isValid);
     if (validRows.length === 0) {
@@ -1071,17 +1435,38 @@ export default function UserManagement() {
       return;
     }
     setIsImportingKelas(true);
-    let successCount = 0, failCount = 0;
+    let successCount = 0,
+      failCount = 0;
     for (const row of validRows) {
       try {
-        const { data: existing } = await supabase.from("kelas").select("id_kelas").eq("nama", row.nama).maybeSingle();
+        const { data: existing } = await supabase
+          .from("kelas")
+          .select("id_kelas")
+          .eq("nama", row.nama)
+          .maybeSingle();
         if (existing) { failCount++; continue; }
-        const dataInsert: any = { nama: row.nama, id_guru: row.guruId, aktif: row.aktif, dibuat_pada: new Date().toISOString() };
-        if (isAdminJurusan && user?.id_jurusan) dataInsert.id_jurusan = user.id_jurusan;
+
+        const dataInsert: any = {
+          nama: row.nama,
+          id_guru: row.guruId || null,
+          aktif: row.aktif,
+          dibuat_pada: new Date().toISOString(),
+        };
+
+        // Tentukan id_jurusan
+        if (isAdminSuper && row.jurusanId) {
+          dataInsert.id_jurusan = row.jurusanId;
+        } else if (isAdminJurusan && user?.id_jurusan) {
+          dataInsert.id_jurusan = user.id_jurusan;
+        } else {
+          dataInsert.id_jurusan = null;
+        }
+
         await supabase.from("kelas").insert(dataInsert);
         successCount++;
       } catch { failCount++; }
     }
+
     if (successCount > 0) {
       toast({ title: "Impor Selesai", description: `${successCount} kelas berhasil diimpor, ${failCount} gagal.` });
     } else {
@@ -1093,18 +1478,6 @@ export default function UserManagement() {
     setImportKelasPreviewRows([]);
     setImportKelasStep("upload");
     setIsImportingKelas(false);
-  };
-  const handleSkipMissingGurus = () => {
-    const filteredRows = importKelasPreviewRows.map(row => {
-      if (!row.guruValid && row.nik_wali) {
-        return { ...row, isValid: false, validationErrors: [...row.validationErrors, "NIK wali tidak ditemukan, baris akan dilewati"] };
-      }
-      return row;
-    });
-    setImportKelasPreviewRows(filteredRows);
-    setMissingGuruDialogOpen(false);
-    setImportKelasStep("preview");
-    setImportKelasDialogOpen(true);
   };
 
   // ========== IMPORT EXCEL UNTUK PENGGUNA ==========
@@ -1180,6 +1553,7 @@ export default function UserManagement() {
     }
   };
 
+  // Fungsi handleImport dimodifikasi untuk menangani missing jurusan pada import guru
   const handleImport = async () => {
     if (!previewData.length) {
       toast({ title: "Kesalahan", description: "Tidak ada data untuk diimpor", variant: "destructive" });
@@ -1192,6 +1566,27 @@ export default function UserManagement() {
 
     try {
       if (userType === "guru") {
+        // --- Validasi awal: cek jurusan yang hilang ---
+        const jurusanNamesFromGuru = previewData
+          .map(row => row.nama_jurusan?.toString().trim())
+          .filter((name): name is string => !!name);
+        const uniqueJurusanNames = [...new Set(jurusanNamesFromGuru)];
+        if (uniqueJurusanNames.length > 0) {
+          const { data: existingJurusan } = await supabase
+            .from("jurusan")
+            .select("nama_jurusan")
+            .in("nama_jurusan", uniqueJurusanNames);
+          const existingNames = existingJurusan?.map(j => j.nama_jurusan) || [];
+          const missingJurusan = uniqueJurusanNames.filter(name => !existingNames.includes(name));
+          if (missingJurusan.length > 0) {
+            setImportGuruMissingJurusan(missingJurusan);
+            setMissingGuruJurusanDialogOpen(true);
+            setIsLoading(false);
+            return; // hentikan import, tampilkan popup
+          }
+        }
+
+        // --- Lanjutkan loop import seperti biasa ---
         for (const row of previewData) {
           try {
             const nama = row.nama?.toString().trim();
@@ -1593,6 +1988,43 @@ export default function UserManagement() {
     }
   };
 
+  // ===== Fungsi untuk menambahkan jurusan yang hilang pada import guru =====
+  const addMissingGuruJurusanAndContinue = async () => {
+    if (importGuruMissingJurusan.length === 0) {
+      setMissingGuruJurusanDialogOpen(false);
+      await handleImport();
+      return;
+    }
+    setIsAddingMissingGuruJurusan(true);
+    let addedCount = 0;
+    try {
+      for (const namaJurusan of importGuruMissingJurusan) {
+        const { data: existing } = await supabase
+          .from("jurusan")
+          .select("id_jurusan")
+          .eq("nama_jurusan", namaJurusan)
+          .maybeSingle();
+        if (!existing) {
+          await supabase.from("jurusan").insert({
+            nama_jurusan: namaJurusan,
+            aktif: true,
+            dibuat_pada: new Date().toISOString(),
+          });
+          addedCount++;
+        }
+      }
+      toast({ title: "Berhasil", description: `${addedCount} jurusan berhasil ditambahkan.` });
+      setMissingGuruJurusanDialogOpen(false);
+      setImportGuruMissingJurusan([]);
+      await fetchJurusan();
+      await handleImport();
+    } catch (error: any) {
+      toast({ title: "Gagal", description: error.message, variant: "destructive" });
+    } finally {
+      setIsAddingMissingGuruJurusan(false);
+    }
+  };
+
   // ========== RENDER ==========
   return (
     <div className="min-h-screen bg-[#F0F7FC]">
@@ -1677,11 +2109,14 @@ export default function UserManagement() {
             </div>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "list" | "kelas")} className="space-y-4 sm:space-y-6">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "list" | "kelas" | "jurusan")} className="space-y-4 sm:space-y-6">
               <div className="flex justify-center">
                 <TabsList className="bg-[#2C5EAD] p-1 rounded-xl">
                   <TabsTrigger value="list" className="rounded-lg text-white/80 data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4"><Users className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Daftar Pengguna</TabsTrigger>
                   <TabsTrigger value="kelas" className="rounded-lg text-white/80 data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4"><School className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Kelola Kelas</TabsTrigger>
+                  {isAdminSuper && (
+                    <TabsTrigger value="jurusan" className="rounded-lg text-white/80 data-[state=active]:bg-white data-[state=active]:text-[#2C5EAD] text-xs sm:text-sm px-3 sm:px-4"><Building2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" /> Kelola Jurusan</TabsTrigger>
+                  )}
                 </TabsList>
               </div>
 
@@ -1760,7 +2195,7 @@ export default function UserManagement() {
                 )}
               </TabsContent>
 
-              {/* TAB KELAS - DENGAN KOLOM JURUSAN */}
+              {/* TAB KELAS */}
               <TabsContent value="kelas" className="space-y-4 sm:space-y-6">
                 <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
                   <div className="flex flex-wrap gap-2 justify-center sm:justify-start"><Button onClick={handleAddKelas} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]"><Plus className="mr-1 h-3 w-3" /> Tambah Kelas</Button><Button variant="outline" onClick={() => setImportKelasDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white"><Upload className="mr-1 h-3 w-3" /> Impor Excel</Button></div>
@@ -1816,16 +2251,106 @@ export default function UserManagement() {
                   </div>
                 )}
               </TabsContent>
+
+              {/* TAB JURUSAN */}
+              {isAdminSuper && (
+                <TabsContent value="jurusan" className="space-y-4 sm:space-y-6">
+                  <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+                    <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                      <Button onClick={handleAddJurusan} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">
+                        <Plus className="mr-1 h-3 w-3" /> Tambah Jurusan
+                      </Button>
+                      <Button variant="outline" onClick={() => setImportJurusanDialogOpen(true)} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">
+                        <Upload className="mr-1 h-3 w-3" /> Impor Excel
+                      </Button>
+                    </div>
+                    <div className="relative flex-1 max-w-md">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                      <Input
+                        placeholder="Cari jurusan..."
+                        value={searchJurusanQuery}
+                        onChange={(e) => setSearchJurusanQuery(e.target.value)}
+                        className="pl-9 pr-8 rounded-xl h-8 sm:h-9 text-xs sm:text-sm w-full"
+                      />
+                      {searchJurusanQuery && (
+                        <button onClick={() => setSearchJurusanQuery("")} className="absolute right-3 top-1/2">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <Button variant="outline" onClick={refreshAll} disabled={isFetchingJurusan} className="rounded-xl h-8 sm:h-9 text-xs sm:text-sm border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">
+                      <RefreshCw className={`mr-1 h-3 w-3 ${isFetchingJurusan ? "animate-spin" : ""}`} /> Segarkan
+                    </Button>
+                  </div>
+
+                  {isFetchingJurusan ? (
+                    <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-[#2C5EAD]" /></div>
+                  ) : (
+                    <div className="border rounded-xl overflow-hidden shadow-sm">
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-slate-50">
+                              <TableHead>Nama Jurusan</TableHead>
+                              <TableHead className="text-center">Status</TableHead>
+                              <TableHead className="text-center">Aksi</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {jurusanList
+                              .filter(j => !searchJurusanQuery || j.nama_jurusan.toLowerCase().includes(searchJurusanQuery.toLowerCase()))
+                              .map(jurusan => (
+                                <TableRow key={jurusan.id_jurusan}>
+                                  <TableCell>{jurusan.nama_jurusan}</TableCell>
+                                  <TableCell className="text-center">
+                                    <Badge className={jurusan.aktif ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>
+                                      {jurusan.aktif ? "Aktif" : "Nonaktif"}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <div className="flex gap-1 justify-center">
+                                      <Button variant="ghost" size="sm" onClick={() => handleEditJurusan(jurusan)}>
+                                        <Edit className="h-4 w-4 text-[#2C5EAD]" />
+                                      </Button>
+                                      {jurusan.aktif ? (
+                                        <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveJurusan(jurusan, false)}>
+                                          <PowerOff className="h-4 w-4 text-red-500" />
+                                        </Button>
+                                      ) : (
+                                        <Button variant="ghost" size="sm" onClick={() => confirmToggleActiveJurusan(jurusan, true)}>
+                                          <Power className="h-4 w-4 text-green-500" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            {jurusanList.filter(j => !searchJurusanQuery || j.nama_jurusan.toLowerCase().includes(searchJurusanQuery.toLowerCase())).length === 0 && (
+                              <TableRow>
+                                <TableCell colSpan={3} className="text-center py-8 text-slate-500">
+                                  Belum ada data jurusan
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )}
+                </TabsContent>
+              )}
             </Tabs>
           </CardContent>
         </Card>
 
         {/* TIPS SECTION */}
         <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-[#C4E2F5]/50 to-[#4BB8FA]/20 max-w-3xl mx-auto">
-          <CardContent className="p-4 sm:p-5"><div className="flex gap-3"><div className="bg-[#2C5EAD]/10 p-2 rounded-xl"><Sparkles className="h-5 w-5 text-[#2C5EAD]" /></div><div><h3 className="font-semibold text-sm">Tips Mengelola Data</h3><p className="text-xs text-slate-600">Gunakan impor Excel untuk data massal. {isAdminJurusan ? "Anda hanya dapat mengelola guru, siswa, dan kelas dalam jurusan Anda." : "Pimpinan dapat mengelola semua jenis pengguna."}</p></div></div></CardContent>
+          <CardContent className="p-4 sm:p-5"><div className="flex gap-3"><div className="bg-[#2C5EAD]/10 p-2 rounded-xl"><Sparkles className="h-5 w-5 text-[#2C5EAD]" /></div><div><h3 className="font-semibold text-sm">Tips Mengelola Data</h3><p className="text-xs text-slate-600">Gunakan impor Excel untuk data massal. {isAdminJurusan ? "Anda hanya dapat mengelola guru, siswa, dan kelas dalam jurusan Anda." : "Pimpinan dapat mengelola semua jenis pengguna dan jurusan."}</p></div></div></CardContent>
         </Card>
         <div className="text-center pt-4"><Separator className="mb-4" /><p className="text-xs text-slate-400">© {new Date().getFullYear()} Manajemen Pengguna &amp; Kelas - SmartAS</p></div>
       </div>
+
+      {/* ========== DIALOG ========== */}
 
       {/* DIALOG TAMBAH USER */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
@@ -1884,7 +2409,7 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG KELAS (DENGAN JURUSAN) */}
+      {/* DIALOG KELAS */}
       <Dialog open={kelasDialogOpen} onOpenChange={setKelasDialogOpen}>
         <DialogContent className="rounded-2xl">
           <DialogHeader><DialogTitle>{editingKelas ? "Ubah Kelas" : "Tambah Kelas Baru"}</DialogTitle></DialogHeader>
@@ -1971,7 +2496,6 @@ export default function UserManagement() {
                 </PopoverContent>
               </Popover>
             </div>
-            {/* DROPDOWN JURUSAN - HANYA UNTUK PIMPINAN */}
             {isAdminSuper && (
               <div>
                 <Label className="text-slate-700 font-medium text-xs sm:text-sm">Jurusan</Label>
@@ -2028,12 +2552,71 @@ export default function UserManagement() {
         <DialogContent className="rounded-2xl max-w-lg"><DialogHeader><DialogTitle>{isActivatingKelasMode ? "Aktifkan Kelas" : "Nonaktifkan Kelas"}</DialogTitle><DialogDescription>{isActivatingKelasMode ? `Aktifkan kembali kelas ${togglingKelas?.nama}?` : `Yakin ingin menonaktifkan kelas ${togglingKelas?.nama}?`}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setToggleKelasDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button><Button onClick={executeToggleActiveKelas} disabled={isSavingKelas}>{isSavingKelas && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isActivatingKelasMode ? "Aktifkan" : "Nonaktifkan"}</Button></DialogFooter></DialogContent>
       </Dialog>
 
+      {/* DIALOG JURUSAN */}
+      <Dialog open={jurusanDialogOpen} onOpenChange={setJurusanDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingJurusan ? "Ubah Jurusan" : "Tambah Jurusan Baru"}</DialogTitle>
+            <DialogDescription>Isi nama jurusan yang akan dikelola.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Nama Jurusan</Label>
+              <Input
+                value={jurusanForm.nama_jurusan}
+                onChange={(e) => setJurusanForm({ ...jurusanForm, nama_jurusan: e.target.value })}
+                className="rounded-xl"
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="jurusan_aktif"
+                checked={jurusanForm.aktif}
+                onCheckedChange={(checked) => setJurusanForm({ ...jurusanForm, aktif: checked === true })}
+              />
+              <Label htmlFor="jurusan_aktif" className="text-sm">Aktif</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setJurusanDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">
+              Batal
+            </Button>
+            <Button onClick={handleSaveJurusan} disabled={isSavingJurusan} className="rounded-xl bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">
+              {isSavingJurusan && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Simpan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={toggleJurusanDialogOpen} onOpenChange={setToggleJurusanDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-md">
+          <DialogHeader>
+            <DialogTitle>{isActivatingJurusanMode ? "Aktifkan Jurusan" : "Nonaktifkan Jurusan"}</DialogTitle>
+            <DialogDescription>
+              {isActivatingJurusanMode
+                ? `Aktifkan kembali jurusan ${togglingJurusan?.nama_jurusan}?`
+                : `Yakin ingin menonaktifkan jurusan ${togglingJurusan?.nama_jurusan}?`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setToggleJurusanDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">
+              Batal
+            </Button>
+            <Button onClick={executeToggleActiveJurusan} disabled={isSavingJurusan} variant={isActivatingJurusanMode ? "default" : "destructive"}>
+              {isSavingJurusan && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isActivatingJurusanMode ? "Aktifkan" : "Nonaktifkan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* IMPORT KELAS DIALOGS */}
       <Dialog open={importKelasDialogOpen} onOpenChange={setImportKelasDialogOpen}>
         <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader><DialogTitle>Impor Kelas dari Excel</DialogTitle><DialogDescription>Unggah file Excel untuk menambah kelas secara massal</DialogDescription></DialogHeader>
-          {importKelasStep === "upload" && (<div className="space-y-4"><div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50"><div className="flex flex-col items-center gap-2"><Upload className="h-8 w-8 text-slate-400" /><label htmlFor="kelas-file-input" className="cursor-pointer"><span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk unggah</span><input id="kelas-file-input" type="file" accept=".xlsx,.xls" onChange={handleKelasFileUpload} className="hidden" disabled={isImportingKelas} /></label><p className="text-xs text-slate-500">atau tarik & lepas file Excel di sini</p></div></div>{importKelasUploadError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{importKelasUploadError}</AlertDescription></Alert>}<Button variant="outline" onClick={downloadKelasTemplate} className="w-full"><Download className="h-4 w-4 mr-2" /> Unduh Template Excel Kelas</Button><div className="bg-blue-50 p-3 rounded-lg text-sm"><p className="font-semibold">Format File:</p><p>Kolom yang diperlukan: <strong>nama</strong> (wajib), <strong>nik_wali</strong> (opsional), <strong>aktif</strong> (opsional, 1 untuk aktif)</p><p className="text-xs text-red-600">* NIK wali harus sesuai dengan data guru di database</p></div></div>)}
-          {importKelasStep === "preview" && importKelasPreviewRows.length > 0 && (<div className="space-y-4"><div className="flex justify-between"><p className="text-sm font-medium">Pratinjau Data ({importKelasPreviewRows.length} baris)</p><Badge>{importKelasPreviewRows.filter(r => r.isValid).length} dari {importKelasPreviewRows.length} valid</Badge></div><div className="border rounded-lg overflow-x-auto max-h-96"><Table><TableHeader><TableRow><TableHead>#</TableHead><TableHead>Nama Kelas</TableHead><TableHead>NIK Wali</TableHead><TableHead>Aktif</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{importKelasPreviewRows.map((row, idx) => (<TableRow key={idx} className={!row.isValid ? "bg-red-50" : ""}><TableCell>{row.rowIndex}</TableCell><TableCell>{row.nama}</TableCell><TableCell>{row.nik_wali || "-"}{!row.guruValid && row.nik_wali && <span className="text-red-500">(tidak ditemukan)</span>}</TableCell><TableCell>{row.aktif ? "Aktif" : "Nonaktif"}</TableCell><TableCell>{row.isValid ? "Valid" : <div className="text-red-600 text-xs">{row.validationErrors.join(", ")}</div>}</TableCell></TableRow>))}</TableBody></Table></div><div className="flex justify-end gap-3"><Button variant="outline" onClick={() => { setImportKelasDialogOpen(false); setImportKelasRawData([]); setImportKelasPreviewRows([]); setImportKelasStep("upload"); }}>Batal</Button><Button onClick={confirmImportKelas} disabled={isImportingKelas || importKelasPreviewRows.filter(r => r.isValid).length === 0} className="bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isImportingKelas && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Impor Data</Button></div></div>)}
+          {importKelasStep === "upload" && (<div className="space-y-4"><div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50"><div className="flex flex-col items-center gap-2"><Upload className="h-8 w-8 text-slate-400" /><label htmlFor="kelas-file-input" className="cursor-pointer"><span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk unggah</span><input id="kelas-file-input" type="file" accept=".xlsx,.xls" onChange={handleKelasFileUpload} className="hidden" disabled={isImportingKelas} /></label><p className="text-xs text-slate-500">atau tarik & lepas file Excel di sini</p></div></div>{importKelasUploadError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{importKelasUploadError}</AlertDescription></Alert>}<Button variant="outline" onClick={downloadKelasTemplate} className="w-full"><Download className="h-4 w-4 mr-2" /> Unduh Template Excel Kelas</Button><div className="bg-blue-50 p-3 rounded-lg text-sm"><p className="font-semibold">Format File:</p><p>Kolom yang diperlukan: <strong>nama</strong> (wajib), <strong>nik_wali</strong> (opsional), <strong>nama_jurusan</strong> (opsional, untuk pimpinan), <strong>aktif</strong> (opsional, 1 untuk aktif)</p><p className="text-xs text-red-600">* NIK wali harus sesuai dengan data guru di database</p></div></div>)}
+          {importKelasStep === "preview" && importKelasPreviewRows.length > 0 && (<div className="space-y-4"><div className="flex justify-between"><p className="text-sm font-medium">Pratinjau Data ({importKelasPreviewRows.length} baris)</p><Badge>{importKelasPreviewRows.filter(r => r.isValid).length} dari {importKelasPreviewRows.length} valid</Badge></div><div className="border rounded-lg overflow-x-auto max-h-96"><Table><TableHeader><TableRow><TableHead>#</TableHead><TableHead>Nama Kelas</TableHead><TableHead>NIK Wali</TableHead><TableHead>Jurusan</TableHead><TableHead>Aktif</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{importKelasPreviewRows.map((row, idx) => (<TableRow key={idx} className={!row.isValid ? "bg-red-50" : ""}><TableCell>{row.rowIndex}</TableCell><TableCell>{row.nama}</TableCell><TableCell>{row.nik_wali || "-"}{!row.guruValid && row.nik_wali && <span className="text-red-500">(tidak ditemukan)</span>}</TableCell><TableCell>{row.nama_jurusan || "-"}{!row.jurusanValid && row.nama_jurusan && <span className="text-red-500">(tidak ditemukan)</span>}</TableCell><TableCell>{row.aktif ? "Aktif" : "Nonaktif"}</TableCell><TableCell>{row.isValid ? "Valid" : <div className="text-red-600 text-xs">{row.validationErrors.join(", ")}</div>}</TableCell></TableRow>))}</TableBody></Table></div><div className="flex justify-end gap-3"><Button variant="outline" onClick={() => { setImportKelasDialogOpen(false); setImportKelasRawData([]); setImportKelasPreviewRows([]); setImportKelasStep("upload"); }}>Batal</Button><Button onClick={confirmImportKelas} disabled={isImportingKelas || importKelasPreviewRows.filter(r => r.isValid).length === 0} className="bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isImportingKelas && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Impor Data</Button></div></div>)}
         </DialogContent>
       </Dialog>
 
@@ -2041,16 +2624,184 @@ export default function UserManagement() {
         <DialogContent className="rounded-xl max-w-md"><DialogHeader><DialogTitle>Wali Kelas Tidak Ditemukan</DialogTitle><DialogDescription>Beberapa NIK wali kelas tidak ditemukan.</DialogDescription></DialogHeader><div className="bg-yellow-50 p-3 rounded-lg"><p className="font-medium">NIK tidak ditemukan:</p><ul className="list-disc list-inside mt-1">{Array.from(importKelasMissingGurus).map(nik => <li key={nik} className="font-mono">{nik}</li>)}</ul><p className="text-sm mt-2">Baris dengan NIK tidak ditemukan akan dilewati. Lanjutkan?</p></div><DialogFooter><Button variant="outline" onClick={() => { setMissingGuruDialogOpen(false); setImportKelasDialogOpen(false); setImportKelasRawData([]); }}>Batalkan Impor</Button><Button onClick={handleSkipMissingGurus} className="bg-green-600">Lanjutkan (Lewati Baris Bermasalah)</Button></DialogFooter></DialogContent>
       </Dialog>
 
+      {/* DIALOG MISSING JURUSAN SAAT IMPORT KELAS */}
+      <Dialog open={missingJurusanKelasDialogOpen} onOpenChange={setMissingJurusanKelasDialogOpen}>
+        <DialogContent className="rounded-xl max-w-md">
+          <DialogHeader>
+            <DialogTitle>Jurusan Tidak Ditemukan</DialogTitle>
+            <DialogDescription>Beberapa nama jurusan dalam file Excel tidak ditemukan di database.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-yellow-50 p-3 rounded-lg">
+              <p className="text-sm font-medium text-yellow-800">Jurusan yang belum terdaftar:</p>
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                {importKelasMissingJurusan.map((jurusan, idx) => (
+                  <li key={idx} className="text-sm text-yellow-700">{jurusan}</li>
+                ))}
+              </ul>
+            </div>
+            <p className="text-sm text-slate-600">
+              Apakah Anda ingin menambahkan jurusan di atas ke database dan melanjutkan import kelas?
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setMissingJurusanKelasDialogOpen(false);
+                setImportKelasMissingJurusan([]);
+                setImportKelasDialogOpen(false);
+              }}
+              className="rounded-lg"
+            >
+              Batalkan Impor
+            </Button>
+            <Button
+              onClick={addMissingJurusanKelasAndContinue}
+              disabled={isAddingMissingJurusanKelas}
+              className="rounded-lg bg-green-600 hover:bg-green-700"
+            >
+              {isAddingMissingJurusanKelas ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Menambahkan...</>
+              ) : (
+                "Tambahkan Jurusan & Lanjutkan"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG MISSING JURUSAN SAAT IMPORT GURU */}
+      <Dialog open={missingGuruJurusanDialogOpen} onOpenChange={setMissingGuruJurusanDialogOpen}>
+        <DialogContent className="rounded-xl max-w-md">
+          <DialogHeader>
+            <DialogTitle>Jurusan Tidak Ditemukan</DialogTitle>
+            <DialogDescription>
+              Beberapa nama jurusan dalam file Excel untuk import guru tidak ditemukan di database.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-yellow-50 p-3 rounded-lg">
+              <p className="text-sm font-medium text-yellow-800">Jurusan yang belum terdaftar:</p>
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                {importGuruMissingJurusan.map((jurusan, idx) => (
+                  <li key={idx} className="text-sm text-yellow-700">{jurusan}</li>
+                ))}
+              </ul>
+            </div>
+            <p className="text-sm text-slate-600">
+              Apakah Anda ingin menambahkan jurusan di atas ke database dan melanjutkan import guru?
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setMissingGuruJurusanDialogOpen(false);
+                setImportGuruMissingJurusan([]);
+                setImportDialogOpen(false);
+              }}
+              className="rounded-lg"
+            >
+              Batalkan Impor
+            </Button>
+            <Button
+              onClick={addMissingGuruJurusanAndContinue}
+              disabled={isAddingMissingGuruJurusan}
+              className="rounded-lg bg-green-600 hover:bg-green-700"
+            >
+              {isAddingMissingGuruJurusan ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Menambahkan...</>
+              ) : (
+                "Tambahkan Jurusan & Lanjutkan"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG IMPORT JURUSAN */}
+      <Dialog open={importJurusanDialogOpen} onOpenChange={setImportJurusanDialogOpen}>
+        <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader><DialogTitle>Impor Jurusan dari Excel</DialogTitle><DialogDescription>Unggah file Excel untuk menambah jurusan secara massal</DialogDescription></DialogHeader>
+          {importJurusanStep === "upload" && (
+            <div className="space-y-4">
+              <div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50">
+                <div className="flex flex-col items-center gap-2">
+                  <Upload className="h-8 w-8 text-slate-400" />
+                  <label htmlFor="jurusan-file-input" className="cursor-pointer">
+                    <span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk unggah</span>
+                    <input id="jurusan-file-input" type="file" accept=".xlsx,.xls" onChange={handleJurusanFileUpload} className="hidden" disabled={isImportingJurusan} />
+                  </label>
+                  <p className="text-xs text-slate-500">atau tarik & lepas file Excel di sini</p>
+                </div>
+              </div>
+              {importJurusanUploadError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{importJurusanUploadError}</AlertDescription>
+                </Alert>
+              )}
+              <Button variant="outline" onClick={downloadJurusanTemplate} className="w-full">
+                <Download className="h-4 w-4 mr-2" /> Unduh Template Excel Jurusan
+              </Button>
+              <div className="bg-blue-50 p-3 rounded-lg text-sm">
+                <p className="font-semibold">Format File:</p>
+                <p>Kolom yang diperlukan: <strong>nama_jurusan</strong> (wajib), <strong>aktif</strong> (opsional, 1 untuk aktif)</p>
+              </div>
+            </div>
+          )}
+          {importJurusanStep === "preview" && importJurusanPreviewRows.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex justify-between">
+                <p className="text-sm font-medium">Pratinjau Data ({importJurusanPreviewRows.length} baris)</p>
+                <Badge>{importJurusanPreviewRows.filter(r => r.isValid).length} dari {importJurusanPreviewRows.length} valid</Badge>
+              </div>
+              <div className="border rounded-lg overflow-x-auto max-h-96">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>#</TableHead>
+                      <TableHead>Nama Jurusan</TableHead>
+                      <TableHead>Aktif</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {importJurusanPreviewRows.map((row, idx) => (
+                      <TableRow key={idx} className={!row.isValid ? "bg-red-50" : ""}>
+                        <TableCell>{row.rowIndex}</TableCell>
+                        <TableCell>{row.nama_jurusan}</TableCell>
+                        <TableCell>{row.aktif ? "Aktif" : "Nonaktif"}</TableCell>
+                        <TableCell>{row.isValid ? "Valid" : <div className="text-red-600 text-xs">{row.validationErrors.join(", ")}</div>}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={() => { setImportJurusanDialogOpen(false); setImportJurusanRawData([]); setImportJurusanPreviewRows([]); setImportJurusanStep("upload"); }}>
+                  Batal
+                </Button>
+                <Button onClick={handleImportJurusan} disabled={isImportingJurusan || importJurusanPreviewRows.filter(r => r.isValid).length === 0} className="bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">
+                  {isImportingJurusan && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Impor Data
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* IMPORT USER DIALOG */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader><DialogTitle>Impor {userType === "guru" ? "Guru" : userType === "siswa" ? "Siswa" : userType === "kepala_jurusan" ? "Kepala Jurusan" : "BK"} dari Excel</DialogTitle><DialogDescription>Unggah file Excel untuk menambah data secara massal</DialogDescription></DialogHeader>
           {importStep === "upload" && (<div className="space-y-4"><div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50"><div className="flex flex-col items-center gap-2"><Upload className="h-8 w-8 text-slate-400" /><label htmlFor="user-file-input" className="cursor-pointer"><span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk unggah</span><input id="user-file-input" type="file" accept=".xlsx,.xls" onChange={handleUserFileUpload} className="hidden" disabled={isLoading} /></label><p className="text-xs text-slate-500">atau tarik & lepas file Excel di sini</p></div></div>{uploadError && <Alert className="bg-red-50 border-red-200"><AlertCircle className="h-4 w-4 text-red-600" /><AlertDescription className="text-red-700">{uploadError}</AlertDescription></Alert>}<Button variant="outline" onClick={() => downloadTemplate(userType)} className="w-full rounded-lg"><Download className="h-4 w-4 mr-2" /> Unduh Template Excel</Button><div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700"><p className="font-semibold">Format File:</p>{userType === "guru" && <p>Kolom yang diperlukan: <strong>nama, nik, username, gender</strong> (opsional: nama_jurusan, password)</p>}{userType === "siswa" && <p>Kolom yang diperlukan: <strong>nama, nis, username, gender, kelas</strong> (opsional: password)</p>}{userType === "kepala_jurusan" && <p>Kolom yang diperlukan: <strong>nama, username, nama_jurusan</strong> (opsional: password)</p>}{userType === "bk" && <p>Kolom yang diperlukan: <strong>nama, username</strong> (opsional: password)</p>}<p className="text-xs mt-1">Kata sandi default "password123".</p></div></div>)}
-          {importStep === "preview" && previewData.length > 0 && (<div className="space-y-4"><div className="flex justify-between items-center"><p className="text-sm font-medium">Pratinjau Data ({previewData.length} baris)</p></div><div className="border rounded-lg overflow-x-auto max-h-96"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead>Nama</TableHead>{userType === "guru" && <TableHead>NIK</TableHead>}{userType === "siswa" && <TableHead>NIS</TableHead>}<TableHead>Nama Pengguna</TableHead>{userType !== "bk" && userType !== "kepala_jurusan" && <TableHead>Jenis Kelamin</TableHead>}{userType === "siswa" && <TableHead>Kelas</TableHead>}{userType === "kepala_jurusan" && <TableHead>Nama Jurusan</TableHead>}</TableRow></TableHeader><TableBody>{previewData.slice(0, 20).map((item, idx) => (<TableRow key={idx}><TableCell>{item.nama as string}</TableCell>{userType === "guru" && <TableCell>{item.nik as string}</TableCell>}{userType === "siswa" && <TableCell>{item.nis as string}</TableCell>}<TableCell>{item.username as string}</TableCell>{userType !== "bk" && userType !== "kepala_jurusan" && <TableCell><Badge className={(item.gender as string) === "L" ? "bg-blue-100" : "bg-pink-100"}>{item.gender === "L" ? "Laki-laki" : "Perempuan"}</Badge></TableCell>}{userType === "siswa" && <TableCell>{item.kelas as string}</TableCell>}{userType === "kepala_jurusan" && <TableCell>{item.nama_jurusan as string}</TableCell>}</TableRow>))}{previewData.length > 20 && <TableRow><TableCell colSpan={6} className="text-center text-slate-500">... dan {previewData.length - 20} baris lainnya</TableCell></TableRow>}</TableBody></Table></div><div className="flex gap-3 justify-end"><Button variant="outline" onClick={() => { setImportDialogOpen(false); setPreviewData([]); setImportRawData([]); setImportStep("upload"); }} className="rounded-lg">Batal</Button><Button onClick={handleImport} disabled={isLoading} className="rounded-lg bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Impor Data</Button></div></div>)}
+          {importStep === "preview" && previewData.length > 0 && (<div className="space-y-4"><div className="flex justify-between items-center"><p className="text-sm font-medium">Pratinjau Data ({previewData.length} baris)</p></div><div className="border rounded-lg overflow-x-auto max-h-96"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead>Nama</TableHead>{userType === "guru" && <TableHead>NIK</TableHead>}{userType === "siswa" && <TableHead>NIS</TableHead>}<TableHead>Nama Pengguna</TableHead>{userType !== "bk" && userType !== "kepala_jurusan" && <TableHead>Jenis Kelamin</TableHead>}{userType === "siswa" && <TableHead>Kelas</TableHead>}{userType === "guru" && <TableHead>Jurusan</TableHead>}{userType === "kepala_jurusan" && <TableHead>Nama Jurusan</TableHead>}</TableRow></TableHeader><TableBody>{previewData.slice(0, 20).map((item, idx) => (<TableRow key={idx}><TableCell>{item.nama as string}</TableCell>{userType === "guru" && <TableCell>{item.nik as string}</TableCell>}{userType === "siswa" && <TableCell>{item.nis as string}</TableCell>}<TableCell>{item.username as string}</TableCell>{userType !== "bk" && userType !== "kepala_jurusan" && <TableCell><Badge className={(item.gender as string) === "L" ? "bg-blue-100" : "bg-pink-100"}>{item.gender === "L" ? "Laki-laki" : "Perempuan"}</Badge></TableCell>}{userType === "siswa" && <TableCell>{item.kelas as string}</TableCell>}{userType === "guru" && <TableCell>{item.nama_jurusan as string || "-"}</TableCell>}{userType === "kepala_jurusan" && <TableCell>{item.nama_jurusan as string}</TableCell>}</TableRow>))}{previewData.length > 20 && <TableRow><TableCell colSpan={6} className="text-center text-slate-500">... dan {previewData.length - 20} baris lainnya</TableCell></TableRow>}</TableBody></Table></div><div className="flex gap-3 justify-end"><Button variant="outline" onClick={() => { setImportDialogOpen(false); setPreviewData([]); setImportRawData([]); setImportStep("upload"); }} className="rounded-lg">Batal</Button><Button onClick={handleImport} disabled={isLoading} className="rounded-lg bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Impor Data</Button></div></div>)}
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG KONFIRMASI JURUSAN BARU */}
+      {/* DIALOG KONFIRMASI JURUSAN BARU (UNTUK IMPORT KEPALA_JURUSAN) */}
       <Dialog open={missingJurusanDialogOpen} onOpenChange={setMissingJurusanDialogOpen}>
         <DialogContent className="rounded-xl max-w-md"><DialogHeader><DialogTitle>Jurusan Tidak Ditemukan</DialogTitle><DialogDescription>Beberapa nama jurusan dalam file Excel tidak ditemukan di database.</DialogDescription></DialogHeader><div className="space-y-4"><div className="bg-yellow-50 p-3 rounded-lg"><p className="text-sm font-medium text-yellow-800">Jurusan yang belum terdaftar:</p><ul className="list-disc list-inside mt-2 space-y-1">{importJurusanMissing.map((jurusan, idx) => <li key={idx} className="text-sm text-yellow-700">{jurusan}</li>)}</ul></div><p className="text-sm text-slate-600">Apakah Anda ingin menambahkan jurusan di atas ke database dan melanjutkan import?</p></div><DialogFooter className="gap-2"><Button variant="outline" onClick={() => { setMissingJurusanDialogOpen(false); setImportJurusanMissing([]); setImportDialogOpen(false); }} className="rounded-lg">Batalkan Impor</Button><Button onClick={continueImportAfterMissingJurusan} disabled={isAddingMissingJurusan} className="rounded-lg bg-green-600 hover:bg-green-700">{isAddingMissingJurusan ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Menambahkan...</> : "Tambahkan Jurusan & Lanjutkan"}</Button></DialogFooter></DialogContent>
       </Dialog>
