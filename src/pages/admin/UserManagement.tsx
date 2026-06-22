@@ -1370,7 +1370,13 @@ export default function UserManagement() {
     supabase
       .from("jurusan")
       .select("nama_jurusan")
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) {
+          // Jika gagal query, langsung buka preview
+          setImportKelasStep("preview");
+          setImportKelasDialogOpen(true);
+          return;
+        }
         const existingNames = data?.map(j => j.nama_jurusan) || [];
         const missingJurusan = uniqueJurusanNames.filter(name => !existingNames.includes(name));
         if (missingJurusan.length > 0) {
@@ -1380,11 +1386,6 @@ export default function UserManagement() {
           setImportKelasStep("preview");
           setImportKelasDialogOpen(true);
         }
-      })
-      .catch(() => {
-        // Jika gagal query, langsung buka preview
-        setImportKelasStep("preview");
-        setImportKelasDialogOpen(true);
       });
   };
 
@@ -1485,11 +1486,21 @@ export default function UserManagement() {
     let headers: string[];
     let data: (string | number)[][];
     if (type === "guru") {
-      headers = ["nama", "nik", "username", "gender", "nama_jurusan", "password"];
-      data = [
-        ["Ahmad Santoso", "198512342021011001", "ahmad.santoso@school.com", "L", "RPL", "password123"],
-        ["Siti Aminah", "198709152021012002", "siti.aminah@school.com", "P", "TKJ", "password123"],
-      ];
+      if (isAdminSuper) {
+        // Admin super: template dengan kolom nama_jurusan
+        headers = ["nama", "nik", "username", "gender", "nama_jurusan", "password"];
+        data = [
+          ["Ahmad Santoso", "198512342021011001", "ahmad.santoso@school.com", "L", "RPL", "password123"],
+          ["Siti Aminah", "198709152021012002", "siti.aminah@school.com", "P", "TKJ", "password123"],
+        ];
+      } else {
+        // Kepala jurusan: template tanpa nama_jurusan (otomatis memakai jurusan kepala jurusan)
+        headers = ["nama", "nik", "username", "gender", "password"];
+        data = [
+          ["Ahmad Santoso", "198512342021011001", "ahmad.santoso@school.com", "L", "password123"],
+          ["Siti Aminah", "198709152021012002", "siti.aminah@school.com", "P", "password123"],
+        ];
+      }
     } else if (type === "siswa") {
       headers = ["nama", "nis", "username", "gender", "kelas", "password"];
       data = [
@@ -1529,10 +1540,17 @@ export default function UserManagement() {
       if (jsonData.length === 0) throw new Error("File kosong");
 
       let requiredColumns: string[];
-      if (userType === "guru") requiredColumns = ["nama", "nik", "username", "gender"];
-      else if (userType === "siswa") requiredColumns = ["nama", "nis", "username", "gender", "kelas"];
-      else if (userType === "kepala_jurusan") requiredColumns = ["nama", "username", "nama_jurusan"];
-      else requiredColumns = ["nama", "username"];
+      if (userType === "guru") {
+        requiredColumns = ["nama", "nik", "username", "gender"];
+        // Jika admin super dan file mengandung kolom nama_jurusan, tidak masalah (opsional)
+        // Jika kepala jurusan, kolom nama_jurusan tidak diwajibkan
+      } else if (userType === "siswa") {
+        requiredColumns = ["nama", "nis", "username", "gender", "kelas"];
+      } else if (userType === "kepala_jurusan") {
+        requiredColumns = ["nama", "username", "nama_jurusan"];
+      } else {
+        requiredColumns = ["nama", "username"];
+      }
 
       const firstRow = jsonData[0];
       const missingColumns = requiredColumns.filter(col => !(col in firstRow));
@@ -1566,27 +1584,29 @@ export default function UserManagement() {
 
     try {
       if (userType === "guru") {
-        // --- Validasi awal: cek jurusan yang hilang ---
-        const jurusanNamesFromGuru = previewData
-          .map(row => row.nama_jurusan?.toString().trim())
-          .filter((name): name is string => !!name);
-        const uniqueJurusanNames = [...new Set(jurusanNamesFromGuru)];
-        if (uniqueJurusanNames.length > 0) {
-          const { data: existingJurusan } = await supabase
-            .from("jurusan")
-            .select("nama_jurusan")
-            .in("nama_jurusan", uniqueJurusanNames);
-          const existingNames = existingJurusan?.map(j => j.nama_jurusan) || [];
-          const missingJurusan = uniqueJurusanNames.filter(name => !existingNames.includes(name));
-          if (missingJurusan.length > 0) {
-            setImportGuruMissingJurusan(missingJurusan);
-            setMissingGuruJurusanDialogOpen(true);
-            setIsLoading(false);
-            return; // hentikan import, tampilkan popup
+        // --- Validasi awal: cek jurusan yang hilang (hanya untuk admin super) ---
+        if (isAdminSuper) {
+          const jurusanNamesFromGuru = previewData
+            .map(row => row.nama_jurusan?.toString().trim())
+            .filter((name): name is string => !!name);
+          const uniqueJurusanNames = [...new Set(jurusanNamesFromGuru)];
+          if (uniqueJurusanNames.length > 0) {
+            const { data: existingJurusan } = await supabase
+              .from("jurusan")
+              .select("nama_jurusan")
+              .in("nama_jurusan", uniqueJurusanNames);
+            const existingNames = existingJurusan?.map(j => j.nama_jurusan) || [];
+            const missingJurusan = uniqueJurusanNames.filter(name => !existingNames.includes(name));
+            if (missingJurusan.length > 0) {
+              setImportGuruMissingJurusan(missingJurusan);
+              setMissingGuruJurusanDialogOpen(true);
+              setIsLoading(false);
+              return; // hentikan import, tampilkan popup
+            }
           }
         }
 
-        // --- Lanjutkan loop import seperti biasa ---
+        // --- Lanjutkan loop import ---
         for (const row of previewData) {
           try {
             const nama = row.nama?.toString().trim();
@@ -1594,7 +1614,8 @@ export default function UserManagement() {
             const username = row.username?.toString().trim();
             const gender = row.gender?.toString().toUpperCase();
             const password = row.password?.toString() || "password123";
-            const namaJurusan = row.nama_jurusan?.toString().trim();
+            // Untuk kepala jurusan, abaikan nilai nama_jurusan dari file (jika ada)
+            const namaJurusan = isAdminSuper ? row.nama_jurusan?.toString().trim() : undefined;
 
             if (!nama || !nik || !username || !gender) {
               skipCount++;
@@ -1622,7 +1643,7 @@ export default function UserManagement() {
             }
 
             let jurusanId = null;
-            if (namaJurusan) {
+            if (isAdminSuper && namaJurusan) {
               const { data: jurusan } = await supabase
                 .from("jurusan")
                 .select("id_jurusan")
@@ -1634,6 +1655,7 @@ export default function UserManagement() {
               }
               jurusanId = jurusan.id_jurusan;
             } else if (isAdminJurusan && user?.id_jurusan) {
+              // Kepala jurusan: pakai jurusan sendiri
               jurusanId = user.id_jurusan;
             }
 
@@ -1671,6 +1693,7 @@ export default function UserManagement() {
           }
         }
       } else if (userType === "siswa") {
+        // ... (kode siswa tetap sama)
         const missingKelasSet = new Set<string>();
         const validRowsTemp: { row: ExcelRow; index: number }[] = [];
 
@@ -1789,6 +1812,7 @@ export default function UserManagement() {
           }
         }
       } else if (userType === "kepala_jurusan") {
+        // ... (kode kepala jurusan tetap sama)
         const jurusanNames = [...new Set(previewData.map(row => row.nama_jurusan?.toString().trim()).filter(Boolean))];
         if (jurusanNames.length) {
           const { data: existingJurusan } = await supabase
@@ -1857,6 +1881,7 @@ export default function UserManagement() {
           }
         }
       } else if (userType === "bk") {
+        // ... (kode bk tetap sama)
         for (const row of previewData) {
           try {
             const nama = row.nama?.toString().trim();
@@ -2796,8 +2821,8 @@ export default function UserManagement() {
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogContent className="rounded-xl max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader><DialogTitle>Impor {userType === "guru" ? "Guru" : userType === "siswa" ? "Siswa" : userType === "kepala_jurusan" ? "Kepala Jurusan" : "BK"} dari Excel</DialogTitle><DialogDescription>Unggah file Excel untuk menambah data secara massal</DialogDescription></DialogHeader>
-          {importStep === "upload" && (<div className="space-y-4"><div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50"><div className="flex flex-col items-center gap-2"><Upload className="h-8 w-8 text-slate-400" /><label htmlFor="user-file-input" className="cursor-pointer"><span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk unggah</span><input id="user-file-input" type="file" accept=".xlsx,.xls" onChange={handleUserFileUpload} className="hidden" disabled={isLoading} /></label><p className="text-xs text-slate-500">atau tarik & lepas file Excel di sini</p></div></div>{uploadError && <Alert className="bg-red-50 border-red-200"><AlertCircle className="h-4 w-4 text-red-600" /><AlertDescription className="text-red-700">{uploadError}</AlertDescription></Alert>}<Button variant="outline" onClick={() => downloadTemplate(userType)} className="w-full rounded-lg"><Download className="h-4 w-4 mr-2" /> Unduh Template Excel</Button><div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700"><p className="font-semibold">Format File:</p>{userType === "guru" && <p>Kolom yang diperlukan: <strong>nama, nik, username, gender</strong> (opsional: nama_jurusan, password)</p>}{userType === "siswa" && <p>Kolom yang diperlukan: <strong>nama, nis, username, gender, kelas</strong> (opsional: password)</p>}{userType === "kepala_jurusan" && <p>Kolom yang diperlukan: <strong>nama, username, nama_jurusan</strong> (opsional: password)</p>}{userType === "bk" && <p>Kolom yang diperlukan: <strong>nama, username</strong> (opsional: password)</p>}<p className="text-xs mt-1">Kata sandi default "password123".</p></div></div>)}
-          {importStep === "preview" && previewData.length > 0 && (<div className="space-y-4"><div className="flex justify-between items-center"><p className="text-sm font-medium">Pratinjau Data ({previewData.length} baris)</p></div><div className="border rounded-lg overflow-x-auto max-h-96"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead>Nama</TableHead>{userType === "guru" && <TableHead>NIK</TableHead>}{userType === "siswa" && <TableHead>NIS</TableHead>}<TableHead>Nama Pengguna</TableHead>{userType !== "bk" && userType !== "kepala_jurusan" && <TableHead>Jenis Kelamin</TableHead>}{userType === "siswa" && <TableHead>Kelas</TableHead>}{userType === "guru" && <TableHead>Jurusan</TableHead>}{userType === "kepala_jurusan" && <TableHead>Nama Jurusan</TableHead>}</TableRow></TableHeader><TableBody>{previewData.slice(0, 20).map((item, idx) => (<TableRow key={idx}><TableCell>{item.nama as string}</TableCell>{userType === "guru" && <TableCell>{item.nik as string}</TableCell>}{userType === "siswa" && <TableCell>{item.nis as string}</TableCell>}<TableCell>{item.username as string}</TableCell>{userType !== "bk" && userType !== "kepala_jurusan" && <TableCell><Badge className={(item.gender as string) === "L" ? "bg-blue-100" : "bg-pink-100"}>{item.gender === "L" ? "Laki-laki" : "Perempuan"}</Badge></TableCell>}{userType === "siswa" && <TableCell>{item.kelas as string}</TableCell>}{userType === "guru" && <TableCell>{item.nama_jurusan as string || "-"}</TableCell>}{userType === "kepala_jurusan" && <TableCell>{item.nama_jurusan as string}</TableCell>}</TableRow>))}{previewData.length > 20 && <TableRow><TableCell colSpan={6} className="text-center text-slate-500">... dan {previewData.length - 20} baris lainnya</TableCell></TableRow>}</TableBody></Table></div><div className="flex gap-3 justify-end"><Button variant="outline" onClick={() => { setImportDialogOpen(false); setPreviewData([]); setImportRawData([]); setImportStep("upload"); }} className="rounded-lg">Batal</Button><Button onClick={handleImport} disabled={isLoading} className="rounded-lg bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Impor Data</Button></div></div>)}
+          {importStep === "upload" && (<div className="space-y-4"><div className="border-2 border-dashed rounded-lg p-6 text-center bg-slate-50"><div className="flex flex-col items-center gap-2"><Upload className="h-8 w-8 text-slate-400" /><label htmlFor="user-file-input" className="cursor-pointer"><span className="text-sm font-medium text-blue-600 hover:text-blue-700">Klik untuk unggah</span><input id="user-file-input" type="file" accept=".xlsx,.xls" onChange={handleUserFileUpload} className="hidden" disabled={isLoading} /></label><p className="text-xs text-slate-500">atau tarik & lepas file Excel di sini</p></div></div>{uploadError && <Alert className="bg-red-50 border-red-200"><AlertCircle className="h-4 w-4 text-red-600" /><AlertDescription className="text-red-700">{uploadError}</AlertDescription></Alert>}<Button variant="outline" onClick={() => downloadTemplate(userType)} className="w-full rounded-lg"><Download className="h-4 w-4 mr-2" /> Unduh Template Excel</Button><div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700"><p className="font-semibold">Format File:</p>{userType === "guru" && <p>Kolom yang diperlukan: <strong>nama, nik, username, gender</strong> {isAdminSuper ? "(opsional: nama_jurusan, password)" : "(password opsional, jurusan otomatis)"}</p>}{userType === "siswa" && <p>Kolom yang diperlukan: <strong>nama, nis, username, gender, kelas</strong> (opsional: password)</p>}{userType === "kepala_jurusan" && <p>Kolom yang diperlukan: <strong>nama, username, nama_jurusan</strong> (opsional: password)</p>}{userType === "bk" && <p>Kolom yang diperlukan: <strong>nama, username</strong> (opsional: password)</p>}<p className="text-xs mt-1">Kata sandi default "password123".</p></div></div>)}
+          {importStep === "preview" && previewData.length > 0 && (<div className="space-y-4"><div className="flex justify-between items-center"><p className="text-sm font-medium">Pratinjau Data ({previewData.length} baris)</p></div><div className="border rounded-lg overflow-x-auto max-h-96"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead>Nama</TableHead>{userType === "guru" && <TableHead>NIK</TableHead>}{userType === "siswa" && <TableHead>NIS</TableHead>}<TableHead>Nama Pengguna</TableHead>{userType !== "bk" && userType !== "kepala_jurusan" && <TableHead>Jenis Kelamin</TableHead>}{userType === "siswa" && <TableHead>Kelas</TableHead>}{userType === "guru" && isAdminSuper && <TableHead>Jurusan</TableHead>}{userType === "guru" && isAdminJurusan && <TableHead>Jurusan (Otomatis)</TableHead>}{userType === "kepala_jurusan" && <TableHead>Nama Jurusan</TableHead>}</TableRow></TableHeader><TableBody>{previewData.slice(0, 20).map((item, idx) => (<TableRow key={idx}><TableCell>{item.nama as string}</TableCell>{userType === "guru" && <TableCell>{item.nik as string}</TableCell>}{userType === "siswa" && <TableCell>{item.nis as string}</TableCell>}<TableCell>{item.username as string}</TableCell>{userType !== "bk" && userType !== "kepala_jurusan" && <TableCell><Badge className={(item.gender as string) === "L" ? "bg-blue-100" : "bg-pink-100"}>{item.gender === "L" ? "Laki-laki" : "Perempuan"}</Badge></TableCell>}{userType === "siswa" && <TableCell>{item.kelas as string}</TableCell>}{userType === "guru" && isAdminSuper && <TableCell>{item.nama_jurusan as string || "-"}</TableCell>}{userType === "guru" && isAdminJurusan && <TableCell>{jurusanList.find(j => j.id_jurusan === user?.id_jurusan)?.nama_jurusan || "-"}</TableCell>}{userType === "kepala_jurusan" && <TableCell>{item.nama_jurusan as string}</TableCell>}</TableRow>))}{previewData.length > 20 && <TableRow><TableCell colSpan={6} className="text-center text-slate-500">... dan {previewData.length - 20} baris lainnya</TableCell></TableRow>}</TableBody></Table></div><div className="flex gap-3 justify-end"><Button variant="outline" onClick={() => { setImportDialogOpen(false); setPreviewData([]); setImportRawData([]); setImportStep("upload"); }} className="rounded-lg">Batal</Button><Button onClick={handleImport} disabled={isLoading} className="rounded-lg bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Impor Data</Button></div></div>)}
         </DialogContent>
       </Dialog>
 

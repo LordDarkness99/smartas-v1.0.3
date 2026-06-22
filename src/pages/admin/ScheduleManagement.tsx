@@ -124,6 +124,20 @@ const convertToMinutes = (timeStr: string): number => {
   return hours * 60 + minutes;
 };
 
+// Validasi waktu: jam 00-23, menit 00-59, dan start < end
+const isValidTimeRange = (timeRange: string): boolean => {
+  const parts = timeRange.split(" - ");
+  if (parts.length !== 2) return false;
+  for (const part of parts) {
+    const [hours, minutes] = part.split(":").map(Number);
+    if (isNaN(hours) || isNaN(minutes)) return false;
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return false;
+  }
+  const startMinutes = convertToMinutes(parts[0]);
+  const endMinutes = convertToMinutes(parts[1]);
+  return startMinutes < endMinutes;
+};
+
 function isTimeOverlap(jam1: string, jam2: string): boolean {
   const parseRange = (jam: string) => {
     const [start, end] = jam.split(" - ");
@@ -442,6 +456,20 @@ export default function ScheduleManagement() {
     if (activeTab === "jadwal" && selectedKelas) fetchJadwal();
   }, [selectedKelas, selectedHari, activeTab]);
 
+  // ---------------------- PENGECEKAN OVERLAP KELAS (baru) ----------------------
+  const checkKelasOverlap = async (kelasId: number, hari: string, jam: string, excludeId?: number): Promise<boolean> => {
+    let query = supabase
+      .from("jadwal")
+      .select("id_jadwal, jam")
+      .eq("id_kelas", kelasId)
+      .eq("hari", hari)
+      .eq("aktif", true);
+    if (excludeId) query = query.neq("id_jadwal", excludeId);
+    const { data } = await query;
+    return data?.some(j => isTimeOverlap(j.jam, jam)) || false;
+  };
+  // ------------------------------------------------------------------------------
+
   const checkOverlapJadwal = async (kelasId: number, mapelId: number, hari: string, jam: string, excludeId?: number): Promise<boolean> => {
     let query = supabase
       .from("jadwal")
@@ -509,7 +537,12 @@ export default function ScheduleManagement() {
     if (!jadwalForm.id_mapel) errors.id_mapel = "Mata pelajaran harus dipilih";
     if (!jadwalForm.id_guru) errors.id_guru = "Guru harus dipilih";
     if (!jadwalForm.jam) errors.jam = "Jam harus diisi";
-    if (jadwalForm.jam && !/^\d{2}:\d{2} - \d{2}:\d{2}$/.test(jadwalForm.jam)) errors.jam = "Format jam harus 'HH:MM - HH:MM'";
+    if (jadwalForm.jam && !/^\d{2}:\d{2} - \d{2}:\d{2}$/.test(jadwalForm.jam)) {
+      errors.jam = "Format jam harus 'HH:MM - HH:MM'";
+    }
+    if (jadwalForm.jam && !isValidTimeRange(jadwalForm.jam)) {
+      errors.jam = "Jam tidak valid: pastikan format HH:MM - HH:MM dengan jam 00-23 dan menit 00-59, serta jam mulai sebelum jam selesai.";
+    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -521,14 +554,22 @@ export default function ScheduleManagement() {
     const hari = jadwalForm.hari, jam = jadwalForm.jam, excludeId = editingJadwal?.id_jadwal;
     setIsSavingJadwal(true);
     try {
+      // Cek tumpang tindih untuk mapel yang sama di kelas yang sama
       if (await checkOverlapJadwal(kelasId, mapelId, hari, jam, excludeId)) {
         toast({ title: "Error", description: `Jadwal untuk kelas dan mata pelajaran ini sudah ada pada jam yang tumpang tindih di hari ${hari}.`, variant: "destructive" });
         return;
       }
+      // Cek tumpang tindih untuk guru yang sama
       if (await checkGuruOverlap(guruId, hari, jam, excludeId)) {
         toast({ title: "Error", description: `Guru sudah memiliki jadwal lain di hari ${hari} pada jam yang tumpang tindih.`, variant: "destructive" });
         return;
       }
+      // === PERBAIKAN: Cek tumpang tindih di kelas yang sama (tanpa memperhatikan mapel) ===
+      if (await checkKelasOverlap(kelasId, hari, jam, excludeId)) {
+        toast({ title: "Error", description: `Kelas ini sudah memiliki jadwal lain di hari ${hari} pada jam yang tumpang tindih.`, variant: "destructive" });
+        return;
+      }
+
       const data = { id_kelas: kelasId, id_mapel: mapelId, id_guru: guruId, hari, jam, aktif: true, dibuat_pada: new Date().toISOString() };
       if (editingJadwal) {
         await supabase.from("jadwal").update(data).eq("id_jadwal", editingJadwal.id_jadwal);
@@ -560,6 +601,7 @@ export default function ScheduleManagement() {
     try {
       const newStatus = !togglingJadwal.aktif;
       if (newStatus === true) {
+        // Cek tumpang tindih mapel
         const isOverlapMapel = await checkOverlapJadwal(
           togglingJadwal.id_kelas,
           togglingJadwal.id_mapel,
@@ -568,9 +610,10 @@ export default function ScheduleManagement() {
           togglingJadwal.id_jadwal
         );
         if (isOverlapMapel) {
-          toast({ title: "Error", description: `Tidak dapat mengaktifkan karena jadwal tumpang tindih dengan jadwal aktif lainnya di kelas yang sama.`, variant: "destructive" });
+          toast({ title: "Error", description: `Tidak dapat mengaktifkan karena jadwal tumpang tindih dengan jadwal aktif lainnya di kelas yang sama untuk mapel yang sama.`, variant: "destructive" });
           return;
         }
+        // Cek tumpang tindih guru
         const isGuruOverlap = await checkGuruOverlap(
           togglingJadwal.id_guru,
           togglingJadwal.hari,
@@ -579,6 +622,17 @@ export default function ScheduleManagement() {
         );
         if (isGuruOverlap) {
           toast({ title: "Error", description: `Tidak dapat mengaktifkan karena guru sudah memiliki jadwal aktif di jam yang sama.`, variant: "destructive" });
+          return;
+        }
+        // === PERBAIKAN: Cek tumpang tindih di kelas yang sama ===
+        const isKelasOverlap = await checkKelasOverlap(
+          togglingJadwal.id_kelas,
+          togglingJadwal.hari,
+          togglingJadwal.jam,
+          togglingJadwal.id_jadwal
+        );
+        if (isKelasOverlap) {
+          toast({ title: "Error", description: `Tidak dapat mengaktifkan karena kelas ini sudah memiliki jadwal aktif di jam yang sama.`, variant: "destructive" });
           return;
         }
       }
@@ -899,6 +953,7 @@ export default function ScheduleManagement() {
     const failures: { row: number; error: string }[] = [];
     for (const row of validRows) {
       try {
+        // Cek overlap mapel
         const isOverlapMapel = await checkOverlapJadwal(
           row.kelasId,
           row.mapelId,
@@ -913,6 +968,7 @@ export default function ScheduleManagement() {
           failCount++;
           continue;
         }
+        // Cek overlap guru
         const isGuruOverlap = await checkGuruOverlap(
           row.guruId,
           row.hari,
@@ -926,6 +982,21 @@ export default function ScheduleManagement() {
           failCount++;
           continue;
         }
+        // === PERBAIKAN: Cek overlap kelas ===
+        const isKelasOverlap = await checkKelasOverlap(
+          row.kelasId,
+          row.hari,
+          row.jam
+        );
+        if (isKelasOverlap) {
+          failures.push({
+            row: row.rowIndex,
+            error: `Kelas ${row.kelas} sudah memiliki jadwal lain di hari ${row.hari} pada jam ${row.jam}`
+          });
+          failCount++;
+          continue;
+        }
+
         const { error } = await supabase.from("jadwal").insert({
           id_kelas: row.kelasId,
           id_mapel: row.mapelId,
