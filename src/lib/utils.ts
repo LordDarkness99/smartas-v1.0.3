@@ -12,12 +12,12 @@ export function cn(...inputs: ClassValue[]) {
 
 /**
  * Menentukan apakah user perlu melakukan filter data berdasarkan id_jurusan.
- * Hanya admin_jurusan yang perlu filter, sementara admin dan BK melihat semua data.
+ * Hanya kepala_jurusan yang perlu filter, sementara pimpinan dan BK melihat semua data.
  * @param user - Objek user dari useAuth()
- * @returns true jika user adalah admin_jurusan dan memiliki id_jurusan
+ * @returns true jika user adalah kepala_jurusan dan memiliki id_jurusan
  */
 export function shouldFilterByJurusan(user: User | null): boolean {
-  return user?.peran === 'admin_jurusan' && !!user.id_jurusan;
+  return user?.peran === 'kepala_jurusan' && !!user.id_jurusan;
 }
 
 /**
@@ -41,7 +41,7 @@ export function getJurusanFilter(user: User | null): { id_jurusan: number } | nu
 /**
  * Mengecek apakah user memiliki role yang diizinkan (salah satu dari roles).
  * @param user - Objek user dari useAuth()
- * @param allowedRoles - Array string role yang diizinkan, misal ['admin', 'bk']
+ * @param allowedRoles - Array string role yang diizinkan, misal ['pimpinan', 'bk']
  * @returns true jika user ada dan perannya termasuk dalam allowedRoles
  */
 export function hasRole(user: User | null, allowedRoles: string[]): boolean {
@@ -49,10 +49,10 @@ export function hasRole(user: User | null, allowedRoles: string[]): boolean {
 }
 
 /**
- * Mengecek apakah user adalah admin (super admin).
+ * Mengecek apakah user adalah pimpinan (super admin).
  */
 export function isAdmin(user: User | null): boolean {
-  return user?.peran === 'admin';
+  return user?.peran === 'pimpinan';
 }
 
 /**
@@ -66,7 +66,7 @@ export function isBK(user: User | null): boolean {
  * Mengecek apakah user adalah admin jurusan.
  */
 export function isAdminJurusan(user: User | null): boolean {
-  return user?.peran === 'admin_jurusan';
+  return user?.peran === 'kepala_jurusan';
 }
 
 /**
