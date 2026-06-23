@@ -39,6 +39,89 @@ import {
   PowerOff, Power, Building2, ChevronDown,
 } from "lucide-react";
 
+// ==================== KOMPONEN SELECT DENGAN SEARCH ====================
+interface SelectWithSearchProps {
+  value: string;
+  onValueChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+  disabled?: boolean;
+  className?: string;
+  triggerClassName?: string;
+  searchPlaceholder?: string;
+  emptyMessage?: string;
+}
+
+const SelectWithSearch: React.FC<SelectWithSearchProps> = ({
+  value,
+  onValueChange,
+  options,
+  placeholder = "Pilih...",
+  disabled = false,
+  className = "",
+  triggerClassName = "",
+  searchPlaceholder = "Cari...",
+  emptyMessage = "Tidak ada data",
+}) => {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const selectedLabel = options.find((opt) => opt.value === value)?.label || placeholder;
+
+  const filteredOptions = options.filter((opt) =>
+    opt.label.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className={`w-full justify-between rounded-lg border-slate-200 h-9 text-sm font-normal ${triggerClassName}`}
+          disabled={disabled}
+        >
+          {selectedLabel}
+          <ChevronDown className="h-4 w-4 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-0" align="start" sideOffset={5}>
+        <div className="p-2 border-b bg-slate-50">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+            <Input
+              placeholder={searchPlaceholder}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-7 h-8 text-sm rounded-lg"
+            />
+          </div>
+        </div>
+        <div className="max-h-60 overflow-y-auto">
+          {filteredOptions.length === 0 ? (
+            <div className="px-3 py-4 text-center text-sm text-slate-500">{emptyMessage}</div>
+          ) : (
+            filteredOptions.map((opt) => (
+              <button
+                key={opt.value}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${
+                  value === opt.value ? "bg-[#C4E2F5] text-[#2C5EAD] font-medium" : ""
+                }`}
+                onClick={() => {
+                  onValueChange(opt.value);
+                  setOpen(false);
+                  setSearch("");
+                }}
+              >
+                {opt.label}
+              </button>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 // ==================== TYPES ====================
 interface GuruImportData { nama: string; nik: string; username: string; gender: string; password?: string; nama_jurusan?: string; }
 interface SiswaImportData { nama: string; nis: string; username: string; gender: string; kelas: string; password?: string; }
@@ -2386,10 +2469,54 @@ export default function UserManagement() {
             <div><Label>Nama Pengguna</Label><Input value={addForm.username} onChange={e => setAddForm({ ...addForm, username: e.target.value })} className="rounded-xl" /></div>
             {addForm.peran !== "bk" && addForm.peran !== "kepala_jurusan" && <div><Label>Jenis Kelamin</Label><Select value={addForm.gender} onValueChange={v => setAddForm({ ...addForm, gender: v })}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jenis kelamin" /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>}
             {addForm.peran === "guru" && <div><Label>NIK</Label><Input value={addForm.nik} onChange={e => setAddForm({ ...addForm, nik: e.target.value })} className="rounded-xl" /></div>}
-            {addForm.peran === "guru" && isAdminSuper && <div><Label>Jurusan</Label><Select value={addForm.id_jurusan} onValueChange={v => setAddForm({ ...addForm, id_jurusan: v })}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan (opsional)" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
-            {addForm.peran === "siswa" && <div><Label>NIS</Label><Input value={addForm.nis} onChange={e => setAddForm({ ...addForm, nis: e.target.value })} className="rounded-xl" /></div>}
-            {addForm.peran === "siswa" && <div><Label>Kelas</Label><Select value={addForm.kelas_id} onValueChange={v => setAddForm({ ...addForm, kelas_id: v })}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih kelas (opsional)" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada kelas</SelectItem>{kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}</SelectContent></Select></div>}
-            {addForm.peran === "kepala_jurusan" && <div><Label>Jurusan</Label><Select value={addForm.id_jurusan || "none"} onValueChange={v => setAddForm({ ...addForm, id_jurusan: v })}><SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent><SelectItem value="none" disabled>Pilih jurusan</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
+            {addForm.peran === "guru" && isAdminSuper && (
+              <div>
+                <Label>Jurusan</Label>
+                <SelectWithSearch
+                  value={addForm.id_jurusan}
+                  onValueChange={(v) => setAddForm({ ...addForm, id_jurusan: v })}
+                  options={[
+                    { value: "none", label: "Tidak ada" },
+                    ...jurusanList.map((j) => ({
+                      value: j.id_jurusan.toString(),
+                      label: j.nama_jurusan,
+                    })),
+                  ]}
+                  placeholder="Pilih jurusan (opsional)"
+                />
+              </div>
+            )}
+            {addForm.peran === "siswa" && (
+              <div>
+                <Label>Kelas</Label>
+                <SelectWithSearch
+                  value={addForm.kelas_id}
+                  onValueChange={(v) => setAddForm({ ...addForm, kelas_id: v })}
+                  options={[
+                    { value: "none", label: "Tidak ada kelas" },
+                    ...kelasList.map((k) => ({
+                      value: k.id_kelas.toString(),
+                      label: k.nama,
+                    })),
+                  ]}
+                  placeholder="Pilih kelas (opsional)"
+                />
+              </div>
+            )}
+            {addForm.peran === "kepala_jurusan" && (
+              <div>
+                <Label>Jurusan</Label>
+                <SelectWithSearch
+                  value={addForm.id_jurusan || ""}
+                  onValueChange={(v) => setAddForm({ ...addForm, id_jurusan: v })}
+                  options={jurusanList.map((j) => ({
+                    value: j.id_jurusan.toString(),
+                    label: j.nama_jurusan,
+                  }))}
+                  placeholder="Pilih jurusan"
+                />
+              </div>
+            )}
             <div><Label>Kata Sandi (opsional)</Label><Input type="password" value={addForm.password} onChange={e => setAddForm({ ...addForm, password: e.target.value })} className="rounded-xl" placeholder="Kosongkan untuk default: password123" /></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setAddDialogOpen(false)} className="border-[#2C5EAD] text-[#2C5EAD] hover:bg-[#2C5EAD] hover:text-white">Batal</Button><Button onClick={handleAddUser} disabled={isLoading} className="rounded-xl bg-gradient-to-r from-[#2C5EAD] to-[#1591DC]">{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan</Button></DialogFooter>
@@ -2405,9 +2532,60 @@ export default function UserManagement() {
             <div><Label className="text-xs">Nama Pengguna</Label><Input value={editForm.username} onChange={e => setEditForm({ ...editForm, username: e.target.value })} className="rounded-lg text-sm h-9" /></div>
             {editForm.peran !== "bk" && editForm.peran !== "kepala_jurusan" && <div><Label className="text-xs">Jenis Kelamin</Label><Select value={editForm.gender} onValueChange={v => setEditForm({ ...editForm, gender: v })}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="L">Laki-laki</SelectItem><SelectItem value="P">Perempuan</SelectItem></SelectContent></Select></div>}
             {editForm.peran === "guru" && <div><Label className="text-xs">NIK</Label><Input value={editForm.nik} onChange={e => setEditForm({ ...editForm, nik: e.target.value })} className="rounded-lg text-sm h-9" /></div>}
-            {editForm.peran === "guru" && isAdminSuper && <div><Label className="text-xs">Jurusan</Label><Select value={editForm.id_jurusan} onValueChange={v => setEditForm({ ...editForm, id_jurusan: v })}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
-            {editForm.peran === "siswa" && (<><div><Label className="text-xs">NIS</Label><Input value={editForm.nis} onChange={e => setEditForm({ ...editForm, nis: e.target.value })} className="rounded-lg text-sm h-9" /></div><div><Label className="text-xs">Kelas</Label><Select value={editForm.kelas_id} onValueChange={v => setEditForm({ ...editForm, kelas_id: v })}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue placeholder="Pilih kelas" /></SelectTrigger><SelectContent><SelectItem value="none">Tidak ada kelas</SelectItem>{kelasList.map(k => <SelectItem key={k.id_kelas} value={k.id_kelas.toString()}>{k.nama}</SelectItem>)}</SelectContent></Select></div></>)}
-            {editForm.peran === "kepala_jurusan" && <div><Label className="text-xs">Jurusan</Label><Select value={editForm.id_jurusan || "none"} onValueChange={v => setEditForm({ ...editForm, id_jurusan: v })}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue placeholder="Pilih jurusan" /></SelectTrigger><SelectContent><SelectItem value="none" disabled>Pilih jurusan</SelectItem>{jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}</SelectContent></Select></div>}
+            {editForm.peran === "guru" && isAdminSuper && (
+              <div>
+                <Label className="text-xs">Jurusan</Label>
+                <SelectWithSearch
+                  value={editForm.id_jurusan}
+                  onValueChange={(v) => setEditForm({ ...editForm, id_jurusan: v })}
+                  options={[
+                    { value: "none", label: "Tidak ada" },
+                    ...jurusanList.map((j) => ({
+                      value: j.id_jurusan.toString(),
+                      label: j.nama_jurusan,
+                    })),
+                  ]}
+                  placeholder="Pilih jurusan"
+                  triggerClassName="h-9 text-sm"
+                />
+              </div>
+            )}
+            {editForm.peran === "siswa" && (
+              <>
+                <div><Label className="text-xs">NIS</Label><Input value={editForm.nis} onChange={e => setEditForm({ ...editForm, nis: e.target.value })} className="rounded-lg text-sm h-9" /></div>
+                <div>
+                  <Label className="text-xs">Kelas</Label>
+                  <SelectWithSearch
+                    value={editForm.kelas_id}
+                    onValueChange={(v) => setEditForm({ ...editForm, kelas_id: v })}
+                    options={[
+                      { value: "none", label: "Tidak ada kelas" },
+                      ...kelasList.map((k) => ({
+                        value: k.id_kelas.toString(),
+                        label: k.nama,
+                      })),
+                    ]}
+                    placeholder="Pilih kelas"
+                    triggerClassName="h-9 text-sm"
+                  />
+                </div>
+              </>
+            )}
+            {editForm.peran === "kepala_jurusan" && (
+              <div>
+                <Label className="text-xs">Jurusan</Label>
+                <SelectWithSearch
+                  value={editForm.id_jurusan || ""}
+                  onValueChange={(v) => setEditForm({ ...editForm, id_jurusan: v })}
+                  options={jurusanList.map((j) => ({
+                    value: j.id_jurusan.toString(),
+                    label: j.nama_jurusan,
+                  }))}
+                  placeholder="Pilih jurusan"
+                  triggerClassName="h-9 text-sm"
+                />
+              </div>
+            )}
             <div><Label className="text-xs">Role</Label><Select value={editForm.peran} onValueChange={v => setEditForm({ ...editForm, peran: v as any })} disabled={!isAdminSuper || editingUser?.peran === "siswa"}><SelectTrigger className="rounded-lg h-9 text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="guru">Guru</SelectItem><SelectItem value="siswa">Siswa</SelectItem>{isAdminSuper && <SelectItem value="kepala_jurusan">Kepala Jurusan</SelectItem>}{isAdminSuper && <SelectItem value="bk">BK</SelectItem>}</SelectContent></Select></div>
             <div><Label className="text-xs">Kata Sandi Baru (Opsional)</Label><Input type="password" placeholder="Kosongkan jika tidak ingin mengubah" value={editForm.password} onChange={e => setEditForm({ ...editForm, password: e.target.value })} className="rounded-lg text-sm h-9" /></div>
             <div className="flex items-center space-x-2"><Checkbox id="edit_aktif" checked={editForm.aktif} onCheckedChange={(checked) => setEditForm({ ...editForm, aktif: checked === true })} /><Label htmlFor="edit_aktif" className="text-xs">Aktif (centang agar pengguna dapat login)</Label></div>
@@ -2524,22 +2702,21 @@ export default function UserManagement() {
             {isAdminSuper && (
               <div>
                 <Label className="text-slate-700 font-medium text-xs sm:text-sm">Jurusan</Label>
-                <Select
+                <SelectWithSearch
                   value={kelasForm.id_jurusan || "none"}
-                  onValueChange={(value) => setKelasForm({ ...kelasForm, id_jurusan: value === "none" ? "" : value })}
-                >
-                  <SelectTrigger className="rounded-lg border-slate-200 h-9 text-sm mt-1">
-                    <SelectValue placeholder="Pilih jurusan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Tanpa Jurusan</SelectItem>
-                    {jurusanList.map((jurusan) => (
-                      <SelectItem key={jurusan.id_jurusan} value={jurusan.id_jurusan.toString()}>
-                        {jurusan.nama_jurusan}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onValueChange={(v) =>
+                    setKelasForm({ ...kelasForm, id_jurusan: v === "none" ? "" : v })
+                  }
+                  options={[
+                    { value: "none", label: "Tanpa Jurusan" },
+                    ...jurusanList.map((j) => ({
+                      value: j.id_jurusan.toString(),
+                      label: j.nama_jurusan,
+                    })),
+                  ]}
+                  placeholder="Pilih jurusan"
+                  triggerClassName="h-9 text-sm mt-1"
+                />
               </div>
             )}
             {isAdminJurusan && user?.id_jurusan && (
@@ -2845,15 +3022,19 @@ export default function UserManagement() {
             {isAdminSuper && (
               <div>
                 <Label className="text-sm">Pilih Jurusan untuk Kelas Baru</Label>
-                <Select value={selectedJurusanForNewKelas} onValueChange={setSelectedJurusanForNewKelas}>
-                  <SelectTrigger className="rounded-lg mt-1">
-                    <SelectValue placeholder="Pilih jurusan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Tanpa Jurusan</SelectItem>
-                    {jurusanList.map(j => <SelectItem key={j.id_jurusan} value={j.id_jurusan.toString()}>{j.nama_jurusan}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SelectWithSearch
+                  value={selectedJurusanForNewKelas}
+                  onValueChange={setSelectedJurusanForNewKelas}
+                  options={[
+                    { value: "none", label: "Tanpa Jurusan" },
+                    ...jurusanList.map((j) => ({
+                      value: j.id_jurusan.toString(),
+                      label: j.nama_jurusan,
+                    })),
+                  ]}
+                  placeholder="Pilih jurusan"
+                  triggerClassName="rounded-lg mt-1"
+                />
               </div>
             )}
             <p className="text-sm text-slate-600">Apakah Anda ingin menambahkan kelas di atas ke database dan melanjutkan import?</p>
