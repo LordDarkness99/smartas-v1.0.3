@@ -108,6 +108,34 @@ export default function AdminDashboard() {
   const [filterLevel, setFilterLevel] = useState<"Semua" | "X" | "XI" | "XII">("Semua");
   const [searchKelas, setSearchKelas] = useState("");
 
+  // === [PERBAIKAN] FUNGSI PEMBANDING TINGKAT YANG TEPAT ===
+  const isLevelMatch = (namaKelas: string, level: string) => {
+    if (level === "Semua") return true;
+    if (level === "X") {
+      return namaKelas.startsWith("X") && !namaKelas.startsWith("XI") && !namaKelas.startsWith("XII");
+    }
+    if (level === "XI") {
+      return namaKelas.startsWith("XI") && !namaKelas.startsWith("XII");
+    }
+    if (level === "XII") {
+      return namaKelas.startsWith("XII");
+    }
+    return false;
+  };
+
+  // === [PERBAIKAN] FILTER UNTUK KEDUA CARD ===
+  const filteredKelasTanpaPresensi = monitoringData.kelasTanpaPresensi.filter((item) => {
+    const matchLevel = isLevelMatch(item.nama, filterLevel);
+    const matchSearch = searchKelas === "" || item.nama.toLowerCase().includes(searchKelas.toLowerCase());
+    return matchLevel && matchSearch;
+  });
+
+  const filteredMapelTanpaPresensi = monitoringData.mapelTanpaPresensi.filter((item) => {
+    const matchLevel = isLevelMatch(item.kelas, filterLevel);
+    const matchSearch = searchKelas === "" || item.kelas.toLowerCase().includes(searchKelas.toLowerCase());
+    return matchLevel && matchSearch;
+  });
+
   // === HELPER: FORMAT TANGGAL ===
   const formatLocalDate = (date: Date): string => {
     const year = date.getFullYear();
@@ -235,6 +263,8 @@ export default function AdminDashboard() {
       const now = new Date();
       const today = formatLocalDate(now);
       const hariIndo = now.toLocaleDateString("id-ID", { weekday: "long" });
+      // Jika database menggunakan bahasa Inggris (Monday), ubah baris di atas menjadi:
+      // const hariIndo = now.toLocaleDateString("en-US", { weekday: "long" });
 
       // Ambil data jurusan
       const { data: jurusanData } = await supabase
@@ -330,14 +360,16 @@ export default function AdminDashboard() {
         .gte("waktu_presensi", `${today}T00:00:00`)
         .lte("waktu_presensi", `${today}T23:59:59`);
 
+      // [PERBAIKAN] Konversi id_jadwal ke Number agar Map.get() berhasil
       const presensiMapelCount = new Map<number, number>();
       for (const p of presensiMapelToday || []) {
-        presensiMapelCount.set(p.id_jadwal, (presensiMapelCount.get(p.id_jadwal) || 0) + 1);
+        const idJadwal = Number(p.id_jadwal);
+        presensiMapelCount.set(idJadwal, (presensiMapelCount.get(idJadwal) || 0) + 1);
       }
 
       const mapelTanpaPresensi = (jadwalHariIni || [])
         .filter((j) => {
-          const count = presensiMapelCount.get(j.id_jadwal) || 0;
+          const count = presensiMapelCount.get(Number(j.id_jadwal)) || 0;
           return count === 0;
         })
         .map((j) => {
@@ -436,21 +468,6 @@ export default function AdminDashboard() {
     totalPresensi > 0
       ? parseFloat(((summaryPresensi.hadir + summaryPresensi.terlambat) / totalPresensi * 100).toFixed(1))
       : 0;
-
-  // === FILTER UNTUK KEDUA CARD ===
-  const filterByLevelAndSearch = (namaKelas: string) => {
-    if (filterLevel !== "Semua" && !namaKelas.startsWith(filterLevel)) return false;
-    if (searchKelas && !namaKelas.toLowerCase().includes(searchKelas.toLowerCase())) return false;
-    return true;
-  };
-
-  const filteredKelasTanpaPresensi = monitoringData.kelasTanpaPresensi.filter((item) =>
-    filterByLevelAndSearch(item.nama)
-  );
-
-  const filteredMapelTanpaPresensi = monitoringData.mapelTanpaPresensi.filter((item) =>
-    filterByLevelAndSearch(item.kelas)
-  );
 
   // === LOADING STATE ===
   if (loading) {
@@ -885,7 +902,7 @@ export default function AdminDashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-5 space-y-4">
-              {/* Filter untuk card kelas (sama) */}
+              {/* Filter untuk card kelas */}
               <div className="flex flex-wrap gap-3 items-center">
                 <div className="flex items-center gap-2">
                   <Label className="text-sm font-medium text-slate-700 whitespace-nowrap">Tingkat:</Label>
@@ -962,7 +979,7 @@ export default function AdminDashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-5 space-y-4">
-              {/* Filter untuk card mapel (sama) */}
+              {/* Filter untuk card mapel */}
               <div className="flex flex-wrap gap-3 items-center">
                 <div className="flex items-center gap-2">
                   <Label className="text-sm font-medium text-slate-700 whitespace-nowrap">Tingkat:</Label>
@@ -993,10 +1010,16 @@ export default function AdminDashboard() {
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-[#2C5EAD]" />
                 </div>
-              ) : filteredMapelTanpaPresensi.length === 0 ? (
+              ) : monitoringData.mapelTanpaPresensi.length === 0 && !loadingMonitoring ? (
+                // Cek apakah tidak ada jadwal sama sekali atau semua sudah dipresensi
                 <div className="text-center py-8 text-slate-400">
                   <CheckCircle className="h-12 w-12 mx-auto mb-2 text-emerald-400" />
                   <p>Semua mata pelajaran sudah dipresensi hari ini</p>
+                </div>
+              ) : filteredMapelTanpaPresensi.length === 0 && monitoringData.mapelTanpaPresensi.length > 0 ? (
+                <div className="text-center py-8 text-slate-400">
+                  <AlertCircle className="h-12 w-12 mx-auto mb-2 text-amber-400" />
+                  <p>Tidak ada jadwal yang sesuai dengan filter</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
