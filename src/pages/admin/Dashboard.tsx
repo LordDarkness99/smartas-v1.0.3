@@ -1079,7 +1079,7 @@ export default function AdminDashboard() {
         {/* FOOTER */}
         <div className="text-center pt-4">
           <Separator className="mb-4" />
-          <p className="text-xs text-slate-400">© {new Date().getFullYear()} Dashboard Admin - SmartAS</p>
+          <p className="text-xs text-slate-400">© {new Date().getFullYear()} Dashboard - SmartAS</p>
           <p className="text-[10px] text-slate-300 mt-1">Sistem Informasi Akademik</p>
         </div>
       </div>
