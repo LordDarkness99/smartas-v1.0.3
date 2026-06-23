@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, SVGProps } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -9,11 +9,27 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { 
-  Users, 
-  School, 
-  BookOpen, 
-  UserCheck, 
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Users,
+  School,
+  BookOpen,
+  UserCheck,
   Loader2,
   Sun,
   Moon,
@@ -21,26 +37,20 @@ import {
   RefreshCw,
   TrendingUp,
   Activity,
-  Calendar,
   Clock,
   CheckCircle,
   XCircle,
   AlertCircle,
   Sparkles,
-  Trophy,
   BarChart3,
   PieChart as PieChartIcon,
   LineChart as LineChartIcon,
   GraduationCap,
-  Home,
-  Briefcase,
-  Star,
   Heart,
-  Smile,
-  ThumbsUp,
-  FileText
+  FileText,
 } from "lucide-react";
-import { PieChart, Pie, Cell, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart, Bar } from "recharts";
+import { PieChart, Pie, Cell, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import { useToast } from "@/hooks/use-toast";
 
 interface PresensiHarian {
   tanggal: string;
@@ -53,6 +63,9 @@ interface PresensiHarian {
 
 export default function AdminDashboard() {
   const { user } = useAuth();
+  const { toast } = useToast();
+
+  // === STATS ===
   const [stats, setStats] = useState({
     siswa: 0,
     guru: 0,
@@ -61,6 +74,8 @@ export default function AdminDashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // === PRESENSI ===
   const [presensiData, setPresensiData] = useState<PresensiHarian[]>([]);
   const [summaryPresensi, setSummaryPresensi] = useState({
     hadir: 0,
@@ -73,7 +88,7 @@ export default function AdminDashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
 
-  // State untuk toggle kategori pie chart
+  // === PIE CHART FILTER ===
   const [selectedCategories, setSelectedCategories] = useState({
     hadir: true,
     terlambat: true,
@@ -82,15 +97,26 @@ export default function AdminDashboard() {
     alfa: true,
   });
 
-  // Helper: format tanggal lokal YYYY-MM-DD
+  // === MONITORING ===
+  const [monitoringData, setMonitoringData] = useState<{
+    kelasTanpaPresensi: { id_kelas: number; nama: string; jurusan: string }[];
+    mapelTanpaPresensi: { kelas: string; mapel: string; guru: string; jam: string }[];
+  }>({ kelasTanpaPresensi: [], mapelTanpaPresensi: [] });
+  const [loadingMonitoring, setLoadingMonitoring] = useState(true);
+
+  // === FILTER TINGKAT DAN PENCARIAN UNTUK KEDUA CARD ===
+  const [filterLevel, setFilterLevel] = useState<"Semua" | "X" | "XI" | "XII">("Semua");
+  const [searchKelas, setSearchKelas] = useState("");
+
+  // === HELPER: FORMAT TANGGAL ===
   const formatLocalDate = (date: Date): string => {
     const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   };
 
-  // ==================== GREETING EFFECT ====================
+  // === GREETING ===
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour < 12) setGreeting("Selamat Pagi");
@@ -101,29 +127,25 @@ export default function AdminDashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // ==================== FETCH PRESENSI DATA (dengan rentang yang benar) ====================
+  // === FETCH PRESENSI DATA ===
   const fetchPresensiData = useCallback(async () => {
     try {
       const now = new Date();
       let startDate: Date;
-      
+
       if (periode === "minggu") {
-        // Mulai dari hari Senin minggu ini
         startDate = new Date(now);
-        const dayOfWeek = now.getDay(); // 0 Minggu, 1 Senin, ... 6 Sabtu
-        // Hitung selisih ke Senin sebelumnya: jika hari ini Senin (1) => 0, jika Minggu (0) => 6
-        const daysToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+        const dayOfWeek = now.getDay();
+        const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
         startDate.setDate(now.getDate() - daysToMonday);
       } else {
-        // Mulai dari tanggal 1 bulan ini
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
       }
-      
-      // Set jam ke 00:00:00 untuk konsistensi
+
       startDate.setHours(0, 0, 0, 0);
       const endDate = new Date(now);
       endDate.setHours(23, 59, 59, 999);
-      
+
       const start = formatLocalDate(startDate);
       const end = formatLocalDate(endDate);
 
@@ -135,24 +157,35 @@ export default function AdminDashboard() {
 
       if (error) throw error;
 
-      // Map untuk menyimpan data per tanggal
-      const presensiMap: Record<string, { hadir: number; terlambat: number; izin: number; sakit: number; alfa: number }> = {};
-      
+      const presensiMap: Record<
+        string,
+        { hadir: number; terlambat: number; izin: number; sakit: number; alfa: number }
+      > = {};
+
       for (const pres of data || []) {
         const tanggal = formatLocalDate(new Date(pres.waktu_presensi));
         if (!presensiMap[tanggal]) {
           presensiMap[tanggal] = { hadir: 0, terlambat: 0, izin: 0, sakit: 0, alfa: 0 };
         }
         switch (pres.status_presensi) {
-          case "Hadir": presensiMap[tanggal].hadir++; break;
-          case "Terlambat": presensiMap[tanggal].terlambat++; break;
-          case "Izin": presensiMap[tanggal].izin++; break;
-          case "Sakit": presensiMap[tanggal].sakit++; break;
-          case "Alfa": presensiMap[tanggal].alfa++; break;
+          case "Hadir":
+            presensiMap[tanggal].hadir++;
+            break;
+          case "Terlambat":
+            presensiMap[tanggal].terlambat++;
+            break;
+          case "Izin":
+            presensiMap[tanggal].izin++;
+            break;
+          case "Sakit":
+            presensiMap[tanggal].sakit++;
+            break;
+          case "Alfa":
+            presensiMap[tanggal].alfa++;
+            break;
         }
       }
 
-      // Buat seluruh tanggal dalam rentang (termasuk yang tanpa data)
       const allDates: string[] = [];
       const currentDate = new Date(startDate);
       while (currentDate <= endDate) {
@@ -160,8 +193,7 @@ export default function AdminDashboard() {
         currentDate.setDate(currentDate.getDate() + 1);
       }
 
-      // Gabungkan dengan data presensi (isi 0 jika tidak ada)
-      const chartData = allDates.map(tanggal => ({
+      const chartData = allDates.map((tanggal) => ({
         tanggal,
         hadir: presensiMap[tanggal]?.hadir || 0,
         terlambat: presensiMap[tanggal]?.terlambat || 0,
@@ -170,8 +202,11 @@ export default function AdminDashboard() {
         alfa: presensiMap[tanggal]?.alfa || 0,
       }));
 
-      // Hitung total summary
-      let totalHadir = 0, totalTerlambat = 0, totalIzin = 0, totalSakit = 0, totalAlfa = 0;
+      let totalHadir = 0,
+        totalTerlambat = 0,
+        totalIzin = 0,
+        totalSakit = 0,
+        totalAlfa = 0;
       for (const item of chartData) {
         totalHadir += item.hadir;
         totalTerlambat += item.terlambat;
@@ -193,7 +228,142 @@ export default function AdminDashboard() {
     }
   }, [periode]);
 
-  // ==================== FETCH STATS ====================
+  // === FETCH MONITORING DATA ===
+  const fetchMonitoringData = useCallback(async () => {
+    setLoadingMonitoring(true);
+    try {
+      const now = new Date();
+      const today = formatLocalDate(now);
+      const hariIndo = now.toLocaleDateString("id-ID", { weekday: "long" });
+
+      // Ambil data jurusan
+      const { data: jurusanData } = await supabase
+        .from("jurusan")
+        .select("id_jurusan, nama_jurusan");
+      const jurusanMap = new Map<number, string>((jurusanData || []).map((j) => [j.id_jurusan, j.nama_jurusan]));
+
+      // ---- Ambil semua kelas ----
+      let kelasQuery = supabase
+        .from("kelas")
+        .select("id_kelas, nama, id_jurusan")
+        .eq("aktif", true);
+      if (user?.peran === "kepala_jurusan" && user?.id_jurusan) {
+        kelasQuery = kelasQuery.eq("id_jurusan", user.id_jurusan);
+      }
+      const { data: semuaKelas } = await kelasQuery;
+      if (!semuaKelas) throw new Error("Gagal ambil data kelas");
+
+      // ---- 1. Kelas yang belum presensi harian ----
+      const { data: presensiHarianToday } = await supabase
+        .from("presensi_harian")
+        .select("id_siswa")
+        .gte("waktu_presensi", `${today}T00:00:00`)
+        .lte("waktu_presensi", `${today}T23:59:59`);
+
+      let siswaQuery = supabase
+        .from("siswa")
+        .select("id_siswa, id_kelas")
+        .eq("aktif", true);
+      if (user?.peran === "kepala_jurusan" && user?.id_jurusan) {
+        const kelasIds = semuaKelas.map((k) => k.id_kelas);
+        if (kelasIds.length > 0) siswaQuery = siswaQuery.in("id_kelas", kelasIds);
+        else siswaQuery = siswaQuery.eq("id_kelas", -1);
+      }
+      const { data: semuaSiswa } = await siswaQuery;
+
+      const siswaSudahPresensi = new Set((presensiHarianToday || []).map((p) => p.id_siswa));
+
+      const kelasPresensiMap = new Map<number, { total: number; sudah: number; belum: number }>();
+      for (const siswa of semuaSiswa || []) {
+        const idKelas = siswa.id_kelas;
+        if (!idKelas) continue;
+        if (!kelasPresensiMap.has(idKelas)) {
+          kelasPresensiMap.set(idKelas, { total: 0, sudah: 0, belum: 0 });
+        }
+        const entry = kelasPresensiMap.get(idKelas)!;
+        entry.total++;
+        if (siswaSudahPresensi.has(siswa.id_siswa)) entry.sudah++;
+        else entry.belum++;
+      }
+
+      const kelasTanpaPresensi = semuaKelas
+        .filter((k) => {
+          const stat = kelasPresensiMap.get(k.id_kelas);
+          return stat && stat.belum > 0;
+        })
+        .map((k) => ({
+          id_kelas: k.id_kelas,
+          nama: k.nama,
+          jurusan: k.id_jurusan ? jurusanMap.get(k.id_jurusan) || "-" : "-",
+        }));
+
+      // ---- 2. Mata pelajaran yang belum dipresensi ----
+      let jadwalQuery = supabase
+        .from("jadwal")
+        .select(
+          `
+          id_jadwal,
+          hari,
+          jam,
+          kelas:kelas (id_kelas, nama, id_jurusan),
+          mata_pelajaran (id_mapel, nama),
+          guru:guru (id_guru, nama)
+        `
+        )
+        .eq("hari", hariIndo)
+        .eq("aktif", true);
+
+      if (user?.peran === "kepala_jurusan" && user?.id_jurusan) {
+        const kelasIds = semuaKelas.map((k) => k.id_kelas);
+        if (kelasIds.length > 0) {
+          jadwalQuery = jadwalQuery.in("id_kelas", kelasIds);
+        } else {
+          jadwalQuery = jadwalQuery.eq("id_kelas", -1);
+        }
+      }
+      const { data: jadwalHariIni } = await jadwalQuery;
+      if (!jadwalHariIni) throw new Error("Gagal ambil jadwal");
+
+      const { data: presensiMapelToday } = await supabase
+        .from("presensi_siswa_mapel")
+        .select("id_jadwal")
+        .gte("waktu_presensi", `${today}T00:00:00`)
+        .lte("waktu_presensi", `${today}T23:59:59`);
+
+      const presensiMapelCount = new Map<number, number>();
+      for (const p of presensiMapelToday || []) {
+        presensiMapelCount.set(p.id_jadwal, (presensiMapelCount.get(p.id_jadwal) || 0) + 1);
+      }
+
+      const mapelTanpaPresensi = (jadwalHariIni || [])
+        .filter((j) => {
+          const count = presensiMapelCount.get(j.id_jadwal) || 0;
+          return count === 0;
+        })
+        .map((j) => {
+          const kelas = j.kelas as any;
+          return {
+            kelas: kelas?.nama || "-",
+            mapel: (j.mata_pelajaran as any)?.nama || "-",
+            guru: (j.guru as any)?.nama || "-",
+            jam: j.jam || "-",
+          };
+        });
+
+      setMonitoringData({ kelasTanpaPresensi, mapelTanpaPresensi });
+    } catch (error) {
+      console.error("Error fetching monitoring data:", error);
+      toast({
+        title: "Gagal memuat monitoring",
+        description: error instanceof Error ? error.message : "Terjadi kesalahan",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingMonitoring(false);
+    }
+  }, [user, toast]);
+
+  // === FETCH STATS ===
   useEffect(() => {
     const fetchStats = async () => {
       try {
@@ -219,25 +389,26 @@ export default function AdminDashboard() {
 
     fetchStats();
     fetchPresensiData();
-  }, [periode, fetchPresensiData]);
+    fetchMonitoringData();
+  }, [periode, fetchPresensiData, fetchMonitoringData]);
 
-  // ==================== HANDLE REFRESH ====================
+  // === HANDLE REFRESH ===
   const handleRefresh = () => {
     setRefreshing(true);
-    Promise.all([fetchPresensiData()]).finally(() => setRefreshing(false));
+    Promise.all([fetchPresensiData(), fetchMonitoringData()]).finally(() => setRefreshing(false));
   };
 
-  // ==================== FORMAT DATE ====================
+  // === FORMAT DATE ===
   const formatDate = useCallback((date: Date) => {
-    return date.toLocaleDateString("id-ID", { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    return date.toLocaleDateString("id-ID", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     });
   }, []);
 
-  // ==================== COLORS ====================
+  // === COLORS ===
   const COLORS = ["#10b981", "#f59e0b", "#3b82f6", "#8b5cf6", "#ef4444"];
   const categoryLabels = [
     { key: "hadir", label: "Hadir", color: "#10b981" },
@@ -247,21 +418,41 @@ export default function AdminDashboard() {
     { key: "alfa", label: "Alfa", color: "#ef4444" },
   ];
 
-  // Filter pie data berdasarkan kategori yang dipilih
   const pieData = categoryLabels
-    .filter(cat => selectedCategories[cat.key as keyof typeof selectedCategories])
-    .map(cat => ({
+    .filter((cat) => selectedCategories[cat.key as keyof typeof selectedCategories])
+    .map((cat) => ({
       name: cat.label,
       value: summaryPresensi[cat.key as keyof typeof summaryPresensi],
     }))
-    .filter(item => item.value > 0);
+    .filter((item) => item.value > 0);
 
-  const totalPresensi = summaryPresensi.hadir + summaryPresensi.terlambat + summaryPresensi.izin + summaryPresensi.sakit + summaryPresensi.alfa;
-  const kehadiranPersen = totalPresensi > 0
-    ? parseFloat(((summaryPresensi.hadir + summaryPresensi.terlambat) / totalPresensi * 100).toFixed(1))
-    : 0;
+  const totalPresensi =
+    summaryPresensi.hadir +
+    summaryPresensi.terlambat +
+    summaryPresensi.izin +
+    summaryPresensi.sakit +
+    summaryPresensi.alfa;
+  const kehadiranPersen =
+    totalPresensi > 0
+      ? parseFloat(((summaryPresensi.hadir + summaryPresensi.terlambat) / totalPresensi * 100).toFixed(1))
+      : 0;
 
-  // ==================== LOADING STATE ====================
+  // === FILTER UNTUK KEDUA CARD ===
+  const filterByLevelAndSearch = (namaKelas: string) => {
+    if (filterLevel !== "Semua" && !namaKelas.startsWith(filterLevel)) return false;
+    if (searchKelas && !namaKelas.toLowerCase().includes(searchKelas.toLowerCase())) return false;
+    return true;
+  };
+
+  const filteredKelasTanpaPresensi = monitoringData.kelasTanpaPresensi.filter((item) =>
+    filterByLevelAndSearch(item.nama)
+  );
+
+  const filteredMapelTanpaPresensi = monitoringData.mapelTanpaPresensi.filter((item) =>
+    filterByLevelAndSearch(item.kelas)
+  );
+
+  // === LOADING STATE ===
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#C4E2F5]">
@@ -276,8 +467,7 @@ export default function AdminDashboard() {
   // ==================== MAIN RENDER ====================
   return (
     <div className="min-h-screen bg-[#F0F7FC]">
-      
-      {/* HEADER SECTION - gradasi palette */}
+      {/* HEADER */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#2C5EAD] via-[#1591DC] to-[#4BB8FA] shadow-xl mx-4 mt-4">
         <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
         <div className="relative container mx-auto px-6 py-6">
@@ -290,9 +480,13 @@ export default function AdminDashboard() {
               </Avatar>
               <div>
                 <div className="flex items-center gap-2 text-blue-100 text-sm">
-                  {greeting === "Selamat Pagi" ? <Sun className="h-4 w-4" /> : 
-                   greeting === "Selamat Malam" ? <Moon className="h-4 w-4" /> : 
-                   <Cloud className="h-4 w-4" />}
+                  {greeting === "Selamat Pagi" ? (
+                    <Sun className="h-4 w-4" />
+                  ) : greeting === "Selamat Malam" ? (
+                    <Moon className="h-4 w-4" />
+                  ) : (
+                    <Cloud className="h-4 w-4" />
+                  )}
                   <p className="text-sm">{greeting}</p>
                 </div>
                 <h1 className="text-2xl lg:text-3xl font-bold text-white">Dashboard Admin</h1>
@@ -301,20 +495,22 @@ export default function AdminDashboard() {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-3">
               <div className="bg-[#2C5EAD] rounded-xl px-4 py-2 text-center shadow-md">
                 <p className="text-xs text-white/90">{formatDate(currentTime)}</p>
-                <p className="text-xl font-semibold text-white">{currentTime.toLocaleTimeString("id-ID")}</p>
+                <p className="text-xl font-semibold text-white">
+                  {currentTime.toLocaleTimeString("id-ID")}
+                </p>
               </div>
-              <Button 
-                variant="ghost" 
-                size="icon" 
+              <Button
+                variant="ghost"
+                size="icon"
                 className="bg-[#2C5EAD] hover:bg-[#2C5EAD]/80 text-white rounded-xl shadow-md"
                 onClick={handleRefresh}
                 disabled={refreshing}
               >
-                <RefreshCw className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`} />
               </Button>
             </div>
           </div>
@@ -323,8 +519,7 @@ export default function AdminDashboard() {
 
       {/* MAIN CONTENT */}
       <div className="container mx-auto px-4 py-8 space-y-8">
-        
-        {/* STATS CARDS - background putih dengan shadow tebal */}
+        {/* STATS CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="rounded-xl border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-all duration-200">
             <CardContent className="p-4">
@@ -340,7 +535,7 @@ export default function AdminDashboard() {
               <p className="text-[10px] text-slate-400 mt-1">Siswa aktif</p>
             </CardContent>
           </Card>
-          
+
           <Card className="rounded-xl border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-all duration-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -355,7 +550,7 @@ export default function AdminDashboard() {
               <p className="text-[10px] text-slate-400 mt-1">Guru aktif</p>
             </CardContent>
           </Card>
-          
+
           <Card className="rounded-xl border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-all duration-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -370,7 +565,7 @@ export default function AdminDashboard() {
               <p className="text-[10px] text-slate-400 mt-1">Kelas aktif</p>
             </CardContent>
           </Card>
-          
+
           <Card className="rounded-xl border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-all duration-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -387,7 +582,7 @@ export default function AdminDashboard() {
           </Card>
         </div>
 
-        {/* SUMMARY CARD - Header solid #1591DC */}
+        {/* RINGKASAN PRESENSI */}
         <Card className="rounded-xl border-0 shadow-xl overflow-hidden">
           <CardHeader className="bg-[#1591DC] text-white p-5">
             <div className="flex items-center gap-3">
@@ -430,9 +625,9 @@ export default function AdminDashboard() {
                 <div className="text-xs text-rose-600">Alfa</div>
               </div>
             </div>
-            
+
             <Separator className="my-4" />
-            
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-[#2C5EAD]" />
@@ -449,10 +644,9 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        {/* CHARTS GRID */}
+        {/* GRAFIK */}
         <div className="grid gap-6 lg:grid-cols-2">
-          
-          {/* LINE CHART CARD - Header solid #4BB8FA */}
+          {/* LINE CHART */}
           <Card className="rounded-xl border-0 shadow-xl overflow-hidden">
             <CardHeader className="bg-[#4BB8FA] text-white p-5">
               <div className="flex items-center justify-between">
@@ -466,8 +660,8 @@ export default function AdminDashboard() {
                     variant="ghost"
                     size="sm"
                     className={`rounded-lg text-white text-xs transition-all ${
-                      periode === "minggu" 
-                        ? "bg-[#2C5EAD] text-white shadow-md" 
+                      periode === "minggu"
+                        ? "bg-[#2C5EAD] text-white shadow-md"
                         : "bg-white/10 hover:bg-white/20"
                     }`}
                   >
@@ -478,8 +672,8 @@ export default function AdminDashboard() {
                     variant="ghost"
                     size="sm"
                     className={`rounded-lg text-white text-xs transition-all ${
-                      periode === "bulan" 
-                        ? "bg-[#2C5EAD] text-white shadow-md" 
+                      periode === "bulan"
+                        ? "bg-[#2C5EAD] text-white shadow-md"
                         : "bg-white/10 hover:bg-white/20"
                     }`}
                   >
@@ -497,73 +691,73 @@ export default function AdminDashboard() {
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={presensiData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis 
-                        dataKey="tanggal" 
-                        angle={-45} 
-                        textAnchor="end" 
-                        height={60} 
+                      <XAxis
+                        dataKey="tanggal"
+                        angle={-45}
+                        textAnchor="end"
+                        height={60}
                         tick={{ fontSize: 10, fill: "#64748b" }}
                       />
                       <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
-                      <Tooltip 
-                        contentStyle={{ 
-                          borderRadius: '12px', 
-                          border: 'none', 
-                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-                          backgroundColor: 'white'
+                      <Tooltip
+                        contentStyle={{
+                          borderRadius: "12px",
+                          border: "none",
+                          boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                          backgroundColor: "white",
                         }}
-                        cursor={{ stroke: '#94a3b8', strokeWidth: 1 }}
+                        cursor={{ stroke: "#94a3b8", strokeWidth: 1 }}
                       />
-                      <Legend 
-                        wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
+                      <Legend
+                        wrapperStyle={{ fontSize: "11px", paddingTop: "10px" }}
                         iconType="circle"
                       />
-                      <Line 
-                        type="monotone" 
-                        dataKey="hadir" 
-                        stroke="#10b981" 
-                        name="Hadir" 
-                        strokeWidth={2.5} 
+                      <Line
+                        type="monotone"
+                        dataKey="hadir"
+                        stroke="#10b981"
+                        name="Hadir"
+                        strokeWidth={2.5}
                         dot={{ r: 3.5, strokeWidth: 2 }}
                         activeDot={{ r: 6 }}
                         animationDuration={800}
                       />
-                      <Line 
-                        type="monotone" 
-                        dataKey="terlambat" 
-                        stroke="#f59e0b" 
-                        name="Terlambat" 
-                        strokeWidth={2.5} 
+                      <Line
+                        type="monotone"
+                        dataKey="terlambat"
+                        stroke="#f59e0b"
+                        name="Terlambat"
+                        strokeWidth={2.5}
                         dot={{ r: 3.5, strokeWidth: 2 }}
                         activeDot={{ r: 6 }}
                         animationDuration={800}
                       />
-                      <Line 
-                        type="monotone" 
-                        dataKey="izin" 
-                        stroke="#3b82f6" 
-                        name="Izin" 
-                        strokeWidth={2.5} 
+                      <Line
+                        type="monotone"
+                        dataKey="izin"
+                        stroke="#3b82f6"
+                        name="Izin"
+                        strokeWidth={2.5}
                         dot={{ r: 3.5, strokeWidth: 2 }}
                         activeDot={{ r: 6 }}
                         animationDuration={800}
                       />
-                      <Line 
-                        type="monotone" 
-                        dataKey="sakit" 
-                        stroke="#8b5cf6" 
-                        name="Sakit" 
-                        strokeWidth={2.5} 
+                      <Line
+                        type="monotone"
+                        dataKey="sakit"
+                        stroke="#8b5cf6"
+                        name="Sakit"
+                        strokeWidth={2.5}
                         dot={{ r: 3.5, strokeWidth: 2 }}
                         activeDot={{ r: 6 }}
                         animationDuration={800}
                       />
-                      <Line 
-                        type="monotone" 
-                        dataKey="alfa" 
-                        stroke="#ef4444" 
-                        name="Alfa" 
-                        strokeWidth={2.5} 
+                      <Line
+                        type="monotone"
+                        dataKey="alfa"
+                        stroke="#ef4444"
+                        name="Alfa"
+                        strokeWidth={2.5}
                         dot={{ r: 3.5, strokeWidth: 2 }}
                         activeDot={{ r: 6 }}
                         animationDuration={800}
@@ -582,7 +776,7 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          {/* PIE CHART CARD - Interaktif dengan checkbox filter */}
+          {/* PIE CHART */}
           <Card className="rounded-xl border-0 shadow-xl overflow-hidden">
             <CardHeader className="bg-[#4BB8FA] text-white p-5">
               <div className="flex items-center gap-2">
@@ -626,8 +820,10 @@ export default function AdminDashboard() {
                         data={pieData}
                         cx="50%"
                         cy="50%"
-                        labelLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
-                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        labelLine={{ stroke: "#94a3b8", strokeWidth: 1 }}
+                        label={({ name, percent }) =>
+                          `${name}: ${(percent * 100).toFixed(0)}%`
+                        }
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="value"
@@ -635,25 +831,28 @@ export default function AdminDashboard() {
                         animationBegin={0}
                       >
                         {pieData.map((entry, index) => (
-                          <Cell 
-                            key={`cell-${index}`} 
-                            fill={categoryLabels.find(c => c.label === entry.name)?.color || COLORS[index % COLORS.length]} 
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={
+                              categoryLabels.find((c) => c.label === entry.name)
+                                ?.color || COLORS[index % COLORS.length]
+                            }
                             stroke="white"
                             strokeWidth={2}
                           />
                         ))}
                       </Pie>
-                      <Tooltip 
-                        contentStyle={{ 
-                          borderRadius: '12px', 
-                          border: 'none', 
-                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-                          backgroundColor: 'white'
+                      <Tooltip
+                        contentStyle={{
+                          borderRadius: "12px",
+                          border: "none",
+                          boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                          backgroundColor: "white",
                         }}
                         formatter={(value: number, name: string) => [`${value} kali`, name]}
                       />
-                      <Legend 
-                        wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
+                      <Legend
+                        wrapperStyle={{ fontSize: "11px", paddingTop: "10px" }}
                         iconType="circle"
                       />
                     </PieChart>
@@ -672,7 +871,168 @@ export default function AdminDashboard() {
           </Card>
         </div>
 
-        {/* TIPS SECTION */}
+        {/* ==================== MONITORING PRESENSI HARI INI ==================== */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* KELAS BELUM PRESENSI (dengan filter) */}
+          <Card className="rounded-xl border-0 shadow-xl overflow-hidden">
+            <CardHeader className="bg-[#1591DC] text-white p-5">
+              <div className="flex items-center gap-2">
+                <School className="h-5 w-5" />
+                <CardTitle className="text-lg">Kelas Belum Presensi Hari Ini</CardTitle>
+              </div>
+              <CardDescription className="text-blue-50 text-xs">
+                {user?.peran === "kepala_jurusan" ? "Hanya kelas di jurusan Anda" : "Semua kelas"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-5 space-y-4">
+              {/* Filter untuk card kelas (sama) */}
+              <div className="flex flex-wrap gap-3 items-center">
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm font-medium text-slate-700 whitespace-nowrap">Tingkat:</Label>
+                  <Select value={filterLevel} onValueChange={(val) => setFilterLevel(val as any)}>
+                    <SelectTrigger className="w-[120px] h-9 text-sm rounded-lg border-slate-200">
+                      <SelectValue placeholder="Tingkat" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Semua">Semua</SelectItem>
+                      <SelectItem value="X">X</SelectItem>
+                      <SelectItem value="XI">XI</SelectItem>
+                      <SelectItem value="XII">XII</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2 flex-1 min-w-[150px]">
+                  <Label className="text-sm font-medium text-slate-700 whitespace-nowrap">Cari Kelas:</Label>
+                  <Input
+                    placeholder="Nama kelas..."
+                    value={searchKelas}
+                    onChange={(e) => setSearchKelas(e.target.value)}
+                    className="h-9 text-sm rounded-lg border-slate-200"
+                  />
+                </div>
+              </div>
+
+              {loadingMonitoring ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#2C5EAD]" />
+                </div>
+              ) : filteredKelasTanpaPresensi.length === 0 ? (
+                <div className="text-center py-8 text-slate-400">
+                  <CheckCircle className="h-12 w-12 mx-auto mb-2 text-emerald-400" />
+                  <p>Semua kelas sudah melakukan presensi hari ini</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-50">
+                        <TableHead>Nama Kelas</TableHead>
+                        <TableHead>Jurusan</TableHead>
+                        <TableHead className="text-right">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredKelasTanpaPresensi.map((kelas) => (
+                        <TableRow key={kelas.id_kelas}>
+                          <TableCell className="font-medium">{kelas.nama}</TableCell>
+                          <TableCell>{kelas.jurusan}</TableCell>
+                          <TableCell className="text-right">
+                            <Badge variant="destructive" className="bg-amber-100 text-amber-700">
+                              <AlertCircle className="h-3 w-3 mr-1" /> Belum
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* MAPEL BELUM DIPRESENSI (dengan filter) */}
+          <Card className="rounded-xl border-0 shadow-xl overflow-hidden">
+            <CardHeader className="bg-[#4BB8FA] text-white p-5">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5" />
+                <CardTitle className="text-lg">Mata Pelajaran Belum Dipresensi</CardTitle>
+              </div>
+              <CardDescription className="text-blue-50 text-xs">
+                Berdasarkan jadwal hari ini
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-5 space-y-4">
+              {/* Filter untuk card mapel (sama) */}
+              <div className="flex flex-wrap gap-3 items-center">
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm font-medium text-slate-700 whitespace-nowrap">Tingkat:</Label>
+                  <Select value={filterLevel} onValueChange={(val) => setFilterLevel(val as any)}>
+                    <SelectTrigger className="w-[120px] h-9 text-sm rounded-lg border-slate-200">
+                      <SelectValue placeholder="Tingkat" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Semua">Semua</SelectItem>
+                      <SelectItem value="X">X</SelectItem>
+                      <SelectItem value="XI">XI</SelectItem>
+                      <SelectItem value="XII">XII</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2 flex-1 min-w-[150px]">
+                  <Label className="text-sm font-medium text-slate-700 whitespace-nowrap">Cari Kelas:</Label>
+                  <Input
+                    placeholder="Nama kelas..."
+                    value={searchKelas}
+                    onChange={(e) => setSearchKelas(e.target.value)}
+                    className="h-9 text-sm rounded-lg border-slate-200"
+                  />
+                </div>
+              </div>
+
+              {loadingMonitoring ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#2C5EAD]" />
+                </div>
+              ) : filteredMapelTanpaPresensi.length === 0 ? (
+                <div className="text-center py-8 text-slate-400">
+                  <CheckCircle className="h-12 w-12 mx-auto mb-2 text-emerald-400" />
+                  <p>Semua mata pelajaran sudah dipresensi hari ini</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-50">
+                        <TableHead>Kelas</TableHead>
+                        <TableHead>Mata Pelajaran</TableHead>
+                        <TableHead>Guru</TableHead>
+                        <TableHead>Jam</TableHead>
+                        <TableHead className="text-right">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredMapelTanpaPresensi.map((item, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell className="font-medium">{item.kelas}</TableCell>
+                          <TableCell>{item.mapel}</TableCell>
+                          <TableCell>{item.guru}</TableCell>
+                          <TableCell>{item.jam}</TableCell>
+                          <TableCell className="text-right">
+                            <Badge variant="destructive" className="bg-amber-100 text-amber-700">
+                              <AlertCircle className="h-3 w-3 mr-1" /> Belum
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* TIPS */}
         <Card className="rounded-xl border-0 shadow-lg bg-gradient-to-br from-[#C4E2F5]/50 to-[#4BB8FA]/20">
           <CardContent className="p-5">
             <div className="flex items-start gap-4">
@@ -682,9 +1042,11 @@ export default function AdminDashboard() {
               <div>
                 <h3 className="font-semibold text-slate-800 mb-1">Informasi Dashboard</h3>
                 <p className="text-sm text-slate-600">
-                  Dashboard ini menampilkan ringkasan data sekolah. Grafik presensi menunjukkan tren kehadiran siswa
-                  dengan periode <strong>1 minggu (Senin s/d hari ini)</strong> atau <strong>1 bulan (tanggal 1 s/d hari ini)</strong>.
-                  Pada diagram lingkaran, Anda dapat memilih kategori yang ingin ditampilkan.
+                  Dashboard ini menampilkan ringkasan data sekolah. Grafik presensi menunjukkan tren
+                  kehadiran siswa dengan periode <strong>1 minggu (Senin s/d hari ini)</strong> atau{" "}
+                  <strong>1 bulan (tanggal 1 s/d hari ini)</strong>. Pada diagram lingkaran, Anda
+                  dapat memilih kategori yang ingin ditampilkan. Gunakan filter tingkat dan pencarian
+                  untuk memantau presensi mata pelajaran per kelas.
                 </p>
               </div>
             </div>
@@ -694,12 +1056,8 @@ export default function AdminDashboard() {
         {/* FOOTER */}
         <div className="text-center pt-4">
           <Separator className="mb-4" />
-          <p className="text-xs text-slate-400">
-            © {new Date().getFullYear()} Dashboard Admin - SmartAS
-          </p>
-          <p className="text-[10px] text-slate-300 mt-1">
-            Sistem Informasi Akademik
-          </p>
+          <p className="text-xs text-slate-400">© {new Date().getFullYear()} Dashboard Admin - SmartAS</p>
+          <p className="text-[10px] text-slate-300 mt-1">Sistem Informasi Akademik</p>
         </div>
       </div>
     </div>
