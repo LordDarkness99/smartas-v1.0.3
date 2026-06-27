@@ -86,7 +86,12 @@ export default function StudentAttendance() {
   // Koordinat sekolah
   //const SCHOOL_COORD = { lat: -7.316298604672446, lng: 112.72544806432117 };
   //const SCHOOL_COORD = { lat: -7.310492386369039, lng: 112.72432743671092 };
-  const SCHOOL_COORD = { lat: -7.310495254351707, lng: 112.724319528153 };
+  //const SCHOOL_COORD = { lat: -7.310495254351707, lng: 112.724319528153 };
+
+  //SMK -7.258421724046611, 112.72497587541943
+  const SCHOOL_COORD = { lat: -7.258421724046611, lng: 112.72497587541943 };
+
+
   // ==================== GREETING EFFECT ====================
   useEffect(() => {
     const hour = new Date().getHours();
